@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="DoKnotForget app icon">
+  <rect x="0" y="0" width="512" height="512" rx="96" fill="#0A1B2A" />
+  <g transform="translate(256 256) scale(6) translate(-32 -32)">
+    <path
+      d="M32 32C26 22 12 22 12 32C12 42 26 42 32 32C38 22 52 22 52 32C52 42 38 42 32 32C35 40 42 46 50 52"
+      fill="none"
+      stroke="#F8F7F2"
+      stroke-width="3"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M22 26C17.5 26 16 29 16 32C16 35 17.5 38 22 38"
+      fill="none"
+      stroke="#0A1B2A"
+      stroke-width="3"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M42 26C46.5 26 48 29 48 32C48 35 46.5 38 42 38"
+      fill="none"
+      stroke="#0A1B2A"
+      stroke-width="3"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </g>
+</svg>
