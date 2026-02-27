@@ -166,6 +166,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
 
   const [sensitiveTitle, setSensitiveTitle] = useState("");
   const [sensitiveDate, setSensitiveDate] = useState("");
+  const [momentPulseTick, setMomentPulseTick] = useState(0);
   const [sensitiveDraftMonthDay, setSensitiveDraftMonthDay] = useState("");
   const [sensitiveDraftYear, setSensitiveDraftYear] = useState("");
   const [openSensitivePicker, setOpenSensitivePicker] = useState(false);
@@ -194,6 +195,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
     setSensitiveDate("");
     setSensitiveDraftMonthDay("");
     setSensitiveDraftYear("");
+    setMomentPulseTick(0);
   }, [isOpen, person]);
 
   if (!isOpen) return null;
@@ -299,7 +301,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
           </div>
 
           <div style={{ marginTop: "18px", display: "grid", gap: "14px" }}>
-            <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "12px" }}>Details</div>
+            <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "12px", marginBottom: "12px" }}>Details</div>
             <div>
               <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Name</div>
               <input
@@ -342,7 +344,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
             </div>
 
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px" }}>
-              <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "12px" }}>Moments</div>
+              <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "12px", marginBottom: "12px" }}>Moments</div>
 
               <div style={{ marginTop: "12px", display: "grid", gap: "10px" }}>
                 <button
@@ -403,7 +405,9 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
               </div>
 
               <div style={{ marginTop: "18px", paddingTop: "14px", borderTop: "1px solid var(--border)" }}>
-                <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "12px" }}>Custom moments (optional)</div>
+                <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "12px", marginBottom: "12px" }}>
+                  Custom moments (optional)
+                </div>
 
                 {sensitiveMoments.length ? (
                   <div style={{ marginTop: "10px", display: "grid", gap: "8px" }}>
@@ -430,6 +434,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                         </div>
                         <button
                           onClick={() => removeMomentById(m.id)}
+                          title="This removes the moment from your list."
                           style={{
                             padding: 0,
                             border: "none",
@@ -511,7 +516,9 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                       onSave(deriveMomentBuckets({ ...person, moments: [...person.moments, moment] }));
                       setSensitiveTitle("");
                       setSensitiveDate("");
+                      setMomentPulseTick((t) => t + 1);
                     }}
+                    className={momentPulseTick ? "dkf-row-pulse" : undefined}
                     style={{
                       border: "1px solid var(--border-strong)",
                       background: "transparent",
@@ -534,7 +541,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
             </div>
 
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px", marginTop: "10px" }}>
-              <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "12px" }}>Family</div>
+              <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "12px", marginBottom: "12px" }}>Family</div>
               <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", marginTop: "10px" }}>
                 <input type="checkbox" checked={hasKids} onChange={(e) => setHasKids(e.target.checked)} />
                 Has kids
@@ -710,6 +717,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                                       })
                                     );
                                   }}
+                                  title="This removes the moment from your list."
                                   style={{
                                     padding: 0,
                                     border: "none",
@@ -755,6 +763,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
 
                       <button
                         onClick={() => setChildren((prev) => prev.filter((_, i) => i !== idx))}
+                        title="This removes the moment from your list."
                         style={{
                           padding: 0,
                           border: "none",

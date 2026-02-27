@@ -23,6 +23,8 @@ function App() {
   const [hasHydratedStorage, setHasHydratedStorage] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [hasHydratedOnboarding, setHasHydratedOnboarding] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [isOnboardingExiting, setIsOnboardingExiting] = useState(false);
 
   useEffect(() => {
     let hydratedPeople: Person[] = [];
@@ -108,6 +110,9 @@ function App() {
     } else {
       setScreen("home");
     }
+
+    setToast("Saved.");
+    window.setTimeout(() => setToast(null), 1200);
   }
 
   if (!hasHydratedOnboarding) return null;
@@ -115,6 +120,7 @@ function App() {
   if (!onboardingComplete) {
     return (
       <Onboarding
+        isExiting={isOnboardingExiting}
         onCreateFirstPerson={(person) => {
           setPeople((prev) => {
             const byId = new Map<string, Person>();
@@ -122,10 +128,16 @@ function App() {
             byId.set(person.id, person);
             return Array.from(byId.values());
           });
+          setToast("Saved.");
+          window.setTimeout(() => setToast(null), 1200);
         }}
         onComplete={() => {
-          setOnboardingComplete(true);
-          setScreen("home");
+          setIsOnboardingExiting(true);
+          window.setTimeout(() => {
+            setOnboardingComplete(true);
+            setScreen("home");
+            setIsOnboardingExiting(false);
+          }, 140);
         }}
       />
     );
@@ -174,20 +186,46 @@ function App() {
   }
 
   return (
-    <Home
-      people={people}
-      activeTab={homeTab}
-      onChangeTab={setHomeTab}
-      onAddPerson={() => setScreen("add-person")}
-      onSelectPerson={(person, sourceTab) => {
-        setHomeTab(sourceTab);
-        setSelectedPersonId(person.id);
-        setScreen("home");
-      }}
-      onUpdatePerson={(updated) => {
-        setPeople((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-      }}
-    />
+    <>
+      <Home
+        people={people}
+        activeTab={homeTab}
+        onChangeTab={setHomeTab}
+        onAddPerson={() => setScreen("add-person")}
+        onSelectPerson={(person, sourceTab) => {
+          setHomeTab(sourceTab);
+          setSelectedPersonId(person.id);
+          setScreen("home");
+        }}
+        onUpdatePerson={(updated) => {
+          setPeople((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+          setToast("Saved.");
+          window.setTimeout(() => setToast(null), 1200);
+        }}
+      />
+
+      {toast ? (
+        <div
+          className="dkf-fade-in-140"
+          style={{
+            position: "fixed",
+            left: "50%",
+            transform: "translateX(-50%)",
+            bottom: "18px",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
+            borderRadius: "12px",
+            padding: "10px 12px",
+            color: "var(--ink)",
+            fontFamily: "var(--font-sans)",
+            fontSize: "0.95rem",
+            zIndex: 100,
+          }}
+        >
+          {toast}
+        </div>
+      ) : null}
+    </>
   );
 }
 

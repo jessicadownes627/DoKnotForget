@@ -2,11 +2,56 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/dkf-icon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180.png" />
+    <link rel="manifest" href="/manifest.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DoKnotForget — For the Moments That Matter.</title>
+    <style>
+      html.dkf-launch-active,
+      body.dkf-launch-active {
+        height: 100%;
+        overflow: hidden;
+      }
+
+      #dkf-launch {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        background: #0a1a3a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+          env(safe-area-inset-left);
+        overscroll-behavior: none;
+      }
+
+      #dkf-launch img {
+        display: block;
+        width: min(84vw, 420px);
+        height: auto;
+      }
+    </style>
+    <script>
+      window.__dkfLaunchStart = performance.now();
+      document.documentElement.classList.add("dkf-launch-active");
+      window.addEventListener(
+        "DOMContentLoaded",
+        () => document.body.classList.add("dkf-launch-active"),
+        { once: true },
+      );
+    </script>
   </head>
   <body>
+    <div id="dkf-launch">
+      <img
+        src="./assets/splash2.png"
+        alt="DoKnotForget splash screen."
+      />
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

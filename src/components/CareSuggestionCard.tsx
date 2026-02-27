@@ -38,7 +38,7 @@ export default function CareSuggestionCard({ suggestion, onAction, onSnooze }: P
     return "Later this season";
   }, [suggestion.timelineCategory, suggestion.title]);
 
-  function setSnooze(nextAllowedTimestamp: number, kind: "snooze" | "hide") {
+  function setSnooze(nextAllowedTimestamp: number) {
     try {
       window.localStorage.setItem(`doknotforget_snooze_${suggestion.id}`, String(nextAllowedTimestamp));
     } catch {
@@ -48,7 +48,7 @@ export default function CareSuggestionCard({ suggestion, onAction, onSnooze }: P
     setIsExiting(true);
 
     window.setTimeout(() => {
-      setFeedback(kind === "hide" ? "Okay — hidden for now." : "Got it — I’ll remind you later.");
+      setFeedback("Okay — we’ll bring this back at the right time.");
       window.setTimeout(() => {
         onSnooze?.();
       }, 90);
@@ -157,7 +157,7 @@ export default function CareSuggestionCard({ suggestion, onAction, onSnooze }: P
               onClick={() => {
                 const t = startOfToday();
                 t.setDate(t.getDate() + 1);
-                setSnooze(toTimestampAtStartOfDay(t), "snooze");
+                setSnooze(toTimestampAtStartOfDay(t));
               }}
               style={{ textAlign: "left" }}
             >
@@ -169,7 +169,7 @@ export default function CareSuggestionCard({ suggestion, onAction, onSnooze }: P
                 const t = startOfToday();
                 const offset = Math.max(0, suggestion.sortDaysUntil);
                 t.setDate(t.getDate() + offset);
-                setSnooze(toTimestampAtStartOfDay(t), "snooze");
+                setSnooze(toTimestampAtStartOfDay(t));
               }}
               style={{ textAlign: "left" }}
             >
@@ -180,7 +180,7 @@ export default function CareSuggestionCard({ suggestion, onAction, onSnooze }: P
               onClick={() => {
                 const t = startOfToday();
                 t.setDate(t.getDate() + 7);
-                setSnooze(toTimestampAtStartOfDay(t), "snooze");
+                setSnooze(toTimestampAtStartOfDay(t));
               }}
               style={{ textAlign: "left" }}
             >
@@ -191,7 +191,7 @@ export default function CareSuggestionCard({ suggestion, onAction, onSnooze }: P
               onClick={() => {
                 const t = startOfToday();
                 t.setDate(t.getDate() + 90);
-                setSnooze(toTimestampAtStartOfDay(t), "hide");
+                setSnooze(toTimestampAtStartOfDay(t));
               }}
               style={{ textAlign: "left" }}
             >

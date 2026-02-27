@@ -7,13 +7,14 @@ import PersonEditDrawer from "../components/PersonEditDrawer";
 type Props = {
   onCreateFirstPerson: (person: Person) => void;
   onComplete: () => void;
+  isExiting?: boolean;
 };
 
 function makeId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-export default function Onboarding({ onCreateFirstPerson, onComplete }: Props) {
+export default function Onboarding({ onCreateFirstPerson, onComplete, isExiting = false }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
@@ -27,9 +28,14 @@ export default function Onboarding({ onCreateFirstPerson, onComplete }: Props) {
     []
   );
 
+  const titleDelay = "0ms";
+  const subtitleDelay = "140ms";
+  const bowDelay = "280ms";
+  const buttonDelay = "420ms";
+
   return (
-    <div style={{ background: "var(--paper)", color: "var(--ink)", minHeight: "100vh" }}>
-      <div style={{ maxWidth: "920px", margin: "0 auto", padding: "48px 1.5rem 64px" }}>
+    <div className={isExiting ? "dkf-exit" : undefined} style={{ background: "var(--paper)", color: "var(--ink)", minHeight: "100vh" }}>
+      <div style={{ maxWidth: "920px", margin: "0 auto", padding: "48px 1.5rem 72px" }}>
         <div style={{ maxWidth: "560px", margin: "0 auto" }}>
           <header>
             <h1
@@ -43,7 +49,9 @@ export default function Onboarding({ onCreateFirstPerson, onComplete }: Props) {
               }}
             >
               <span style={{ display: "inline-flex", alignItems: "center", gap: "0.6rem" }}>
-                <BowIcon size={28} />
+                <span className="dkf-fade-in-140" style={{ display: "inline-block", animationDelay: bowDelay }}>
+                  <BowIcon size={28} />
+                </span>
                 <Brand />
               </span>
             </h1>
@@ -61,22 +69,25 @@ export default function Onboarding({ onCreateFirstPerson, onComplete }: Props) {
             {step === 1 ? (
               <>
                 <div
+                  className="dkf-fade-in-140"
                   style={{
                     fontFamily: "var(--font-serif)",
                     fontSize: "1.55rem",
                     fontWeight: 600,
                     letterSpacing: "-0.02em",
                     lineHeight: 1.25,
+                    animationDelay: titleDelay,
                   }}
                 >
-                  Welcome — your Care List for the people who matter.
+                  Show up for the people you care about.
                 </div>
-                <div style={{ marginTop: "0.75rem", color: "var(--muted)", lineHeight: 1.7 }}>
-                  A calm place to remember birthdays, kids’ milestones, and holidays that truly matter.
+                <div className="dkf-fade-in-140" style={{ marginTop: "0.75rem", color: "var(--muted)", lineHeight: 1.7, animationDelay: subtitleDelay }}>
+                  DKF lightens the mental load—so remembering never feels heavy.
                 </div>
 
                 <div style={{ marginTop: "2rem" }}>
                   <button
+                    className="dkf-fade-in-140"
                     onClick={() => setStep(2)}
                     style={{
                       border: "1px solid var(--border-strong)",
@@ -87,10 +98,11 @@ export default function Onboarding({ onCreateFirstPerson, onComplete }: Props) {
                       fontWeight: 500,
                       letterSpacing: "0.01em",
                       borderRadius: "8px",
-                      padding: "0.85rem 1.1rem",
+                      padding: "1.25rem 1.1rem",
                       fontSize: "0.98rem",
                       boxShadow: "none",
                       fontFamily: "var(--font-sans)",
+                      animationDelay: buttonDelay,
                     }}
                   >
                     Get started
@@ -102,22 +114,21 @@ export default function Onboarding({ onCreateFirstPerson, onComplete }: Props) {
             {step === 2 ? (
               <>
                 <div
+                  className="dkf-fade-in-140"
                   style={{
                     fontFamily: "var(--font-serif)",
                     fontSize: "1.45rem",
                     fontWeight: 600,
                     letterSpacing: "-0.02em",
                     lineHeight: 1.25,
+                    animationDelay: titleDelay,
                   }}
                 >
-                  What DoKnotForget does
+                  Quiet reminders, right when you need them.
                 </div>
 
-                <div style={{ marginTop: "1.25rem", display: "grid", gap: "0.85rem", color: "var(--muted)", lineHeight: 1.7 }}>
-                  <div>{"•"} Remembers important family moments</div>
-                  <div>{"•"} Helps you show up for your inner circle</div>
-                  <div>{"•"} Offers gentle suggestions, never nagging</div>
-                  <div>{"•"} Keeps your emotional bandwidth light</div>
+                <div className="dkf-fade-in-140" style={{ marginTop: "0.75rem", color: "var(--muted)", lineHeight: 1.7, animationDelay: subtitleDelay }}>
+                  Birthdays, milestones, little check-ins… handled softly, privately.
                 </div>
 
                 <div style={{ marginTop: "2.25rem", display: "flex", gap: "1rem", alignItems: "baseline" }}>
@@ -138,6 +149,7 @@ export default function Onboarding({ onCreateFirstPerson, onComplete }: Props) {
                     Back
                   </button>
                   <button
+                    className="dkf-fade-in-140"
                     onClick={() => setStep(3)}
                     style={{
                       border: "1px solid var(--border-strong)",
@@ -152,6 +164,7 @@ export default function Onboarding({ onCreateFirstPerson, onComplete }: Props) {
                       fontSize: "0.98rem",
                       boxShadow: "none",
                       fontFamily: "var(--font-sans)",
+                      animationDelay: buttonDelay,
                     }}
                   >
                     Continue
@@ -163,22 +176,25 @@ export default function Onboarding({ onCreateFirstPerson, onComplete }: Props) {
             {step === 3 ? (
               <>
                 <div
+                  className="dkf-fade-in-140"
                   style={{
                     fontFamily: "var(--font-serif)",
                     fontSize: "1.45rem",
                     fontWeight: 600,
                     letterSpacing: "-0.02em",
                     lineHeight: 1.25,
+                    animationDelay: titleDelay,
                   }}
                 >
-                  Let’s start your Care List.
+                  Keep your circle close.
                 </div>
-                <div style={{ marginTop: "0.75rem", color: "var(--muted)", lineHeight: 1.7 }}>
-                  Add someone you genuinely want to remember more thoughtfully.
+                <div className="dkf-fade-in-140" style={{ marginTop: "0.75rem", color: "var(--muted)", lineHeight: 1.7, animationDelay: subtitleDelay }}>
+                  We help you notice the moments that matter.
                 </div>
 
                 <div style={{ marginTop: "2rem", display: "grid", gap: "0.85rem", justifyItems: "start" }}>
                   <button
+                    className="dkf-fade-in-140"
                     onClick={() => setIsDrawerOpen(true)}
                     style={{
                       border: "1px solid var(--border-strong)",
@@ -193,6 +209,7 @@ export default function Onboarding({ onCreateFirstPerson, onComplete }: Props) {
                       fontSize: "0.98rem",
                       boxShadow: "none",
                       fontFamily: "var(--font-sans)",
+                      animationDelay: buttonDelay,
                     }}
                   >
                     Add person

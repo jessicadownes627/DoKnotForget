@@ -53,7 +53,7 @@ export default function People({ people, onSelectPerson, onGoSoon }: Props) {
         minHeight: "100vh",
       }}
     >
-      <div style={{ maxWidth: "920px", margin: "0 auto", padding: "48px 1.5rem 64px" }}>
+      <div style={{ maxWidth: "920px", margin: "0 auto", padding: "48px 1.5rem 72px" }}>
         <style>{`
           .accent-link { text-decoration: none; }
           .accent-link:hover { text-decoration: underline; text-underline-offset: 3px; }

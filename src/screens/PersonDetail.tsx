@@ -215,6 +215,7 @@ export default function PersonDetail({
           letterSpacing: "0.02em",
           color: "var(--muted)",
           textTransform: "uppercase",
+          marginBottom: "12px",
         }}
       >
         {children}

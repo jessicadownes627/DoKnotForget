@@ -257,7 +257,7 @@ export default function Home({
     setQuestionTick((v) => v + 1);
   }
 
-  const greetingText = "Here are the moments that matter coming up.";
+  const greetingText = "Here’s how to show up today.";
 
   useEffect(() => {
     // First-launch bow pulse (once, never repeats).
@@ -281,7 +281,7 @@ export default function Home({
 
   return (
     <div style={{ background: "var(--paper)", color: "var(--ink)", minHeight: "100vh" }}>
-      <div style={{ maxWidth: "920px", margin: "0 auto", padding: "48px 1.5rem 64px" }}>
+      <div style={{ maxWidth: "920px", margin: "0 auto", padding: "48px 1.5rem 72px" }}>
         <div style={{ maxWidth: "560px", margin: "0 auto" }}>
         <header>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "1rem" }}>
@@ -398,10 +398,7 @@ export default function Home({
           {people.length === 0 ? (
             <div style={{ marginTop: "4.75rem", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
               <div style={{ fontSize: "1.35rem", fontWeight: 600, color: "var(--ink)", letterSpacing: "-0.01em" }}>
-                No one added yet.
-              </div>
-              <div style={{ marginTop: "0.55rem", color: "var(--muted)", maxWidth: "34rem", lineHeight: 1.6 }}>
-                Start with someone important.
+                Add someone you care about.
               </div>
               <div style={{ marginTop: "1.5rem" }}>
                 <button
@@ -428,10 +425,7 @@ export default function Home({
             <section aria-label="People" style={{ marginTop: "18px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
               {filteredPeople.length === 0 ? (
                 <div style={{ marginTop: "1.5rem" }}>
-                  <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>No matches found.</div>
-                  <div style={{ marginTop: "0.4rem", color: "var(--muted)", fontSize: "0.92rem" }}>
-                    Try a different name.
-                  </div>
+                  <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>No match found.</div>
                 </div>
               ) : (
                 <PeopleIndex people={filteredPeople} today={today} onSelectPerson={(p) => onSelectPerson(p, "people")} />
@@ -495,17 +489,11 @@ export default function Home({
                   <div style={{ marginTop: "1.5rem", padding: "2.25rem 0", textAlign: "center" }}>
                     {searchQuery.trim() && filteredPeople.length === 0 ? (
                       <>
-                        <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>No matches found.</div>
-                        <div style={{ marginTop: "0.4rem", color: "var(--muted)", fontSize: "0.92rem" }}>
-                          Try a different name.
-                        </div>
+                        <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>No match found.</div>
                       </>
                     ) : (
                       <>
-                        <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>All calm for now.</div>
-                        <div style={{ marginTop: "0.4rem", color: "var(--muted)", fontSize: "0.92rem" }}>
-                          Nothing coming up in the next couple of weeks.
-                        </div>
+                        <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>More moments coming soon.</div>
                       </>
                     )}
                   </div>
