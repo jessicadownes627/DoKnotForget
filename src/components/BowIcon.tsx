@@ -1,4 +1,4 @@
-import ribbonSrc from "../assets/ribbon-k.svg";
+import ivoryMarkSrc from "../assets/ivory.png";
 
 type Props = {
   size?: number;
@@ -8,11 +8,11 @@ type Props = {
 export default function BowIcon({ size = 26 }: Props) {
   return (
     <img
-      src={ribbonSrc}
-      alt="Cream ribbon tied into a bow forming the letter K, with a small silver band in the center."
+      src={ivoryMarkSrc}
+      alt="DoKnotForget mark."
       width={size}
       height={size}
-      style={{ display: "block", borderRadius: 8 }}
+      style={{ display: "block", borderRadius: 10 }}
       draggable={false}
     />
   );

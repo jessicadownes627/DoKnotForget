@@ -2,9 +2,10 @@ import { useMemo, useState } from "react";
 import type { Person } from "../models/Person";
 import Brand from "../components/Brand";
 import ContactsSearchResults from "../components/ContactsSearchResults";
+import { SoftGoldDot } from "../components/common/GoldBullets";
 import { useAppState } from "../appState";
 import { useNavigate } from "../router";
-import { filterContacts } from "../utils/contactSearch";
+import { filterContacts, initialsFromName } from "../utils/contactSearch";
 
 function groupKeyFromName(name: string) {
   const trimmed = name.trim();
@@ -138,46 +139,28 @@ export default function Contacts() {
               </div>
             </div>
           ) : (
-            <div style={{ marginTop: "2rem", display: "grid", gap: "1.75rem" }}>
+            <div style={{ marginTop: "2rem" }}>
+              <div className="contacts-section-header">Your contacts</div>
               {grouped.map((group) => (
                 <section key={group.key} aria-label={`Contacts ${group.key}`}>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-serif)",
-                      fontSize: "1.05rem",
-                      fontWeight: 600,
-                      color: "var(--ink)",
-                      marginBottom: "0.65rem",
-                    }}
-                  >
+                  <div className="contacts-alpha-header">
                     {group.key}
                   </div>
-                  <div
-                    style={{
-                      background: "var(--card)",
-                      borderRadius: "12px",
-                      border: "1px solid var(--border)",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {group.people.map((p, idx) => (
+                  <div className="contacts-card-list">
+                    {group.people.map((p) => (
                       <button
                         key={p.id}
+                        type="button"
+                        className="contact-row"
                         onClick={() => navigate(`/person/${p.id}`)}
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          padding: "0.95rem 1rem",
-                          border: "none",
-                          background: "transparent",
-                          cursor: "pointer",
-                          color: "var(--ink)",
-                          fontSize: "1rem",
-                          borderTop:
-                            idx === 0 ? "none" : "1px solid var(--border)",
-                        }}
                       >
-                        {p.name}
+                        <div className="contact-left">
+                          <SoftGoldDot className="contact-dot" />
+                          <div className="contact-avatar" aria-hidden="true">
+                            {initialsFromName(p.name)}
+                          </div>
+                        </div>
+                        <div className="contact-name">{p.name}</div>
                       </button>
                     ))}
                   </div>

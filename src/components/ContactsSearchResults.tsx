@@ -1,5 +1,6 @@
 import type { Person } from "../models/Person";
 import { initialsFromName } from "../utils/contactSearch";
+import { SoftGoldDot } from "./common/GoldBullets";
 
 type Props = {
   results: Person[];
@@ -19,8 +20,11 @@ export default function ContactsSearchResults({ results, onSelect }: Props) {
             className="contact-row"
             onClick={() => onSelect(person)}
           >
-            <div className="contact-avatar" aria-hidden="true">
-              {initialsFromName(person.name)}
+            <div className="contact-left">
+              <SoftGoldDot className="contact-dot" />
+              <div className="contact-avatar" aria-hidden="true">
+                {initialsFromName(person.name)}
+              </div>
             </div>
             <div className="contact-name">{person.name}</div>
           </button>
@@ -29,4 +33,3 @@ export default function ContactsSearchResults({ results, onSelect }: Props) {
     </div>
   );
 }
-
