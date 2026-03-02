@@ -26,9 +26,9 @@ export type ChildSchoolEvent = {
 export type Child = {
   id: string;
   name?: string;
-  birthday?: string; // YYYY-MM-DD (use 0000-MM-DD if year unknown)
+  birthday?: string | null; // YYYY-MM-DD (use 0000-MM-DD if year unknown)
   // Back-compat: older records used `birthdate`.
-  birthdate?: string;
+  birthdate?: string | null;
   schoolEvents?: ChildSchoolEvent[];
 };
 
@@ -37,6 +37,10 @@ export type Person = {
   name: string;
   phone?: string;
   moments: Moment[];
+  isMother?: boolean | null; // null/undefined = unknown, true/false = answered
+  isFather?: boolean | null; // null/undefined = unknown, true/false = answered
+  partnerId?: string | null; // partnered person id
+  anniversary?: string | null; // MM-DD
   hasKids?: boolean;
   parentRole?: "mother" | "father" | "parent";
   religionCulture?: "christian" | "orthodox" | "jewish" | "muslim" | "none";

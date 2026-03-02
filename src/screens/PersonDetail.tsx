@@ -1,174 +1,337 @@
-import { useState } from "react";
-import type { Moment, Person } from "../models/Person";
+import { useEffect, useMemo, useState } from "react";
+import type { Person } from "../models/Person";
 import type { Relationship } from "../models/Relationship";
-import MomentDatePicker from "../components/MomentDatePicker";
-import PersonArchiveCard from "../components/PersonArchiveCard";
 import PersonEditDrawer from "../components/PersonEditDrawer";
+import { useAppState } from "../appState";
+import { useNavigate, useParams } from "../router";
+import { daysUntilDate, getNextBirthdayFromIso } from "../utils/birthdayUtils";
+import { getNextAnniversary } from "../utils/anniversaryUtils";
+import { getFathersDay, getMothersDay } from "../utils/holidayUtils";
+import { RaisedGoldBullet, SoftGoldDot } from "../components/common/GoldBullets";
 
-type Props = {
-  person: Person;
-  onUpdatePerson: (person: Person) => void;
-  people?: Person[];
-  relationships?: Relationship[];
-  onSelectPerson?: (person: Person) => void;
-  onEdit?: () => void;
-  onBack: () => void;
-};
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
 
-export default function PersonDetail({
-  person,
-  onUpdatePerson,
-  people,
-  relationships,
-  onSelectPerson,
-  onBack,
-}: Props) {
+function parseIsoDate(value: string) {
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function timePhrase(daysUntil: number) {
+  if (daysUntil === 0) return "today";
+  if (daysUntil === 1) return "tomorrow";
+  return `in ${daysUntil} days`;
+}
+
+function possessivePronounFor(person: Person): "His" | "Her" | "Their" {
+  const gender = ((person as any).gender ?? "").toString().toLowerCase();
+  if (gender === "male") return "His";
+  if (gender === "female") return "Her";
+  return "Their";
+}
+
+function getAnniversaryMonthDay(person: Person): string | null {
+  const stored = (person.anniversary ?? "").trim();
+  if (stored) return stored;
+  const moment = (person.moments ?? []).find((m) => m.type === "anniversary") ?? null;
+  if (!moment?.date) return null;
+  const parts = moment.date.split("-");
+  if (parts.length !== 3) return null;
+  const mm = parts[1];
+  const dd = parts[2];
+  if (!mm || !dd) return null;
+  return `${mm}-${dd}`;
+}
+
+function formatMonthDay(isoMonthDay: string, formatter: Intl.DateTimeFormat) {
+  const [mmStr, ddStr] = isoMonthDay.trim().split("-");
+  const mm = Number(mmStr);
+  const dd = Number(ddStr);
+  if (!mmStr || !ddStr || Number.isNaN(mm) || Number.isNaN(dd)) return isoMonthDay;
+  const parsed = new Date(2000, mm - 1, dd);
+  if (Number.isNaN(parsed.getTime())) return isoMonthDay;
+  if (parsed.getMonth() !== mm - 1 || parsed.getDate() !== dd) return isoMonthDay;
+  return formatter.format(parsed);
+}
+
+export default function PersonDetail({}: {}) {
+  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const { people, relationships, updatePerson } = useAppState();
+  const person = people.find((p) => p.id === id) ?? null;
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [isAddingBirthday, setIsAddingBirthday] = useState(false);
-  const [birthdayMonthDay, setBirthdayMonthDay] = useState("");
-  const [birthdayYear, setBirthdayYear] = useState("");
-  const [birthdayDraftMonthDay, setBirthdayDraftMonthDay] = useState("");
-  const [birthdayDraftYear, setBirthdayDraftYear] = useState("");
-  const [isBirthdayPickerOpen, setIsBirthdayPickerOpen] = useState(false);
   const [isCircleOpen, setIsCircleOpen] = useState(false);
+  const today = useMemo(() => startOfDay(new Date()), []);
 
-  const birthdays = person.moments.filter((moment) => moment.type === "birthday");
-  const anniversaries = person.moments.filter((moment) => moment.type === "anniversary");
-  const customMoments = person.moments
-    .filter((moment) => moment.type === "custom")
-    .sort((a, b) => a.date.localeCompare(b.date));
-  const birthdayFormatter = new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    day: "numeric",
-  });
-  const birthdayWithYearFormatter = new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-  const fullDateFormatter = new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-  const birthdayShortFormatter = new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-  });
+  useEffect(() => {
+    if (!person) navigate("/home", { replace: true });
+  }, [navigate, person]);
 
-  function parseYmd(value: string) {
-    const [yStr, mStr, dStr] = value.split("-");
-    const y = Number(yStr);
-    const m = Number(mStr);
-    const d = Number(dStr);
-    if (!yStr || Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) return null;
-    return { y, m, d };
-  }
+  if (!person) return null;
 
-  function formatBirthday(date: string) {
-    const parts = parseYmd(date);
-    if (!parts) return date;
+  const partner = person.partnerId ? people.find((p) => p.id === person.partnerId) ?? null : null;
 
-    const year = parts.y;
-    const displayYear = year > 0 ? year : 2000;
-    const parsed = new Date(displayYear, parts.m - 1, parts.d);
-    if (Number.isNaN(parsed.getTime())) return date;
+  const monthDayFormatter = useMemo(
+    () => new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" }),
+    []
+  );
+  const shortDateFormatter = useMemo(
+    () => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }),
+    []
+  );
 
-    return year > 0 ? birthdayWithYearFormatter.format(parsed) : birthdayFormatter.format(parsed);
-  }
+  const initials = useMemo(() => {
+    const n = person.name?.trim() ?? "";
+    if (!n) return "?";
+    return n
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("");
+  }, [person.name]);
 
-  function formatFullDate(value: string) {
-    const parts = parseYmd(value);
-    if (!parts) return value;
-    const displayYear = parts.y > 0 ? parts.y : 2000;
-    const parsed = new Date(displayYear, parts.m - 1, parts.d);
-    if (Number.isNaN(parsed.getTime())) return value;
-    if (parts.y > 0) return fullDateFormatter.format(parsed);
-    return birthdayFormatter.format(parsed);
-  }
+  const kidsNamesOnly = useMemo(() => {
+    const kids = (person.children ?? []).map((c) => (c.name ?? "").trim()).filter(Boolean);
+    if (!kids.length) return null;
+    return kids.slice(0, 3).join(", ") + (kids.length > 3 ? "…" : "");
+  }, [person.children]);
 
-  function getAgeFromBirthday(value: string) {
-    const parts = parseYmd(value);
-    if (!parts || parts.y <= 0) return null;
+  const kidsBirthdayLines = useMemo(() => {
+    const lines: Array<{ key: string; text: string }> = [];
+    for (const child of person.children ?? []) {
+      const name = (child.name ?? "").trim();
+      const raw = (child.birthday ?? child.birthdate ?? "").trim();
+      if (!name || !raw) continue;
+      const next = getNextBirthdayFromIso(raw, today);
+      if (!next) continue;
 
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    let age = today.getFullYear() - parts.y;
+      const yearNum = Number(raw.split("-")[0]);
+      const age = !Number.isNaN(yearNum) && yearNum > 0 ? next.target.getFullYear() - yearNum : null;
+      const dateText = monthDayFormatter.format(next.target);
 
-    const month = today.getMonth() + 1;
-    const hasHadBirthdayThisYear =
-      month > parts.m || (month === parts.m && today.getDate() >= parts.d);
-    if (!hasHadBirthdayThisYear) age -= 1;
-    if (age < 0) return null;
-    return age;
-  }
+      lines.push({
+        key: `${child.id}_${next.year}`,
+        text: age !== null && age > 0 ? `${name} — turns ${age} on ${dateText}` : `${name} — birthday on ${dateText}`,
+      });
+    }
+    return lines;
+  }, [monthDayFormatter, person.children, today]);
 
-  function buildBirthdayIso(monthDay: string, year: string) {
-    if (!monthDay) return "";
-    const parts = parseYmd(monthDay);
-    if (!parts) return "";
-    const mm = String(parts.m).padStart(2, "0");
-    const dd = String(parts.d).padStart(2, "0");
-    const y = year.trim();
-    if (!y) return `0000-${mm}-${dd}`;
-    return `${y.padStart(4, "0")}-${mm}-${dd}`;
-  }
+  const birthdayDisplay = useMemo(() => {
+    const b = (person.moments ?? []).find((m) => m.type === "birthday") ?? null;
+    if (!b?.date) return null;
+    const next = getNextBirthdayFromIso(b.date, today);
+    if (!next) return null;
+    return monthDayFormatter.format(next.target);
+  }, [monthDayFormatter, person.moments, today]);
 
-  function getNextBirthdayInfo(date: string) {
-    const [yearStr, monthStr, dayStr] = date.split("-");
-    const year = Number(yearStr);
-    const month = Number(monthStr);
-    const day = Number(dayStr);
+  const anniversaryDisplay = useMemo(() => {
+    const mmdd = getAnniversaryMonthDay(person);
+    if (!mmdd) return null;
+    return formatMonthDay(mmdd, monthDayFormatter);
+  }, [monthDayFormatter, person]);
 
-    if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) return null;
+  type UpcomingItem = { key: string; label: string; date: Date; daysUntil: number; emoji?: string };
 
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    let target = new Date(today.getFullYear(), month - 1, day);
+  const upcomingItems = useMemo(() => {
+    const base = today;
+    const items: UpcomingItem[] = [];
 
-    if (
-      Number.isNaN(target.getTime()) ||
-      target.getMonth() !== month - 1 ||
-      target.getDate() !== day
-    ) {
-      return null;
+    const birthdayMoment = (person.moments ?? []).find((m) => m.type === "birthday") ?? null;
+    if (birthdayMoment?.date) {
+      const next = getNextBirthdayFromIso(birthdayMoment.date, base);
+      if (next && next.daysUntilBirthday >= 0) {
+        items.push({
+          key: `bday_${person.id}_${next.year}`,
+          label: `${person.name}’s birthday`,
+          date: next.target,
+          daysUntil: next.daysUntilBirthday,
+          emoji: "🎂",
+        });
+      }
     }
 
-    if (target < today) {
-      target = new Date(today.getFullYear() + 1, month - 1, day);
+    if (partner) {
+      const partnerBirthday = (partner.moments ?? []).find((m) => m.type === "birthday") ?? null;
+      if (partnerBirthday?.date) {
+        const next = getNextBirthdayFromIso(partnerBirthday.date, base);
+        if (next && next.daysUntilBirthday >= 0) {
+          items.push({
+            key: `partner_bday_${partner.id}_${next.year}`,
+            label: `${partner.name}’s birthday`,
+            date: next.target,
+            daysUntil: next.daysUntilBirthday,
+            emoji: "🎂",
+          });
+        }
+      }
     }
 
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const daysUntil = Math.round((target.getTime() - today.getTime()) / msPerDay);
-    const relativeLabel =
-      daysUntil === 0 ? "today" : daysUntil === 1 ? "tomorrow" : `in ${daysUntil} days`;
+    const monthDay = getAnniversaryMonthDay(person);
+    if (partner && monthDay) {
+      const next = getNextAnniversary(monthDay);
+      if (next) {
+        const until = daysUntilDate(next, base);
+        if (until >= 0) {
+          items.push({
+            key: `anniv_${person.id}_${partner.id}_${next.getFullYear()}`,
+            label: `Anniversary with ${partner.name}`,
+            date: next,
+            daysUntil: until,
+            emoji: "💕",
+          });
+        }
+      }
+    }
 
-    // "Turns X" uses the full birth year and the year of the next occurrence.
-    const turns = year > 0 ? target.getFullYear() - year : null;
+    for (const child of person.children ?? []) {
+      const childName = (child.name ?? "").trim();
+      const raw = (child.birthday ?? child.birthdate ?? "").trim();
+      if (!childName || !raw) continue;
+      const next = getNextBirthdayFromIso(raw, base);
+      if (!next || next.daysUntilBirthday < 0) continue;
+      items.push({
+        key: `child_bday_${child.id}_${next.year}`,
+        label: `${childName}’s birthday`,
+        date: next.target,
+        daysUntil: next.daysUntilBirthday,
+        emoji: "🎉",
+      });
+    }
 
-    return {
-      daysUntil,
-      relativeLabel,
-      formatted: birthdayShortFormatter.format(target),
-      turns,
-    };
-  }
+    const nowYear = base.getFullYear();
+    if (person.isMother === true || person.holidayPrefs?.mothersDay === true) {
+      let md = getMothersDay(nowYear);
+      if (md < base) md = getMothersDay(nowYear + 1);
+      const until = daysUntilDate(md, base);
+      if (until >= 0) {
+        items.push({
+          key: `md_${md.getFullYear()}`,
+          label: "Mother’s Day",
+          date: md,
+          daysUntil: until,
+          emoji: "💐",
+        });
+      }
+    }
+    if (person.isFather === true || person.holidayPrefs?.fathersDay === true) {
+      let fd = getFathersDay(nowYear);
+      if (fd < base) fd = getFathersDay(nowYear + 1);
+      const until = daysUntilDate(fd, base);
+      if (until >= 0) {
+        items.push({
+          key: `fd_${fd.getFullYear()}`,
+          label: "Father’s Day",
+          date: fd,
+          daysUntil: until,
+          emoji: "🧢",
+        });
+      }
+    }
 
-  function handleSaveBirthday() {
-    const birthdayIso = buildBirthdayIso(birthdayMonthDay, birthdayYear);
-    if (!birthdayIso) return;
-    const moment: Moment = {
-      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      type: "birthday",
-      label: "Birthday",
-      date: birthdayIso,
-      recurring: true,
-    };
-    onUpdatePerson({ ...person, moments: [...person.moments, moment] });
-    setBirthdayMonthDay("");
-    setBirthdayYear("");
-    setIsAddingBirthday(false);
-  }
+    for (const m of person.moments ?? []) {
+      if (m.type !== "custom") continue;
+      if (!m.date) continue;
+
+      let target: Date | null = null;
+      let until: number | null = null;
+
+      if (m.recurring) {
+        const next = getNextBirthdayFromIso(m.date, base);
+        if (next) {
+          target = next.target;
+          until = next.daysUntilBirthday;
+        }
+      } else {
+        const parsed = parseIsoDate(m.date);
+        if (parsed) {
+          target = startOfDay(parsed);
+          until = daysUntilDate(target, base);
+        }
+      }
+
+      if (!target || until === null || until < 0) continue;
+
+      const lower = m.label.toLowerCase();
+      const emoji = lower.includes("birthday") ? "🎂" : lower.includes("anniversary") ? "💕" : "🗓️";
+
+      items.push({
+        key: `custom_${m.id}_${target.toISOString()}`,
+        label: m.label,
+        date: target,
+        daysUntil: until,
+        emoji,
+      });
+    }
+
+    return items
+      .filter((i) => i.daysUntil >= 0 && i.daysUntil <= 365)
+      .sort((a, b) => (a.daysUntil - b.daysUntil) || a.label.localeCompare(b.label));
+  }, [partner, person, today]);
+
+  const nextUp = useMemo(() => {
+    const within60 = upcomingItems.filter((i) => i.daysUntil <= 60);
+    return within60.length ? within60[0] : null;
+  }, [upcomingItems]);
+
+  const nextUpDescription = useMemo(() => {
+    if (!nextUp) return null;
+    const phr = timePhrase(nextUp.daysUntil);
+
+    if (nextUp.label === `${person.name}’s birthday`) {
+      const pronoun = possessivePronounFor(person);
+      return `${pronoun} birthday is ${phr}.`;
+    }
+
+    if (nextUp.label.startsWith("Anniversary with ")) {
+      const pronoun = possessivePronounFor(person);
+      return `${pronoun} anniversary is ${phr}.`;
+    }
+
+    return `${nextUp.label} is ${phr}.`;
+  }, [nextUp, person]);
+
+  const thingsToRemember = useMemo(() => {
+    const lines: Array<{ label: string; value: string }> = [];
+
+    if (person.religionCulture) {
+      lines.push({ label: "Religion / culture", value: person.religionCulture });
+    }
+
+    const kids = (person.children ?? [])
+      .map((c) => {
+        const name = (c.name ?? "").trim();
+        const raw = (c.birthday ?? c.birthdate ?? "").trim();
+        if (!name) return null;
+        if (!raw) return name;
+        const parsed = parseIsoDate(raw);
+        if (!parsed) return name;
+        return `${name} · ${monthDayFormatter.format(parsed)}`;
+      })
+      .filter((v): v is string => Boolean(v));
+    if (kids.length) lines.push({ label: "Kids", value: kids.join(" • ") });
+
+    const prefs: string[] = [];
+    if (person.holidayPrefs?.mothersDay !== undefined) {
+      prefs.push(`Mother’s Day: ${person.holidayPrefs.mothersDay ? "Include" : "Exclude"}`);
+    }
+    if (person.holidayPrefs?.fathersDay !== undefined) {
+      prefs.push(`Father’s Day: ${person.holidayPrefs.fathersDay ? "Include" : "Exclude"}`);
+    }
+    if (prefs.length) lines.push({ label: "Holidays", value: prefs.join(" · ") });
+
+    const notes = (person.moments ?? []).filter((m) => m.type === "custom" && m.category === "sensitive");
+    if (notes.length) {
+      lines.push({
+        label: "Notes",
+        value: notes.map((m) => (m.date ? `${m.label} · ${m.date}` : m.label)).join(" • "),
+      });
+    }
+
+    return lines;
+  }, [monthDayFormatter, person]);
 
   const relationshipsForPerson = (relationships ?? []).filter(
     (rel) => rel.fromId === person.id || rel.toId === person.id
@@ -183,14 +346,7 @@ export default function PersonDetail({
     })
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
-  const relationshipOrder: Array<Relationship["type"]> = [
-    "partner",
-    "child",
-    "parent",
-    "sibling",
-    "friend",
-    "other",
-  ];
+  const relationshipOrder: Array<Relationship["type"]> = ["partner", "child", "parent", "sibling", "friend", "other"];
 
   const groupedRelatedPeople = relationshipOrder
     .map((type) => ({
@@ -205,55 +361,238 @@ export default function PersonDetail({
     return type.charAt(0).toUpperCase() + type.slice(1);
   }
 
-  function GroupLabel({ children }: { children: string }) {
-    return (
+  return (
+    <div style={{ background: "var(--paper)", color: "var(--ink)", minHeight: "100vh" }}>
       <div
         style={{
-          marginTop: "12px",
-          fontFamily: "var(--font-sans)",
-          fontSize: "0.85rem",
-          letterSpacing: "0.02em",
-          color: "var(--muted)",
-          textTransform: "uppercase",
-          marginBottom: "12px",
+          maxWidth: "920px",
+          margin: "0 auto",
+          padding: "env(safe-area-inset-top) 16px 16px 16px",
+          boxSizing: "border-box",
+          minHeight: "100vh",
         }}
       >
-        {children}
-      </div>
-    );
-  }
+        <div style={{ maxWidth: "700px", margin: "0 auto", paddingTop: "32px" }}>
+          <div style={{ marginBottom: "1.75rem", display: "flex", justifyContent: "space-between" }}>
+            <button
+              onClick={() => navigate("/home", { state: { defaultTab: "contacts" } })}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "var(--muted)",
+                padding: 0,
+              }}
+            >
+              ← Back
+            </button>
+            <button
+              onClick={() => setIsEditOpen(true)}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "var(--muted)",
+                padding: 0,
+              }}
+            >
+              Edit
+            </button>
+          </div>
 
-  return (
-    <div style={{ padding: "3.5rem", maxWidth: "700px", margin: "0 auto" }}>
-      <div style={{ marginBottom: "1.75rem", display: "flex", justifyContent: "space-between" }}>
-        <button
-          onClick={onBack}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            color: "var(--muted)",
-            padding: 0,
-          }}
-        >
-          ← Back
-        </button>
-        <button
-          onClick={() => setIsEditOpen(true)}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            color: "var(--muted)",
-            padding: 0,
-          }}
-        >
-          Edit
-        </button>
-      </div>
+          <div style={{ maxWidth: "560px", margin: "0 auto" }}>
+            <section aria-label="Relationship snapshot">
+              <div
+                style={{
+                  width: "100%",
+                  background: "var(--paper)",
+                  borderRadius: "16px",
+                  padding: "22px",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                  marginBottom: "24px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "16px",
+                    alignItems: "flex-start",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "56px",
+                      height: "56px",
+                      borderRadius: "999px",
+                      background: "rgba(27, 42, 65, 0.08)",
+                      color: "var(--ink)",
+                      display: "grid",
+                      placeItems: "center",
+                      fontWeight: 600,
+                      letterSpacing: "0.02em",
+                      flex: "0 0 auto",
+                    }}
+                  >
+                    {initials}
+                  </div>
 
-      <div style={{ maxWidth: "560px", margin: "0 auto" }}>
-        <PersonArchiveCard person={person} />
+                  <div style={{ minWidth: "220px", flex: "1 1 260px" }}>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-serif)",
+                        fontSize: "30px",
+                        fontWeight: 600,
+                        letterSpacing: "-0.01em",
+                        color: "var(--ink)",
+                      }}
+                    >
+                      {person.name.trim()}
+                    </div>
+
+                    <div style={{ marginTop: "10px", display: "grid", gap: "5px", color: "var(--muted)", lineHeight: 1.5, fontSize: "16px" }}>
+                      {partner ? <div>Partner — {partner.name}</div> : null}
+                      {kidsNamesOnly ? <div>Kids: {kidsNamesOnly}</div> : null}
+                      {kidsBirthdayLines.length ? (
+                        <div style={{ display: "grid", gap: "6px" }}>
+                          {kidsBirthdayLines.map((line) => (
+                            <div key={line.key} style={{ display: "flex", alignItems: "center" }}>
+                              <SoftGoldDot />
+                              <div style={{ minWidth: 0 }}>{line.text}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      {birthdayDisplay ? (
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          <SoftGoldDot />
+                          <div style={{ minWidth: 0 }}>Birthday on {birthdayDisplay}</div>
+                        </div>
+                      ) : null}
+                      {anniversaryDisplay ? (
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          <SoftGoldDot />
+                          <div style={{ minWidth: 0 }}>Anniversary on {anniversaryDisplay}</div>
+                        </div>
+                      ) : null}
+                      {nextUp && nextUpDescription ? (
+                        <div style={{ marginTop: "10px", display: "flex", alignItems: "center" }}>
+                          <RaisedGoldBullet />
+                          <div style={{ minWidth: 0 }}>
+                            <div>Coming up for {person.name.trim()}…</div>
+                            <div>{nextUpDescription}</div>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section aria-label="Upcoming moments" style={{ marginTop: "28px" }}>
+              <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>
+                What’s coming up for {person.name.trim()}
+              </div>
+              {upcomingItems.length ? (
+                <div style={{ marginTop: "14px", display: "grid", gap: "10px" }}>
+                  {upcomingItems.slice(0, 8).map((item) => (
+                    <div key={item.key} style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                      <div style={{ color: "var(--ink)", display: "flex", alignItems: "center", minWidth: 0 }}>
+                        <SoftGoldDot />
+                        <div style={{ minWidth: 0 }}>
+                          {item.label}
+                          {item.emoji ? ` ${item.emoji}` : ""}
+                        </div>
+                      </div>
+                      <div style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>
+                        {item.daysUntil <= 7 ? timePhrase(item.daysUntil) : shortDateFormatter.format(item.date)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ marginTop: "12px", color: "var(--muted)", lineHeight: 1.6 }}>
+                  Nothing on the horizon yet.
+                </div>
+              )}
+            </section>
+
+            {thingsToRemember.length || groupedRelatedPeople.length ? (
+              <section aria-label="Things to remember" style={{ marginTop: "28px" }}>
+                <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>
+                  Things to remember
+                </div>
+
+                {thingsToRemember.length ? (
+                  <div style={{ marginTop: "12px", display: "grid", gap: "10px", color: "var(--muted)", lineHeight: 1.6 }}>
+                    {thingsToRemember.map((line) => (
+                      <div key={line.label}>
+                        <span style={{ color: "var(--ink)" }}>{line.label}:</span> {line.value}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div style={{ marginTop: thingsToRemember.length ? "18px" : "12px" }}>
+                  <button
+                    onClick={() => setIsCircleOpen((prev) => !prev)}
+                    style={{
+                      padding: 0,
+                      border: "none",
+                      background: "none",
+                      cursor: "pointer",
+                      color: "var(--ink)",
+                      fontSize: "16px",
+                      fontFamily: "var(--font-sans)",
+                      fontWeight: 500,
+                      textAlign: "left",
+                    }}
+                  >
+                    Related people <span style={{ color: "var(--muted)" }}>{isCircleOpen ? "—" : "+"}</span>
+                  </button>
+
+                  {isCircleOpen ? (
+                    <div style={{ marginTop: "14px" }}>
+                      {groupedRelatedPeople.length === 0 ? (
+                        <div style={{ color: "var(--muted)", lineHeight: 1.6 }}>No related people yet.</div>
+                      ) : (
+                        <div style={{ display: "grid", gap: "14px" }}>
+                          {groupedRelatedPeople.map((group) => (
+                            <div key={group.type}>
+                              <div style={{ color: "var(--muted)", fontSize: "14px", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.02em" }}>
+                                {formatRelationshipType(group.type)}
+                              </div>
+                              <div style={{ display: "grid", gap: "10px" }}>
+                                {group.items.map(({ person: related }) => (
+                                  <button
+                                    key={related.id}
+                                    onClick={() => navigate(`/person/${related.id}`)}
+                                    style={{
+                                      border: "1px solid var(--border)",
+                                      borderRadius: "14px",
+                                      background: "rgba(255,255,255,0.6)",
+                                      padding: "12px 14px",
+                                      textAlign: "left",
+                                      cursor: "pointer",
+                                      color: "var(--ink)",
+                                    }}
+                                  >
+                                    <div style={{ fontWeight: 500 }}>{related.name}</div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
+          </div>
+        </div>
       </div>
 
       <PersonEditDrawer
@@ -261,289 +600,9 @@ export default function PersonDetail({
         person={person}
         onClose={() => setIsEditOpen(false)}
         onSave={(updated) => {
-          onUpdatePerson(updated);
+          updatePerson(updated);
         }}
       />
-
-      <div style={{ marginTop: "2.5rem", display: "grid", gap: "2.75rem", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
-        <section aria-label="Personal">
-          <GroupLabel>Personal</GroupLabel>
-          <div style={{ marginTop: "0.85rem", color: "var(--muted)", lineHeight: 1.6 }}>
-            {person.phone ? `Phone: ${person.phone}` : "Phone: Phone not added"}
-          </div>
-        </section>
-
-        <section aria-label="Family">
-          <GroupLabel>Family</GroupLabel>
-          <div style={{ marginTop: "0.85rem", color: "var(--muted)", lineHeight: 1.6 }}>
-            {(() => {
-              const kidsCount = (person.children ?? []).length;
-              if (!person.hasKids && kidsCount === 0) return "No family details yet.";
-              if (kidsCount === 0) return "Has kids.";
-              return kidsCount === 1 ? "1 child saved." : `${kidsCount} children saved.`;
-            })()}
-          </div>
-        </section>
-
-        <section aria-label="Culture">
-          <GroupLabel>Culture</GroupLabel>
-          <div style={{ marginTop: "0.85rem", color: "var(--muted)", lineHeight: 1.6 }}>
-            {person.religionCulture ? `Religion/culture: ${person.religionCulture}` : "Religion/culture: Not set"}
-          </div>
-        </section>
-
-        <section aria-label="Dates">
-          <GroupLabel>Dates</GroupLabel>
-
-          <div style={{ marginTop: "1.15rem" }}>
-            <div style={{ fontFamily: "var(--font-sans)", fontSize: "1rem", fontWeight: 600, color: "var(--ink)" }}>
-              Birthdays
-            </div>
-
-            {birthdays.length === 0 ? (
-              <p style={{ marginTop: "0.6rem", color: "var(--muted)", lineHeight: 1.6 }}>No birthdays saved yet.</p>
-            ) : (
-              <ul
-                style={{
-                  marginTop: "0.65rem",
-                  listStyle: "none",
-                  paddingLeft: 0,
-                  color: "var(--muted)",
-                  lineHeight: 1.7,
-                }}
-              >
-                {birthdays.map((moment) => (
-                  <li key={moment.id} style={{ marginBottom: "0.35rem" }}>
-                    {"•"} Birthday · {formatBirthday(moment.date)}
-                    {(() => {
-                      const age = getAgeFromBirthday(moment.date);
-                      return age !== null ? ` · Age ${age}` : "";
-                    })()}
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {!isAddingBirthday ? (
-              <div style={{ marginTop: "1.5rem" }}>
-                <button
-                  onClick={() => setIsAddingBirthday(true)}
-                  style={{
-                    padding: "0.75rem 1.25rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  Add a birthday
-                </button>
-              </div>
-            ) : (
-              <div style={{ marginTop: "1.5rem", display: "grid", gap: "0.75rem", maxWidth: "520px" }}>
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    setBirthdayDraftMonthDay(birthdayMonthDay);
-                    setBirthdayDraftYear(birthdayYear);
-                    setIsBirthdayPickerOpen(true);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      setBirthdayDraftMonthDay(birthdayMonthDay);
-                      setBirthdayDraftYear(birthdayYear);
-                      setIsBirthdayPickerOpen(true);
-                    }
-                  }}
-                  style={{
-                    display: "flex",
-                    alignItems: "baseline",
-                    justifyContent: "space-between",
-                    padding: "0.75rem 0",
-                    cursor: "pointer",
-                    borderBottom: "1px solid rgba(27, 42, 65, 0.22)",
-                    gap: "1rem",
-                  }}
-                >
-                  <div style={{ color: "var(--ink)" }}>Birthday</div>
-                  <div style={{ color: "var(--muted)", textAlign: "right" }}>
-                    {birthdayMonthDay
-                      ? formatBirthday(buildBirthdayIso(birthdayMonthDay, birthdayYear))
-                      : "Select date"}
-                  </div>
-                </div>
-
-                <MomentDatePicker
-                  isOpen={isBirthdayPickerOpen}
-                  title="Birthday"
-                  mode="birthday"
-                  monthDay={birthdayDraftMonthDay}
-                  setMonthDay={setBirthdayDraftMonthDay}
-                  year={birthdayDraftYear}
-                  setYear={setBirthdayDraftYear}
-                  yearHelperText="Used for milestone reminders."
-                  onSave={() => {
-                    setBirthdayMonthDay(birthdayDraftMonthDay);
-                    setBirthdayYear(birthdayDraftYear);
-                    setIsBirthdayPickerOpen(false);
-                  }}
-                  onCancel={() => setIsBirthdayPickerOpen(false)}
-                  onClear={() => {
-                    setBirthdayDraftMonthDay("");
-                    setBirthdayDraftYear("");
-                  }}
-                />
-
-                <div style={{ display: "flex", gap: "0.75rem" }}>
-                  <button
-                    onClick={handleSaveBirthday}
-                    style={{
-                      padding: "0.6rem 1rem",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Save birthday
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsBirthdayPickerOpen(false);
-                      setIsAddingBirthday(false);
-                      setBirthdayMonthDay("");
-                      setBirthdayYear("");
-                      setBirthdayDraftMonthDay("");
-                      setBirthdayDraftYear("");
-                    }}
-                    style={{
-                      padding: "0.6rem 1rem",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div style={{ marginTop: "2.25rem" }}>
-            <div style={{ fontFamily: "var(--font-sans)", fontSize: "1rem", fontWeight: 600, color: "var(--ink)" }}>
-              Anniversary
-            </div>
-
-            {anniversaries.length === 0 ? (
-              <p style={{ marginTop: "0.6rem", color: "var(--muted)", lineHeight: 1.6 }}>No anniversary saved yet.</p>
-            ) : (
-              <ul
-                style={{
-                  marginTop: "0.65rem",
-                  listStyle: "none",
-                  paddingLeft: 0,
-                  color: "var(--muted)",
-                  lineHeight: 1.7,
-                }}
-              >
-                {anniversaries.map((moment) => (
-                  <li key={moment.id} style={{ marginBottom: "0.35rem" }}>
-                    {"•"} Anniversary · {formatFullDate(moment.date)}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div style={{ marginTop: "2.25rem" }}>
-            <div style={{ fontFamily: "var(--font-sans)", fontSize: "1rem", fontWeight: 600, color: "var(--ink)" }}>
-              Custom moments
-            </div>
-
-            {customMoments.length === 0 ? (
-              <p style={{ marginTop: "0.6rem", color: "var(--muted)", lineHeight: 1.6 }}>No custom moments saved yet.</p>
-            ) : (
-              <ul
-                style={{
-                  marginTop: "0.65rem",
-                  listStyle: "none",
-                  paddingLeft: 0,
-                  color: "var(--muted)",
-                  lineHeight: 1.7,
-                }}
-              >
-                {customMoments.map((moment) => (
-                  <li key={moment.id} style={{ marginBottom: "0.35rem" }}>
-                    {"•"} {moment.label} · {formatFullDate(moment.date)}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </section>
-
-        <section aria-label="Circle">
-          <GroupLabel>Circle</GroupLabel>
-          <button
-            onClick={() => setIsCircleOpen((prev) => !prev)}
-            style={{
-              marginTop: "0.85rem",
-              padding: 0,
-              border: "none",
-              background: "none",
-              cursor: "pointer",
-              color: "var(--ink)",
-              fontSize: "1rem",
-              fontFamily: "var(--font-sans)",
-              fontWeight: 600,
-              textAlign: "left",
-            }}
-          >
-            Related people <span style={{ color: "var(--muted)" }}>{isCircleOpen ? "—" : "+"}</span>
-          </button>
-
-          {isCircleOpen ? (
-            <div style={{ marginTop: "1.25rem" }}>
-              {groupedRelatedPeople.length === 0 ? (
-                <div style={{ color: "var(--muted)", lineHeight: 1.6 }}>No related people yet.</div>
-              ) : (
-                <div style={{ display: "grid", gap: "1.75rem" }}>
-                  {groupedRelatedPeople.map((group) => (
-                    <div key={group.type}>
-                      <div style={{ color: "var(--muted)", fontSize: "0.9rem", marginBottom: "0.6rem" }}>
-                        {formatRelationshipType(group.type)}
-                      </div>
-                      <div style={{ display: "grid", gap: "1.25rem" }}>
-                        {group.items.map(({ person: related }) => {
-                          const birthdayMoment =
-                            related.moments.find((m) => m.type === "birthday") ?? null;
-                          const info = birthdayMoment ? getNextBirthdayInfo(birthdayMoment.date) : null;
-
-                          return (
-                            <PersonArchiveCard
-                              key={related.id}
-                              person={related}
-                              onClick={onSelectPerson ? () => onSelectPerson(related) : undefined}
-                            >
-                              <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
-                                {formatRelationshipType(group.type)}
-                              </div>
-                              {birthdayMoment && info ? (
-                                <div style={{ marginTop: "0.35rem", color: "var(--muted)", fontSize: "0.9rem" }}>
-                                  <div>
-                                    {info.turns !== null
-                                      ? `Turns ${info.turns} · ${info.formatted}`
-                                      : `Birthday · ${info.formatted}`}
-                                  </div>
-                                  <div style={{ marginTop: "0.15rem" }}>{info.relativeLabel}</div>
-                                </div>
-                              ) : null}
-                            </PersonArchiveCard>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : null}
-        </section>
-      </div>
     </div>
   );
 }

@@ -24,10 +24,16 @@ export default function SoonReminderCard({
   phone,
   prefilledMessage,
 }: SoonReminderCardProps) {
+  const trimmed = eventText.trim();
+  const parts = trimmed.split("·").map((p) => p.trim()).filter(Boolean);
+  const dateLine = parts[0] ?? trimmed;
+  const label = parts.length > 1 ? parts.slice(1).join(" · ") : "";
+  const title = label ? `${personName}’s ${label}` : personName;
+
   return (
     <div className="soon-card">
-      <h3 className="soon-name">{personName}</h3>
-      <p className="soon-event">{eventText}</p>
+      <div className="soon-event">{dateLine}</div>
+      <h3 className="soon-name">{title}</h3>
       <button
         className="soon-button"
         onClick={() => openSmsComposer(phone, prefilledMessage)}

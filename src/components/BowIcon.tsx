@@ -1,3 +1,5 @@
+import ribbonSrc from "../assets/ribbon-k.svg";
+
 type Props = {
   size?: number;
   color?: string;
@@ -6,7 +8,7 @@ type Props = {
 export default function BowIcon({ size = 26 }: Props) {
   return (
     <img
-      src="/app-icons/icon-180.png"
+      src={ribbonSrc}
       alt="Cream ribbon tied into a bow forming the letter K, with a small silver band in the center."
       width={size}
       height={size}

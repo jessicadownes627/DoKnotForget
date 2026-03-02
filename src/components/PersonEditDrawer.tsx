@@ -301,7 +301,6 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
           </div>
 
           <div style={{ marginTop: "18px", display: "grid", gap: "14px" }}>
-            <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "12px", marginBottom: "12px" }}>Details</div>
             <div>
               <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Name</div>
               <input
@@ -311,7 +310,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                 style={{
                   width: "100%",
                   padding: "0.75rem 0.85rem",
-                  borderRadius: "8px",
+                  borderRadius: "12px",
                   border: "1px solid var(--border-strong)",
                   background: "var(--card)",
                   color: "var(--ink)",
@@ -330,17 +329,13 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                 style={{
                   width: "100%",
                   padding: "0.75rem 0.85rem",
-                  borderRadius: "8px",
+                  borderRadius: "12px",
                   border: "1px solid var(--border-strong)",
                   background: "var(--card)",
                   color: "var(--ink)",
                   fontSize: "1rem",
                 }}
               />
-            </div>
-
-            <div style={{ color: "var(--muted)", fontSize: "0.85rem", marginTop: "2px" }}>
-              Family (optional)
             </div>
 
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px" }}>
@@ -360,7 +355,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                     gap: "1rem",
                     width: "100%",
                     padding: "0.85rem 0.95rem",
-                    borderRadius: "8px",
+                    borderRadius: "12px",
                     border: "1px solid var(--border-strong)",
                     background: "var(--card)",
                     cursor: "pointer",
@@ -388,7 +383,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                     gap: "1rem",
                     width: "100%",
                     padding: "0.85rem 0.95rem",
-                    borderRadius: "8px",
+                    borderRadius: "12px",
                     border: "1px solid var(--border-strong)",
                     background: "var(--card)",
                     cursor: "pointer",
@@ -405,8 +400,11 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
               </div>
 
               <div style={{ marginTop: "18px", paddingTop: "14px", borderTop: "1px solid var(--border)" }}>
-                <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "12px", marginBottom: "12px" }}>
-                  Custom moments (optional)
+                <div
+                  className="dkf-fade-in-80"
+                  style={{ fontWeight: 500, fontSize: "16px", color: "var(--muted)", marginTop: "12px", marginBottom: "12px" }}
+                >
+                  Anything else you want to remember? (optional)
                 </div>
 
                 {sensitiveMoments.length ? (
@@ -419,7 +417,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                           justifyContent: "space-between",
                           gap: "1rem",
                           padding: "0.75rem 0.85rem",
-                          borderRadius: "8px",
+                          borderRadius: "12px",
                           border: "1px solid var(--border)",
                           background: "var(--card)",
                         }}
@@ -462,11 +460,11 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                   <input
                     value={sensitiveTitle}
                     onChange={(e) => setSensitiveTitle(e.target.value)}
-                    placeholder="Label (optional)"
+                    placeholder="Label"
                     style={{
                       width: "100%",
                       padding: "0.75rem 0.85rem",
-                      borderRadius: "8px",
+                      borderRadius: "12px",
                       border: "1px solid var(--border-strong)",
                       background: "var(--card)",
                       color: "var(--ink)",
@@ -487,7 +485,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                       gap: "1rem",
                       width: "100%",
                       padding: "0.85rem 0.95rem",
-                      borderRadius: "8px",
+                      borderRadius: "12px",
                       border: "1px solid var(--border-strong)",
                       background: "var(--card)",
                       cursor: "pointer",
@@ -527,7 +525,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                       textAlign: "center",
                       fontWeight: 500,
                       letterSpacing: "0.01em",
-                      borderRadius: "8px",
+                      borderRadius: "12px",
                       padding: "0.75rem 1rem",
                       fontSize: "0.95rem",
                       boxShadow: "none",
@@ -541,16 +539,16 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
             </div>
 
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px", marginTop: "10px" }}>
-              <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "12px", marginBottom: "12px" }}>Family</div>
+              <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "12px", marginBottom: "12px" }}>Kids</div>
               <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", marginTop: "10px" }}>
                 <input type="checkbox" checked={hasKids} onChange={(e) => setHasKids(e.target.checked)} />
-                Has kids
+                Kids
               </label>
 
               {hasKids ? (
                 <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
                   <div style={{ display: "grid", gap: "8px" }}>
-                    <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Parent role (optional)</div>
+                    <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Parent role</div>
                     <div style={{ display: "grid", gap: "10px" }}>
                       <div>
                         <div style={{ color: "var(--muted)", fontSize: "0.82rem" }}>Mother’s Day</div>
@@ -560,7 +558,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                           style={{
                             width: "100%",
                             padding: "0.65rem 0.75rem",
-                            borderRadius: "8px",
+                            borderRadius: "12px",
                             border: "1px solid var(--border-strong)",
                             background: "var(--card)",
                             color: "var(--ink)",
@@ -580,7 +578,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                           style={{
                             width: "100%",
                             padding: "0.65rem 0.75rem",
-                            borderRadius: "8px",
+                            borderRadius: "12px",
                             border: "1px solid var(--border-strong)",
                             background: "var(--card)",
                             color: "var(--ink)",
@@ -598,17 +596,14 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
               ) : null}
 
               <div style={{ marginTop: "12px" }}>
-                <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Religion / culture (optional)</div>
-                <div style={{ marginTop: "4px", color: "var(--muted)", fontSize: "0.85rem", lineHeight: 1.5 }}>
-                  Helps surface meaningful holidays.
-                </div>
+                <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Religion / Culture</div>
                 <select
                   value={religionCulture ?? ""}
                   onChange={(e) => setReligionCulture((e.target.value as Person["religionCulture"]) || "")}
                   style={{
                     width: "100%",
                     padding: "0.75rem 0.85rem",
-                    borderRadius: "8px",
+                    borderRadius: "12px",
                     border: "1px solid var(--border-strong)",
                     background: "var(--card)",
                     color: "var(--ink)",
@@ -616,7 +611,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                     marginTop: "6px",
                   }}
                 >
-                  <option value="">Optional</option>
+                  <option value="">Not set</option>
                   <option value="christian">Christian</option>
                   <option value="orthodox">Orthodox</option>
                   <option value="jewish">Jewish</option>
@@ -627,7 +622,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
 
               {hasKids ? (
                 <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
-                  <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Children</div>
+                  <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Kids</div>
 
                   {children.map((child, idx) => (
                     <div
@@ -635,7 +630,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                       style={{
                         border: "1px solid var(--border)",
                         background: "var(--paper)",
-                        borderRadius: "8px",
+                        borderRadius: "12px",
                         padding: "12px",
                         display: "grid",
                         gap: "10px",
@@ -647,11 +642,11 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                           const nextName = e.target.value;
                           setChildren((prev) => prev.map((c, i) => (i === idx ? { ...c, name: nextName } : c)));
                         }}
-                        placeholder="Child name (optional)"
+                        placeholder="Child name"
                         style={{
                           width: "100%",
                           padding: "0.65rem 0.75rem",
-                          borderRadius: "8px",
+                          borderRadius: "12px",
                           border: "1px solid var(--border-strong)",
                           background: "var(--card)",
                           color: "var(--ink)",
@@ -671,7 +666,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                           gap: "1rem",
                           width: "100%",
                           padding: "0.75rem 0.85rem",
-                          borderRadius: "8px",
+                          borderRadius: "12px",
                           border: "1px solid var(--border-strong)",
                           background: "var(--card)",
                           cursor: "pointer",
@@ -685,11 +680,11 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                         </span>
                       </button>
 
-                      <div style={{ display: "grid", gap: "8px" }}>
-                        <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>School milestones (optional)</div>
-                        {(child.schoolEvents ?? []).length ? (
-                          <div style={{ display: "grid", gap: "6px" }}>
-                            {(child.schoolEvents ?? []).map((ev) => (
+                        <div style={{ display: "grid", gap: "8px" }}>
+                          <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>School milestones</div>
+                          {(child.schoolEvents ?? []).length ? (
+                            <div style={{ display: "grid", gap: "6px" }}>
+                              {(child.schoolEvents ?? []).map((ev) => (
                               <div
                                 key={`${ev.type}-${ev.date}`}
                                 style={{
@@ -697,7 +692,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                                   justifyContent: "space-between",
                                   gap: "1rem",
                                   padding: "0.6rem 0.75rem",
-                                  borderRadius: "8px",
+                                  borderRadius: "12px",
                                   border: "1px solid var(--border)",
                                   background: "var(--card)",
                                 }}
@@ -792,7 +787,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                       textAlign: "left",
                       fontWeight: 500,
                       letterSpacing: "0.01em",
-                      borderRadius: "8px",
+                      borderRadius: "12px",
                       padding: "0.65rem 1rem",
                       fontSize: "0.95rem",
                       justifySelf: "start",
@@ -829,7 +824,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                   textAlign: "center",
                   fontWeight: 500,
                   letterSpacing: "0.01em",
-                  borderRadius: "8px",
+                  borderRadius: "12px",
                   padding: "0.85rem 1.1rem",
                   fontSize: "0.98rem",
                   boxShadow: "none",
@@ -851,7 +846,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
           setMonthDay={setBirthdayDraftMonthDay}
           year={birthdayDraftYear}
           setYear={setBirthdayDraftYear}
-          yearHelperText="Used for milestone reminders."
+          yearHelperText=""
           onSave={() => {
             updateBirthdayFromDraft();
             setOpenBirthday(false);
@@ -874,7 +869,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
           setMonthDay={setAnniversaryDraftMonthDay}
           year={anniversaryDraftYear}
           setYear={setAnniversaryDraftYear}
-          yearHelperText="Used to calculate years together."
+          yearHelperText=""
           requireYear
           onSave={() => {
             updateAnniversaryFromDraft();
@@ -898,7 +893,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
           setMonthDay={setChildDraftMonthDay}
           year={childDraftYear}
           setYear={setChildDraftYear}
-          yearHelperText="Optional."
+          yearHelperText=""
           onSave={() => {
             const iso = buildMomentIso(childDraftMonthDay, childDraftYear, false);
             setChildren((prev) =>
@@ -950,7 +945,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                     style={{
                       width: "100%",
                       padding: "0.75rem 0.85rem",
-                      borderRadius: "8px",
+                      borderRadius: "12px",
                       border: "1px solid var(--border-strong)",
                       background: "var(--card)",
                       color: "var(--ink)",
@@ -977,7 +972,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                   setMonthDay={setMilestoneDraftMonthDay}
                   year={milestoneDraftYear}
                   setYear={setMilestoneDraftYear}
-                  yearHelperText="Optional."
+                  yearHelperText=""
                   requireYear
                   onSave={() => {
                     const iso = buildMomentIso(milestoneDraftMonthDay, milestoneDraftYear, true);
@@ -1015,7 +1010,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
           setMonthDay={setSensitiveDraftMonthDay}
           year={sensitiveDraftYear}
           setYear={setSensitiveDraftYear}
-          yearHelperText="Optional."
+          yearHelperText=""
           onSave={() => {
             const iso = buildMomentIso(sensitiveDraftMonthDay, sensitiveDraftYear, false);
             if (!iso) return;

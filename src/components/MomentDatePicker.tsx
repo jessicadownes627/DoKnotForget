@@ -113,6 +113,7 @@ export default function MomentDatePicker({
           background: "var(--card)",
           borderRadius: "16px",
           border: "1px solid var(--border)",
+          paddingBottom: "calc(24px + env(safe-area-inset-bottom))",
         }}
       >
         <div style={{ fontSize: "1.05rem", fontWeight: 600, color: "var(--ink)" }}>{title}</div>
@@ -241,9 +242,11 @@ export default function MomentDatePicker({
 
         <div style={{ marginTop: "1.35rem" }}>
           <div style={{ fontSize: "0.9rem", color: "var(--ink)", fontWeight: 600 }}>Year</div>
-          <div style={{ marginTop: "0.25rem", color: "var(--muted)", fontSize: "0.88rem", lineHeight: 1.5 }}>
-            {yearHelperText}
-          </div>
+          {yearHelperText.trim() ? (
+            <div style={{ marginTop: "0.25rem", color: "var(--muted)", fontSize: "0.88rem", lineHeight: 1.5 }}>
+              {yearHelperText}
+            </div>
+          ) : null}
 
           <input
             type="number"
@@ -256,7 +259,7 @@ export default function MomentDatePicker({
               marginTop: "0.75rem",
               padding: "0.9rem 1rem",
               fontSize: "1rem",
-              borderRadius: "8px",
+              borderRadius: "12px",
               border: "1px solid var(--border-strong)",
               background: "var(--card)",
               color: "var(--ink)",
@@ -303,7 +306,7 @@ export default function MomentDatePicker({
               textAlign: "center",
               fontWeight: 500,
               letterSpacing: "0.01em",
-              borderRadius: "8px",
+              borderRadius: "12px",
               padding: "0.85rem 1.15rem",
               fontSize: "1rem",
               opacity: canSave ? 1 : 0.6,

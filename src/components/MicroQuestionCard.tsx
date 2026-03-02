@@ -67,83 +67,83 @@ export default function MicroQuestionCard({ suggestion, onChoose, onDismiss }: P
         {question.options.length ? (
           <div style={{ marginTop: "16px", display: "flex", gap: "0.65rem", flexWrap: "wrap" }}>
             {question.options.map((opt) => (
-              <button
-                key={opt.id}
-                onClick={() => onChoose(opt.id)}
-                style={{
-                  border: "1px solid var(--border-strong)",
-                  background: "transparent",
-                  color: "var(--ink)",
-                  cursor: "pointer",
-                  textAlign: "center",
-                  fontWeight: 500,
-                  letterSpacing: "0.01em",
-                  borderRadius: "8px",
-                  padding: "0.75rem 1.05rem",
-                  fontSize: "0.95rem",
-                }}
-              >
+	              <button
+	                key={opt.id}
+	                onClick={() => onChoose(opt.id)}
+	                style={{
+	                  border: "1px solid var(--border-strong)",
+	                  background: "transparent",
+	                  color: "var(--ink)",
+	                  cursor: "pointer",
+	                  textAlign: "center",
+	                  fontWeight: 500,
+	                  letterSpacing: "0.01em",
+	                  borderRadius: "12px",
+	                  padding: "0.75rem 1.05rem",
+	                  fontSize: "0.95rem",
+	                }}
+	              >
                 {opt.label}
               </button>
             ))}
           </div>
         ) : question.id === "addChildName" ? (
           <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
-            <input
-              value={childName}
-              onChange={(e) => setChildName(e.target.value)}
-              placeholder="Child name (optional)"
-              style={{
-                width: "100%",
-                padding: "0.75rem 0.85rem",
-                borderRadius: "8px",
-                border: "1px solid var(--border-strong)",
-                background: "var(--card)",
-                fontSize: "1rem",
-                fontFamily: "var(--font-sans)",
-              }}
-            />
-            <button
-              onClick={() => onChoose("save", { text: childName })}
-              style={{
-                border: "1px solid var(--border-strong)",
-                background: "transparent",
-                color: "var(--ink)",
-                cursor: "pointer",
-                textAlign: "center",
-                fontWeight: 500,
-                letterSpacing: "0.01em",
-                borderRadius: "8px",
-                padding: "0.75rem 1rem",
-                fontSize: "0.95rem",
-                boxShadow: "none",
-                justifySelf: "start",
-              }}
-            >
+	            <input
+	              value={childName}
+	              onChange={(e) => setChildName(e.target.value)}
+	              placeholder="Child name (optional)"
+	              style={{
+	                width: "100%",
+	                padding: "0.75rem 0.85rem",
+	                borderRadius: "12px",
+	                border: "1px solid var(--border-strong)",
+	                background: "var(--card)",
+	                fontSize: "1rem",
+	                fontFamily: "var(--font-sans)",
+	              }}
+	            />
+	            <button
+	              onClick={() => onChoose("save", { text: childName })}
+	              style={{
+	                border: "1px solid var(--border-strong)",
+	                background: "transparent",
+	                color: "var(--ink)",
+	                cursor: "pointer",
+	                textAlign: "center",
+	                fontWeight: 500,
+	                letterSpacing: "0.01em",
+	                borderRadius: "12px",
+	                padding: "0.75rem 1rem",
+	                fontSize: "0.95rem",
+	                boxShadow: "none",
+	                justifySelf: "start",
+	              }}
+	            >
               Save
             </button>
           </div>
         ) : question.id === "addChildBirthday" ? (
           <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
-            <button
-              onClick={() => {
-                const draft = toDraftFromIso("");
-                setDraftMonthDay(draft.monthDay);
-                setDraftYear(draft.year);
-                setIsDatePickerOpen(true);
-              }}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: "1rem",
-                width: "100%",
-                padding: "0.85rem 0.95rem",
-                borderRadius: "8px",
-                border: "1px solid var(--border-strong)",
-                background: "var(--card)",
-                cursor: "pointer",
-                color: "var(--ink)",
-                fontSize: "0.98rem",
+	            <button
+	              onClick={() => {
+	                const draft = toDraftFromIso("");
+	                setDraftMonthDay(draft.monthDay);
+	                setDraftYear(draft.year);
+	                setIsDatePickerOpen(true);
+	              }}
+	              style={{
+	                display: "flex",
+	                justifyContent: "space-between",
+	                gap: "1rem",
+	                width: "100%",
+	                padding: "0.85rem 0.95rem",
+	                borderRadius: "12px",
+	                border: "1px solid var(--border-strong)",
+	                background: "var(--card)",
+	                cursor: "pointer",
+	                color: "var(--ink)",
+	                fontSize: "0.98rem",
                 textAlign: "left",
                 fontFamily: "var(--font-sans)",
               }}

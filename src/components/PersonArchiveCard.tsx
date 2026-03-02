@@ -80,7 +80,14 @@ export default function PersonArchiveCard({
   children,
 }: Props) {
   const name = (displayName ?? person.name).trim();
-  const initial = (person.name.trim().charAt(0) || "?").toUpperCase();
+  const initials = name
+    ? name
+        .split(" ")
+        .filter(Boolean)
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+    : "?";
   const resolvedPhone = (phone ?? person.phone ?? "").trim();
 
   const next = momentSummaryOverride
@@ -126,7 +133,7 @@ export default function PersonArchiveCard({
               fontSize: "1.1rem",
             }}
           >
-            {initial}
+            {initials}
           </div>
 
           <div style={{ minWidth: 0, flex: 1 }}>

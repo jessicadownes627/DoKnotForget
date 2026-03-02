@@ -1,26 +1,21 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { Child, Moment, Person } from "../models/Person";
 import type { Relationship, RelationshipType } from "../models/Relationship";
 import MomentDatePicker from "../components/MomentDatePicker";
+import { useAppState } from "../appState";
+import { useNavigate } from "../router";
 
-type Props = {
-  people: Person[];
-  person?: Person;
-  onSave: (payload: {
-    person: Person;
-    createdPeople: Person[];
-    createdRelationships: Relationship[];
-  }) => void;
-  onBack: () => void;
-};
-
-export default function AddPerson({ people, person: initialPerson, onSave, onBack }: Props) {
+export default function AddPerson() {
+  const navigate = useNavigate();
+  const { people, savePerson } = useAppState();
   const [name, setName] = useState("");
   const [birthdayMonthDay, setBirthdayMonthDay] = useState("");
   const [birthdayYear, setBirthdayYear] = useState("");
   const [birthdayDraftMonthDay, setBirthdayDraftMonthDay] = useState("");
   const [birthdayDraftYear, setBirthdayDraftYear] = useState("");
-  const [anniversary, setAnniversary] = useState("");
+  const [partnerId, setPartnerId] = useState<string | null>(null);
+  const [partnerSearch, setPartnerSearch] = useState("");
+  const [anniversary, setAnniversary] = useState(""); // MM-DD
   const [anniversaryDraftMonthDay, setAnniversaryDraftMonthDay] = useState("");
   const [anniversaryDraftYear, setAnniversaryDraftYear] = useState("");
   const [phone, setPhone] = useState("");
@@ -50,7 +45,7 @@ export default function AddPerson({ people, person: initialPerson, onSave, onBac
   const [relatedName, setRelatedName] = useState("");
   const [relatedType, setRelatedType] = useState<RelationshipType>("child");
   const [openRow, setOpenRow] = useState<
-    "name" | "phone" | "family" | "birthday" | "anniversary" | "custom" | "related" | null
+    "name" | "phone" | "partner" | "family" | "birthday" | "anniversary" | "custom" | "related" | null
   >(null);
 
   const dateFormatter = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" });
@@ -64,6 +59,19 @@ export default function AddPerson({ people, person: initialPerson, onSave, onBac
     if (!value) return "";
     const parsed = new Date(`${value}T00:00:00`);
     if (Number.isNaN(parsed.getTime())) return value;
+    return dateFormatter.format(parsed);
+  }
+
+  function formatMonthDay(value: string) {
+    const trimmed = value.trim();
+    const parts = trimmed.split("-");
+    if (parts.length !== 2) return value;
+    const m = Number(parts[0]);
+    const d = Number(parts[1]);
+    if (!m || !d || Number.isNaN(m) || Number.isNaN(d)) return value;
+    const parsed = new Date(2000, m - 1, d);
+    if (Number.isNaN(parsed.getTime())) return value;
+    if (parsed.getMonth() !== m - 1 || parsed.getDate() !== d) return value;
     return dateFormatter.format(parsed);
   }
 
@@ -121,53 +129,13 @@ export default function AddPerson({ people, person: initialPerson, onSave, onBac
     return `${y.padStart(4, "0")}-${mm}-${dd}`;
   }
 
-  useEffect(() => {
-    if (!initialPerson) return;
-
-    setName(initialPerson.name ?? "");
-    setPhone(initialPerson.phone ?? "");
-    setHasKids(Boolean(initialPerson.hasKids || (initialPerson.children?.length ?? 0) > 0));
-    setParentRole(initialPerson.parentRole ?? "parent");
-    setReligionCulture(initialPerson.religionCulture ?? "");
-    setChildren(initialPerson.children ?? []);
-    setChildEditingIndex(null);
-    setChildDraftMonthDay("");
-    setChildDraftYear("");
-
-    const birthdayMoment =
-      initialPerson.moments.find((m: Moment) => m.type === "birthday") ?? null;
-    if (birthdayMoment?.date) {
-      const parts = parseYmd(birthdayMoment.date);
-      if (parts) {
-        setBirthdayMonthDay(`2000-${String(parts.m).padStart(2, "0")}-${String(parts.d).padStart(2, "0")}`);
-        const y = parts.y > 0 ? String(parts.y) : "";
-        setBirthdayYear(y);
-      } else {
-        setBirthdayMonthDay("");
-        setBirthdayYear("");
-      }
-    } else {
-      setBirthdayMonthDay("");
-      setBirthdayYear("");
-    }
-
-    const anniversaryMoment =
-      initialPerson.moments.find((m: Moment) => m.type === "anniversary") ?? null;
-    setAnniversary(anniversaryMoment?.date ?? "");
-
-    const custom = initialPerson.moments
-      .filter((m) => m.type === "custom")
-      .map((m) => ({ title: m.label, date: m.date }));
-    setCustomMoments(custom);
-
-    setCustomMomentTitle("");
-    setCustomMomentDate("");
-    setCustomDraftMonthDay("");
-    setCustomDraftYear("");
-    setIsCustomDatePickerOpen(false);
-    setIsEditingCustomDatePickerOpen(false);
-    setOpenRow(null);
-  }, [initialPerson]);
+  function monthDayFromDraft(value: string) {
+    const parts = parseYmd(value);
+    if (!parts) return "";
+    const mm = String(parts.m).padStart(2, "0");
+    const dd = String(parts.d).padStart(2, "0");
+    return `${mm}-${dd}`;
+  }
 
   function handleSave() {
     if (!name.trim()) return;
@@ -188,7 +156,7 @@ export default function AddPerson({ people, person: initialPerson, onSave, onBac
         id: makeId(),
         type: "anniversary",
         label: "Anniversary",
-        date: anniversary,
+        date: `0000-${anniversary}`,
         recurring: true,
       });
     }
@@ -203,18 +171,13 @@ export default function AddPerson({ people, person: initialPerson, onSave, onBac
       });
     }
 
-    const basePerson: Person = initialPerson ?? {
-      id: makeId(),
-      name: "",
-      moments: [],
-    };
-
     const person: Person = {
-      ...basePerson,
-      id: basePerson.id,
+      id: makeId(),
       name: name.trim(),
       phone: phone || undefined,
       moments,
+      partnerId: partnerId || undefined,
+      anniversary: anniversary || undefined,
       hasKids: hasKids || (children.length ? true : undefined),
       parentRole: hasKids ? parentRole : undefined,
       religionCulture: religionCulture || undefined,
@@ -229,10 +192,16 @@ export default function AddPerson({ people, person: initialPerson, onSave, onBac
       type: draft.type,
     }));
 
-    onSave({
+    savePerson({
       person,
       createdPeople: createdRelatedPeople,
       createdRelationships,
+    });
+    navigate("/home", {
+      state: {
+        defaultTab: partnerId ? "home" : "contacts",
+        ...(partnerId ? { showPartnerLinkCheck: person.id } : null),
+      },
     });
   }
 
@@ -330,15 +299,24 @@ export default function AddPerson({ people, person: initialPerson, onSave, onBac
   }
 
   return (
-    <div style={{ padding: "3.5rem", maxWidth: "700px", margin: "0 auto" }}>
-      <h2>Add someone important</h2>
+    <div style={{ background: "var(--paper)", color: "var(--ink)", height: "100vh" }}>
+      <div
+        style={{
+          height: "100%",
+          overflowY: "auto",
+          padding: "calc(env(safe-area-inset-top) + 32px) 16px 16px 16px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div style={{ maxWidth: "700px", margin: "0 auto" }}>
+      <h2 style={{ marginTop: 0, fontSize: "30px", fontWeight: 600, fontFamily: "var(--font-serif)", letterSpacing: "-0.02em" }}>Add someone important.</h2>
 
-      <p style={{ marginTop: "1.25rem", color: "var(--muted)" }}>
-        This stays private — just for you.
+      <p style={{ marginTop: "1.25rem", color: "var(--muted)", fontSize: "16px" }}>
+        Add what you know. You can always edit later.
       </p>
 
-      <div style={{ marginTop: "2.25rem", maxWidth: "520px" }}>
-        <div style={{ color: "var(--muted)", fontSize: "0.85rem", marginBottom: "0.75rem" }}>
+      <div style={{ marginTop: "1.5rem", maxWidth: "520px" }}>
+        <div style={{ color: "var(--ink)", fontSize: "20px", fontWeight: 500, marginBottom: "12px" }}>
           Details
         </div>
 
@@ -424,6 +402,95 @@ export default function AddPerson({ people, person: initialPerson, onSave, onBac
             <div style={{ marginTop: "0.35rem", color: "var(--muted)", fontSize: "0.85rem" }}>
               Used for reminder texts
             </div>
+          </div>
+        ) : null}
+
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setOpenRow(openRow === "partner" ? null : "partner")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") setOpenRow(openRow === "partner" ? null : "partner");
+          }}
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            justifyContent: "space-between",
+            padding: "0.75rem 0",
+            cursor: "pointer",
+            borderBottom: "1px solid rgba(27, 42, 65, 0.22)",
+            gap: "1rem",
+          }}
+        >
+          <div style={{ color: "var(--ink)" }}>Partner</div>
+          <div style={{ color: "var(--muted)", textAlign: "right" }}>
+            {partnerId ? (people.find((p) => p.id === partnerId)?.name ?? "Selected") : "Optional"}
+          </div>
+        </div>
+
+        {openRow === "partner" ? (
+          <div style={{ marginTop: "0.85rem", display: "grid", gap: "0.85rem" }}>
+            <input
+              value={partnerSearch}
+              onChange={(e) => setPartnerSearch(e.target.value)}
+              placeholder="Find someone…"
+              autoFocus
+              style={{
+                padding: "0.75rem 0",
+                fontSize: "1rem",
+                width: "100%",
+                color: "var(--ink)",
+              }}
+            />
+
+            <div style={{ display: "grid", gap: "0.5rem" }}>
+              {people
+                .filter((p) => p.name.toLowerCase().includes(partnerSearch.trim().toLowerCase()))
+                .slice(0, 8)
+                .map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      setPartnerId(p.id);
+                      setOpenRow(null);
+                      setPartnerSearch("");
+                    }}
+                    style={{
+                      border: "1px solid rgba(27, 42, 65, 0.18)",
+                      borderRadius: "12px",
+                      background: "rgba(249,246,241,0.45)",
+                      padding: "0.7rem 0.9rem",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      color: "var(--ink)",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+            </div>
+
+            {partnerId ? (
+              <button
+                type="button"
+                onClick={() => setPartnerId(null)}
+                style={{
+                  padding: 0,
+                  border: "none",
+                  background: "none",
+                  color: "var(--muted)",
+                  cursor: "pointer",
+                  fontSize: "0.9rem",
+                  textDecoration: "underline",
+                  textUnderlineOffset: "3px",
+                  justifySelf: "start",
+                }}
+              >
+                Clear partner
+              </button>
+            ) : null}
           </div>
         ) : null}
 
@@ -596,7 +663,7 @@ export default function AddPerson({ people, person: initialPerson, onSave, onBac
                     textAlign: "left",
                     fontWeight: 500,
                     letterSpacing: "0.01em",
-                    borderRadius: "8px",
+                    borderRadius: "12px",
                     padding: "0.55rem 0.95rem",
                     fontSize: "0.95rem",
                   }}
@@ -638,8 +705,8 @@ export default function AddPerson({ people, person: initialPerson, onSave, onBac
         ) : null}
       </div>
 
-      <div style={{ marginTop: "2.25rem", maxWidth: "520px" }}>
-        <div style={{ color: "var(--muted)", fontSize: "0.85rem", marginBottom: "0.75rem" }}>
+      <div style={{ marginTop: "1.5rem", maxWidth: "520px" }}>
+        <div style={{ color: "var(--ink)", fontSize: "20px", fontWeight: 500, marginBottom: "12px" }}>
           Moments
         </div>
 
@@ -713,9 +780,9 @@ export default function AddPerson({ people, person: initialPerson, onSave, onBac
               setOpenRow(null);
               return;
             }
-            const draft = toDraftFromIso(anniversary);
+            const draft = anniversary ? toDraftFromIso(`0000-${anniversary}`) : { monthDay: "", year: "" };
             setAnniversaryDraftMonthDay(draft.monthDay);
-            setAnniversaryDraftYear(draft.year);
+            setAnniversaryDraftYear("");
             setOpenRow("anniversary");
           }}
           onKeyDown={(e) => {
@@ -723,9 +790,9 @@ export default function AddPerson({ people, person: initialPerson, onSave, onBac
               if (openRow === "anniversary") {
                 setOpenRow(null);
               } else {
-                const draft = toDraftFromIso(anniversary);
+                const draft = anniversary ? toDraftFromIso(`0000-${anniversary}`) : { monthDay: "", year: "" };
                 setAnniversaryDraftMonthDay(draft.monthDay);
-                setAnniversaryDraftYear(draft.year);
+                setAnniversaryDraftYear("");
                 setOpenRow("anniversary");
               }
           }}
@@ -741,7 +808,7 @@ export default function AddPerson({ people, person: initialPerson, onSave, onBac
         >
           <div style={{ color: "var(--ink)" }}>Anniversary</div>
           <div style={{ color: "var(--muted)", textAlign: "right" }}>
-            {anniversary ? formatMomentDate(anniversary) : "Select date"}
+            {anniversary ? formatMonthDay(anniversary) : "Select date"}
           </div>
         </div>
 
@@ -754,12 +821,12 @@ export default function AddPerson({ people, person: initialPerson, onSave, onBac
             setMonthDay={setAnniversaryDraftMonthDay}
             year={anniversaryDraftYear}
             setYear={setAnniversaryDraftYear}
-            yearHelperText="Used to calculate years together."
-            requireYear
+            yearHelperText=""
+            requireYear={false}
             onSave={() => {
-              const iso = buildMomentIso(anniversaryDraftMonthDay, anniversaryDraftYear, true);
-              if (!iso) return;
-              setAnniversary(iso);
+              const mmdd = monthDayFromDraft(anniversaryDraftMonthDay);
+              if (!mmdd) return;
+              setAnniversary(mmdd);
               setOpenRow(null);
             }}
             onCancel={() => setOpenRow(null)}
@@ -787,9 +854,30 @@ export default function AddPerson({ people, person: initialPerson, onSave, onBac
             gap: "1rem",
           }}
         >
-          <div style={{ color: "var(--ink)" }}>Add custom moment</div>
-          <div style={{ color: "var(--muted)", textAlign: "right" }}>
-            Add
+          <div style={{ color: "var(--muted)", fontSize: "16px", fontWeight: 500 }}>
+            Anything else you want to remember? (optional)
+          </div>
+          <div
+            aria-hidden="true"
+            style={{
+              color: "var(--muted)",
+              textAlign: "right",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <span
+              style={{
+                display: "inline-block",
+                transform: openRow === "custom" ? "rotate(180deg)" : "rotate(0deg)",
+                transition: "transform 160ms ease",
+                fontSize: "0.95rem",
+                lineHeight: 1,
+              }}
+            >
+              ▾
+            </span>
           </div>
         </div>
 
@@ -1061,8 +1149,8 @@ export default function AddPerson({ people, person: initialPerson, onSave, onBac
         ) : null}
       </div>
 
-      <div style={{ marginTop: "2.25rem", maxWidth: "520px" }}>
-        <div style={{ color: "var(--muted)", fontSize: "0.85rem", marginBottom: "0.75rem" }}>
+      <div style={{ marginTop: "1.5rem", maxWidth: "520px" }}>
+        <div style={{ color: "var(--ink)", fontSize: "20px", fontWeight: 500, marginBottom: "12px" }}>
           Related people
         </div>
 
@@ -1215,7 +1303,7 @@ export default function AddPerson({ people, person: initialPerson, onSave, onBac
         </button>
 
         <button
-          onClick={onBack}
+          onClick={() => navigate("/home")}
           style={{
             padding: "0.75rem 1.25rem",
             cursor: "pointer",
@@ -1223,6 +1311,8 @@ export default function AddPerson({ people, person: initialPerson, onSave, onBac
         >
           Cancel
         </button>
+      </div>
+        </div>
       </div>
     </div>
   );

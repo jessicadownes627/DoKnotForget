@@ -33,7 +33,7 @@ export default function CareSuggestionCard({ suggestion, onAction, onSnooze }: P
     if (!suggestion.timelineCategory) return null;
     const titleHasRelativeTime = /\b(yesterday|today|tomorrow|in\s+\d+\s+days)\b/i.test(suggestion.title);
     if (titleHasRelativeTime) return null;
-    if (suggestion.timelineCategory === "soon") return "Soon";
+    if (suggestion.timelineCategory === "soon") return "Home";
     if (suggestion.timelineCategory === "upcoming") return "Upcoming";
     return "Later this season";
   }, [suggestion.timelineCategory, suggestion.title]);
@@ -119,7 +119,7 @@ export default function CareSuggestionCard({ suggestion, onAction, onSnooze }: P
               textAlign: "center",
               fontWeight: 500,
               letterSpacing: "0.01em",
-              borderRadius: "8px",
+              borderRadius: "16px",
               padding: "0.8rem 1.05rem",
               fontSize: "0.95rem",
               boxShadow: "none",

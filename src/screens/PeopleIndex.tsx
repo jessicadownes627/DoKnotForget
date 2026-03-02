@@ -55,7 +55,7 @@ export default function PeopleIndex({ people, today, onSelectPerson }: Props) {
       {grouped.map((group, idx) => (
         <section
           key={group.key}
-          aria-label={`People ${group.key}`}
+          aria-label={`Contacts ${group.key}`}
           style={{ marginTop: idx === 0 ? 0 : "0.75rem" }}
         >
           <div
