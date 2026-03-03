@@ -450,6 +450,22 @@ export default function Home({
 
     if (!items.length) return null;
 
+    const debugHydration = (() => {
+      try {
+        return window.localStorage.getItem("dkf_debug_hydration") === "1";
+      } catch {
+        return false;
+      }
+    })();
+
+    if (debugHydration) {
+      // eslint-disable-next-line no-console
+      console.log(
+        "[DKF DEBUG] gentleForecast items:",
+        items.map((i) => ({ key: i.key, entityKey: i.entityKey, daysUntil: i.daysUntil, message: i.message }))
+      );
+    }
+
     const groups: ForecastGroups = { tomorrow: [], week: [], month: [] };
     for (const item of items) {
       if (item.daysUntil === 1) groups.tomorrow.push(item);

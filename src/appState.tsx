@@ -33,6 +33,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [relationships, setRelationships] = useState<Relationship[]>([]);
 
   useEffect(() => {
+    const debugHydration = (() => {
+      try {
+        return window.localStorage.getItem("dkf_debug_hydration") === "1";
+      } catch {
+        return false;
+      }
+    })();
+
     let hydratedPeople: Person[] = [];
     try {
       const rawPeople = window.localStorage.getItem(PEOPLE_STORAGE_KEY);
@@ -64,6 +72,42 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
     if (hydratedPeople.length) setPeople(hydratedPeople);
     setHasHydrated(true);
+
+    if (debugHydration) {
+      // eslint-disable-next-line no-console
+      console.log("[DKF DEBUG] Hydrated people array:", hydratedPeople);
+
+      const summary = hydratedPeople.map((p) => {
+        const moments = (p as any)?.moments;
+        const hasMomentsArray = Array.isArray(moments);
+        const birthday = hasMomentsArray ? moments.find((m: any) => m?.type === "birthday") : null;
+        return {
+          id: (p as any)?.id,
+          name: (p as any)?.name,
+          momentsIsArray: hasMomentsArray,
+          momentsCount: hasMomentsArray ? moments.length : null,
+          birthdayMomentDate: birthday?.date ?? null,
+          religionCultureType: Array.isArray((p as any)?.religionCulture)
+            ? "array"
+            : typeof (p as any)?.religionCulture,
+        };
+      });
+      // eslint-disable-next-line no-console
+      console.log("[DKF DEBUG] Hydration summary:", summary);
+
+      const mike =
+        hydratedPeople.find((p) => (p?.name ?? "").toLowerCase().includes("mike")) ?? null;
+      if (mike) {
+        const birthday = (mike.moments ?? []).find((m) => m.type === "birthday") ?? null;
+        // eslint-disable-next-line no-console
+        console.log("[DKF DEBUG] Mike record:", mike);
+        // eslint-disable-next-line no-console
+        console.log("[DKF DEBUG] Mike birthday moment:", birthday);
+      } else {
+        // eslint-disable-next-line no-console
+        console.log("[DKF DEBUG] No person matching name includes 'mike' found.");
+      }
+    }
   }, []);
 
   useEffect(() => {
