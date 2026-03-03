@@ -24,7 +24,6 @@ import {
   type PromptItem,
 } from "../engine/promptEngine";
 import { getFathersDay, getMothersDay } from "../utils/holidayUtils";
-import { getNextAnniversary } from "../utils/anniversaryUtils";
 import { daysUntilDate, getNextBirthdayFromIso } from "../utils/birthdayUtils";
 import MomentDatePicker from "../components/MomentDatePicker";
 import { RaisedGoldBullet } from "../components/common/GoldBullets";
@@ -272,183 +271,8 @@ export default function Home({
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
 
-  function getAnniversaryMonthDay(person: Person): string | null {
-    const stored = (person.anniversary ?? "").trim();
-    if (stored) return stored;
-    const moment = (person.moments ?? []).find((m) => m.type === "anniversary") ?? null;
-    if (!moment?.date) return null;
-    const parts = moment.date.split("-");
-    if (parts.length !== 3) return null;
-    const mm = parts[1];
-    const dd = parts[2];
-    if (!mm || !dd) return null;
-    return `${mm}-${dd}`;
-  }
-
   const gentleForecast = useMemo(() => {
     if (activeTab !== "home") return null;
-
-    type Candidate = {
-      key: string;
-      entityKey: string;
-      daysUntil: number;
-      message: string;
-      priority: number;
-    };
-
-    type ForecastGroups = {
-      tomorrow: Candidate[];
-      week: Candidate[];
-      month: Candidate[];
-    };
-
-    function timePhrase(days: number) {
-      if (days === 1) return "tomorrow";
-      if (days >= 6) return "next week";
-      return `in ${days} days`;
-    }
-
-    const base = today;
-    const candidates: Candidate[] = [];
-    const horizonDays = 30;
-
-    // Holidays
-    const year = new Date().getFullYear();
-    const mothersDay = getMothersDay(year);
-    const fathersDay = getFathersDay(year);
-    const mdUntil = daysUntilDate(mothersDay, base);
-    const fdUntil = daysUntilDate(fathersDay, base);
-    if (mdUntil >= 1 && mdUntil <= horizonDays) {
-      candidates.push({
-        key: `holiday_md_${year}`,
-        entityKey: "holiday:mothers_day",
-        daysUntil: mdUntil,
-        message: `Mother’s Day is ${timePhrase(mdUntil)}`,
-        priority: 1,
-      });
-    }
-    if (fdUntil >= 1 && fdUntil <= horizonDays) {
-      candidates.push({
-        key: `holiday_fd_${year}`,
-        entityKey: "holiday:fathers_day",
-        daysUntil: fdUntil,
-        message: `Father’s Day is ${timePhrase(fdUntil)}`,
-        priority: 1,
-      });
-    }
-
-    // Anniversaries (dedupe by pair)
-    const seenPairs = new Set<string>();
-    for (const person of people) {
-      if (!person?.id) continue;
-      const partnerId = (person.partnerId ?? "").trim();
-      if (!partnerId) continue;
-      const partner = people.find((p) => p.id === partnerId) ?? null;
-      if (!partner) continue;
-
-      const pairKey = [person.id, partnerId].sort().join("_");
-      if (seenPairs.has(pairKey)) continue;
-      seenPairs.add(pairKey);
-
-      const monthDay = getAnniversaryMonthDay(person);
-      if (!monthDay) continue;
-      const next = getNextAnniversary(monthDay);
-      if (!next) continue;
-      const until = daysUntilDate(next, base);
-      if (until < 1 || until > horizonDays) continue;
-
-      candidates.push({
-        key: `anniv_${pairKey}_${next.getFullYear()}`,
-        entityKey: `anniv:${pairKey}`,
-        daysUntil: until,
-        message: `Your anniversary with ${partner.name} is ${timePhrase(until)}`,
-        priority: 1,
-      });
-    }
-
-    // Adult birthdays + custom moments
-    for (const person of people) {
-      if (!person?.id) continue;
-
-      const birthdayMoment = (person.moments ?? []).find((m) => m.type === "birthday") ?? null;
-      if (birthdayMoment?.date) {
-        const next = getNextBirthdayFromIso(birthdayMoment.date, base);
-        if (next && next.daysUntilBirthday >= 1 && next.daysUntilBirthday <= horizonDays) {
-          candidates.push({
-            key: `bday_${person.id}_${next.year}`,
-            entityKey: `person:${person.id}`,
-            daysUntil: next.daysUntilBirthday,
-            message: `${person.name}’s birthday ${timePhrase(next.daysUntilBirthday)}`,
-            priority: 0,
-          });
-        }
-      }
-
-      for (const moment of person.moments ?? []) {
-        if (moment.type !== "custom") continue;
-        let until: number | null = null;
-        if (moment.recurring) {
-          const next = getNextBirthdayFromIso(moment.date, base);
-          if (next) until = next.daysUntilBirthday;
-        } else {
-          const d = isoToDate(moment.date);
-          if (d) until = daysUntilDate(d, base);
-        }
-        if (until === null) continue;
-        if (until < 1 || until > horizonDays) continue;
-        candidates.push({
-          key: `custom_${person.id}_${moment.id}`,
-          entityKey: `person:${person.id}`,
-          daysUntil: until,
-          message: `${moment.label} ${timePhrase(until)}`,
-          priority: 2,
-        });
-      }
-    }
-
-    // Kids birthdays (treat each child separately)
-    for (const parent of people) {
-      if (!parent?.id) continue;
-      for (const child of parent.children ?? []) {
-        const name = (child.name ?? "").trim();
-        if (!child.id || !name) continue;
-        const raw = (child.birthday ?? child.birthdate ?? "").trim();
-        if (!raw) continue;
-        const next = getNextBirthdayFromIso(raw, base);
-        if (!next) continue;
-        if (next.daysUntilBirthday < 1 || next.daysUntilBirthday > horizonDays) continue;
-        candidates.push({
-          key: `childbday_${parent.id}_${child.id}_${next.year}`,
-          entityKey: `child:${parent.id}:${child.id}`,
-          daysUntil: next.daysUntilBirthday,
-          message: `${name}’s birthday ${timePhrase(next.daysUntilBirthday)}`,
-          priority: 0,
-        });
-      }
-    }
-
-    // Nearest per entity
-    const bestByEntity = new Map<string, Candidate>();
-    for (const c of candidates) {
-      const existing = bestByEntity.get(c.entityKey);
-      if (!existing) {
-        bestByEntity.set(c.entityKey, c);
-        continue;
-      }
-      if (c.daysUntil < existing.daysUntil) {
-        bestByEntity.set(c.entityKey, c);
-        continue;
-      }
-      if (c.daysUntil === existing.daysUntil && c.priority < existing.priority) {
-        bestByEntity.set(c.entityKey, c);
-      }
-    }
-
-    const items = Array.from(bestByEntity.values())
-      .sort((a, b) => (a.daysUntil - b.daysUntil) || (a.priority - b.priority) || a.message.localeCompare(b.message))
-      .slice(0, 6);
-
-    if (!items.length) return null;
 
     const debugHydration = (() => {
       try {
@@ -458,22 +282,130 @@ export default function Home({
       }
     })();
 
+    type ForecastItem = {
+      key: string;
+      firstName: string;
+      type: string;
+      label: string;
+      daysUntil: number;
+    };
+
+    type ForecastGroups = {
+      today: ForecastItem[];
+      tomorrow: ForecastItem[];
+      week: ForecastItem[];
+      month: ForecastItem[];
+    };
+
+    function parseLocalYmd(value: string): Date | null {
+      const parts = value.split("-");
+      if (parts.length !== 3) return null;
+      const y = Number(parts[0]);
+      const m = Number(parts[1]);
+      const d = Number(parts[2]);
+      if (!y || !m || !d || Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) return null;
+      const parsed = new Date(y, m - 1, d);
+      if (parsed.getFullYear() !== y || parsed.getMonth() !== m - 1 || parsed.getDate() !== d) return null;
+      return parsed;
+    }
+
+    const base = today;
+    const horizonDays = 30;
+    const all: ForecastItem[] = [];
+
+    // Flat array of all moments for all people.
+    for (const person of people) {
+      if (!person?.id) continue;
+      const firstName = (person.name ?? "").trim().split(" ")[0] || person.name;
+
+      for (const moment of person.moments ?? []) {
+        if (!moment?.id || !moment?.date) continue;
+
+        let until: number | null = null;
+        if (moment.recurring) {
+          const next = getNextBirthdayFromIso(moment.date, base);
+          if (next) until = next.daysUntilBirthday;
+        } else {
+          const d = parseLocalYmd(moment.date);
+          if (d) until = daysUntilDate(d, base);
+        }
+        if (until === null) continue;
+        if (until < 0 || until > horizonDays) continue;
+
+        if (debugHydration && moment.type === "birthday") {
+          // eslint-disable-next-line no-console
+          console.log("[DKF DEBUG] birthday daysUntil:", {
+            firstName,
+            date: moment.date,
+            daysUntil: until,
+          });
+        }
+
+        all.push({
+          key: `${person.id}:${moment.id}`,
+          firstName,
+          type: moment.type,
+          label: moment.label || moment.type,
+          daysUntil: until,
+        });
+      }
+
+      // Kids birthdays (as synthetic moments)
+      for (const child of person.children ?? []) {
+        const childName = (child.name ?? "").trim();
+        const raw = (child.birthday ?? child.birthdate ?? "").trim();
+        if (!child.id || !childName || !raw) continue;
+        const next = getNextBirthdayFromIso(raw, base);
+        if (!next) continue;
+        const until = next.daysUntilBirthday;
+        if (until < 0 || until > horizonDays) continue;
+        all.push({
+          key: `${person.id}:child:${child.id}`,
+          firstName: childName,
+          type: "kidBirthday",
+          label: "Birthday",
+          daysUntil: until,
+        });
+      }
+    }
+
+    all.sort((a, b) => (a.daysUntil - b.daysUntil) || a.firstName.localeCompare(b.firstName) || a.label.localeCompare(b.label));
+
     if (debugHydration) {
       // eslint-disable-next-line no-console
       console.log(
         "[DKF DEBUG] gentleForecast items:",
-        items.map((i) => ({ key: i.key, entityKey: i.entityKey, daysUntil: i.daysUntil, message: i.message }))
+        all.map((i) => ({ key: i.key, firstName: i.firstName, type: i.type, label: i.label, daysUntil: i.daysUntil }))
       );
     }
 
-    const groups: ForecastGroups = { tomorrow: [], week: [], month: [] };
-    for (const item of items) {
+    const groups: ForecastGroups = { today: [], tomorrow: [], week: [], month: [] };
+    const todayItems = all.filter((m) => m.daysUntil === 0);
+    const horizonItems = all.filter((m) => m.daysUntil > 0);
+
+    groups.today = todayItems;
+
+    for (const item of horizonItems) {
       if (item.daysUntil === 1) groups.tomorrow.push(item);
-      else if (item.daysUntil >= 2 && item.daysUntil <= 7) groups.week.push(item);
+      else if (item.daysUntil <= 7) groups.week.push(item);
       else groups.month.push(item);
     }
 
-    return groups;
+    // Limit horizon rendering to keep the block tidy.
+    const maxItems = 6;
+    const limited: ForecastGroups = {
+      today: groups.today,
+      tomorrow: groups.tomorrow,
+      week: groups.week,
+      month: groups.month,
+    };
+
+    const horizonFlat = [...limited.tomorrow, ...limited.week, ...limited.month].slice(0, maxItems);
+    limited.tomorrow = horizonFlat.filter((i) => i.daysUntil === 1);
+    limited.week = horizonFlat.filter((i) => i.daysUntil >= 2 && i.daysUntil <= 7);
+    limited.month = horizonFlat.filter((i) => i.daysUntil >= 8);
+
+    return limited;
   }, [activeTab, people, today]);
 
   function addDays(date: Date, deltaDays: number) {
@@ -1223,7 +1155,9 @@ export default function Home({
                             {gentleForecast.tomorrow.map((i) => (
                               <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
                                 <RaisedGoldBullet />
-                                <div style={{ minWidth: 0 }}>{i.message}</div>
+                                <div style={{ minWidth: 0 }}>
+                                  {i.firstName} · {i.label} tomorrow
+                                </div>
                               </div>
                             ))}
                           </>
@@ -1237,7 +1171,9 @@ export default function Home({
                             {gentleForecast.week.map((i) => (
                               <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
                                 <RaisedGoldBullet />
-                                <div style={{ minWidth: 0 }}>{i.message}</div>
+                                <div style={{ minWidth: 0 }}>
+                                  {i.firstName} · {i.label} in {i.daysUntil} days
+                                </div>
                               </div>
                             ))}
                           </>
@@ -1256,7 +1192,9 @@ export default function Home({
                             {gentleForecast.month.map((i) => (
                               <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
                                 <RaisedGoldBullet />
-                                <div style={{ minWidth: 0 }}>{i.message}</div>
+                                <div style={{ minWidth: 0 }}>
+                                  {i.firstName} · {i.label} in {i.daysUntil} days
+                                </div>
                               </div>
                             ))}
                           </>
