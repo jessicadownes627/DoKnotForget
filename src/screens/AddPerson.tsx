@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Child, Moment, Person } from "../models/Person";
 import type { Relationship, RelationshipType } from "../models/Relationship";
 import MomentDatePicker from "../components/MomentDatePicker";
@@ -56,8 +56,16 @@ export default function AddPerson() {
     "name" | "phone" | "partner" | "family" | "birthday" | "anniversary" | "custom" | "related" | null
   >(null);
 
+  const lastPrefilledPersonIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!editingPerson) return;
+    // Only prefill when entering edit mode (or switching which person is being edited).
+    if (!editingPerson?.id) {
+      lastPrefilledPersonIdRef.current = null;
+      return;
+    }
+    if (lastPrefilledPersonIdRef.current === editingPerson.id) return;
+    lastPrefilledPersonIdRef.current = editingPerson.id;
     setPhone(editingPerson.phone || "");
   }, [editingPerson?.id]);
 
