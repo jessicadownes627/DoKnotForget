@@ -1168,7 +1168,7 @@ export default function Home({
                     padding: "18px",
                     background: "rgba(255,255,255,0.7)",
                     boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-                    marginBottom: "14px",
+                    marginBottom: "10px",
                   }}
                 >
                   <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)" }}>
@@ -1195,8 +1195,8 @@ export default function Home({
                     fontWeight: 600,
                     color: "var(--muted)",
                     letterSpacing: "-0.01em",
-                    marginTop: "18px",
-                    marginBottom: "6px",
+                    marginTop: "12px",
+                    marginBottom: "4px",
                   };
 
                   const firstOf = (fullName: string) => (fullName ?? "").trim().split(" ")[0] || fullName || "Text";
@@ -1267,7 +1267,7 @@ export default function Home({
                       <div
                         key={`${arrivalTick}_${list.length}`}
                         className={arrivalTick ? "dkf-arrival" : undefined}
-                        style={{ marginTop: "1.1rem", display: "grid", gap: "1.75rem" }}
+                        style={{ marginTop: "0.85rem", display: "grid", gap: "1.75rem" }}
                       >
                         {list.flatMap((suggestion, idx) => {
                           const items: React.ReactNode[] = [];
@@ -1305,7 +1305,7 @@ export default function Home({
                   };
 
                   const renderPromptGrid = (children: React.ReactNode) => (
-                    <div style={{ display: "grid", gap: "12px", marginBottom: "8px" }}>{children}</div>
+                    <div style={{ display: "grid", gap: "12px", marginBottom: "6px" }}>{children}</div>
                   );
 
                   const renderEmpty = () => (
