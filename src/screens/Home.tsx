@@ -295,8 +295,13 @@ export default function Home({
       priority: number;
     };
 
+    type ForecastGroups = {
+      tomorrow: Candidate[];
+      week: Candidate[];
+      month: Candidate[];
+    };
+
     function timePhrase(days: number) {
-      if (days === 0) return "today";
       if (days === 1) return "tomorrow";
       if (days >= 6) return "next week";
       return `in ${days} days`;
@@ -304,6 +309,7 @@ export default function Home({
 
     const base = today;
     const candidates: Candidate[] = [];
+    const horizonDays = 30;
 
     // Holidays
     const year = new Date().getFullYear();
@@ -311,7 +317,7 @@ export default function Home({
     const fathersDay = getFathersDay(year);
     const mdUntil = daysUntilDate(mothersDay, base);
     const fdUntil = daysUntilDate(fathersDay, base);
-    if (mdUntil >= 0 && mdUntil <= 7) {
+    if (mdUntil >= 1 && mdUntil <= horizonDays) {
       candidates.push({
         key: `holiday_md_${year}`,
         entityKey: "holiday:mothers_day",
@@ -320,7 +326,7 @@ export default function Home({
         priority: 1,
       });
     }
-    if (fdUntil >= 0 && fdUntil <= 7) {
+    if (fdUntil >= 1 && fdUntil <= horizonDays) {
       candidates.push({
         key: `holiday_fd_${year}`,
         entityKey: "holiday:fathers_day",
@@ -348,7 +354,7 @@ export default function Home({
       const next = getNextAnniversary(monthDay);
       if (!next) continue;
       const until = daysUntilDate(next, base);
-      if (until < 0 || until > 7) continue;
+      if (until < 1 || until > horizonDays) continue;
 
       candidates.push({
         key: `anniv_${pairKey}_${next.getFullYear()}`,
@@ -366,7 +372,7 @@ export default function Home({
       const birthdayMoment = (person.moments ?? []).find((m) => m.type === "birthday") ?? null;
       if (birthdayMoment?.date) {
         const next = getNextBirthdayFromIso(birthdayMoment.date, base);
-        if (next && next.daysUntilBirthday >= 0 && next.daysUntilBirthday <= 7) {
+        if (next && next.daysUntilBirthday >= 1 && next.daysUntilBirthday <= horizonDays) {
           candidates.push({
             key: `bday_${person.id}_${next.year}`,
             entityKey: `person:${person.id}`,
@@ -388,7 +394,7 @@ export default function Home({
           if (d) until = daysUntilDate(d, base);
         }
         if (until === null) continue;
-        if (until < 0 || until > 7) continue;
+        if (until < 1 || until > horizonDays) continue;
         candidates.push({
           key: `custom_${person.id}_${moment.id}`,
           entityKey: `person:${person.id}`,
@@ -409,7 +415,7 @@ export default function Home({
         if (!raw) continue;
         const next = getNextBirthdayFromIso(raw, base);
         if (!next) continue;
-        if (next.daysUntilBirthday < 0 || next.daysUntilBirthday > 7) continue;
+        if (next.daysUntilBirthday < 1 || next.daysUntilBirthday > horizonDays) continue;
         candidates.push({
           key: `childbday_${parent.id}_${child.id}_${next.year}`,
           entityKey: `child:${parent.id}:${child.id}`,
@@ -439,9 +445,18 @@ export default function Home({
 
     const items = Array.from(bestByEntity.values())
       .sort((a, b) => (a.daysUntil - b.daysUntil) || (a.priority - b.priority) || a.message.localeCompare(b.message))
-      .slice(0, 3);
+      .slice(0, 6);
 
-    return items.length ? items.map((i) => i.message) : [];
+    if (!items.length) return null;
+
+    const groups: ForecastGroups = { tomorrow: [], week: [], month: [] };
+    for (const item of items) {
+      if (item.daysUntil === 1) groups.tomorrow.push(item);
+      else if (item.daysUntil >= 2 && item.daysUntil <= 7) groups.week.push(item);
+      else groups.month.push(item);
+    }
+
+    return groups;
   }, [activeTab, people, today]);
 
   function addDays(date: Date, deltaDays: number) {
@@ -1173,14 +1188,63 @@ export default function Home({
                 >
                   <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)" }}>On the horizon</div>
                   <GoldenSunDivider />
-                  <div style={{ marginTop: "10px", display: "grid", gap: "8px", color: "var(--muted)", fontSize: "16px", lineHeight: 1.45 }}>
-                    {gentleForecast && gentleForecast.length ? (
-                      gentleForecast.map((line) => (
-                        <div key={line} style={{ display: "flex", alignItems: "center" }}>
-                          <RaisedGoldBullet />
-                          <div style={{ minWidth: 0 }}>{line}</div>
-                        </div>
-                      ))
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      display: "grid",
+                      gap: "8px",
+                      color: "var(--muted)",
+                      fontSize: "16px",
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    {gentleForecast ? (
+                      <>
+                        {gentleForecast.tomorrow.length ? (
+                          <>
+                            <div style={{ fontWeight: 600 }}>Tomorrow</div>
+                            {gentleForecast.tomorrow.map((i) => (
+                              <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
+                                <RaisedGoldBullet />
+                                <div style={{ minWidth: 0 }}>{i.message}</div>
+                              </div>
+                            ))}
+                          </>
+                        ) : null}
+
+                        {gentleForecast.week.length ? (
+                          <>
+                            <div style={{ fontWeight: 600, marginTop: gentleForecast.tomorrow.length ? "6px" : 0 }}>
+                              This week
+                            </div>
+                            {gentleForecast.week.map((i) => (
+                              <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
+                                <RaisedGoldBullet />
+                                <div style={{ minWidth: 0 }}>{i.message}</div>
+                              </div>
+                            ))}
+                          </>
+                        ) : null}
+
+                        {gentleForecast.month.length ? (
+                          <>
+                            <div
+                              style={{
+                                fontWeight: 600,
+                                marginTop: gentleForecast.tomorrow.length || gentleForecast.week.length ? "6px" : 0,
+                              }}
+                            >
+                              Later this month
+                            </div>
+                            {gentleForecast.month.map((i) => (
+                              <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
+                                <RaisedGoldBullet />
+                                <div style={{ minWidth: 0 }}>{i.message}</div>
+                              </div>
+                            ))}
+                          </>
+                        ) : null}
+                      </>
                     ) : (
                       <div>Nothing big this week — enjoy the quiet ✨</div>
                     )}
@@ -1238,15 +1302,13 @@ export default function Home({
 
                   const careQuestions = visibleCareSuggestions.filter((s) => s.type === "question" && s.question);
                   const careNonQuestions = visibleCareSuggestions.filter((s) => s.type !== "question");
-                  const careToday = careNonQuestions.filter((s) => s.sortDaysUntil === 0);
                   const careComing = careNonQuestions.filter((s) => s.sortDaysUntil >= 1 && s.sortDaysUntil <= 7);
                   const careLater = careNonQuestions.filter((s) => s.sortDaysUntil > 7);
 
                   const hasToday =
                     todayBirthdayPrompts.length ||
                     todayKidsBirthdayPrompts.length ||
-                    todayAnniversaryPrompts.length ||
-                    careToday.length;
+                    todayAnniversaryPrompts.length;
 
                   const hasComing =
                     comingBirthdayPrompts.length ||
@@ -1399,7 +1461,6 @@ export default function Home({
                               })}
                             </>
                           )}
-                          {renderCareList(careToday)}
                         </>
                       ) : null}
 
