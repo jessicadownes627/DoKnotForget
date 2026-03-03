@@ -24,13 +24,6 @@ function timePhrase(daysUntil: number) {
   return `in ${daysUntil} days`;
 }
 
-function possessivePronounFor(person: Person): "His" | "Her" | "Their" {
-  const gender = ((person as any).gender ?? "").toString().toLowerCase();
-  if (gender === "male") return "His";
-  if (gender === "female") return "Her";
-  return "Their";
-}
-
 function getAnniversaryMonthDay(person: Person): string | null {
   const stored = (person.anniversary ?? "").trim();
   if (stored) return stored;
@@ -281,13 +274,12 @@ export default function PersonDetail({}: {}) {
     const phr = timePhrase(nextUp.daysUntil);
 
     if (nextUp.label === `${person.name}’s birthday`) {
-      const pronoun = possessivePronounFor(person);
-      return `${pronoun} birthday is ${phr}.`;
+      const first = (person.name ?? "").trim().split(" ")[0] || person.name;
+      return `${first}’s birthday is ${phr}.`;
     }
 
     if (nextUp.label.startsWith("Anniversary with ")) {
-      const pronoun = possessivePronounFor(person);
-      return `${pronoun} anniversary is ${phr}.`;
+      return `${nextUp.label} is ${phr}.`;
     }
 
     return `${nextUp.label} is ${phr}.`;
@@ -296,8 +288,25 @@ export default function PersonDetail({}: {}) {
   const thingsToRemember = useMemo(() => {
     const lines: Array<{ label: string; value: string }> = [];
 
-    if (person.religionCulture) {
-      lines.push({ label: "Religion / culture", value: person.religionCulture });
+    const storedCulture = (person as any).religionCulture;
+    const cultures: NonNullable<Person["religionCulture"]> = Array.isArray(storedCulture)
+      ? (storedCulture as NonNullable<Person["religionCulture"]>)
+      : typeof storedCulture === "string" && storedCulture.trim()
+        ? ([storedCulture.trim()] as NonNullable<Person["religionCulture"]>)
+        : [];
+    const normalizedCultures = cultures.filter((c) => c !== "none");
+    if (normalizedCultures.length) {
+      const labelMap: Record<NonNullable<Person["religionCulture"]>[number], string> = {
+        christian: "Christian",
+        orthodox: "Orthodox",
+        jewish: "Jewish",
+        muslim: "Muslim",
+        none: "None",
+      };
+      lines.push({
+        label: "Holidays to remember",
+        value: normalizedCultures.map((c) => labelMap[c] ?? c).join(" · "),
+      });
     }
 
     const kids = (person.children ?? [])

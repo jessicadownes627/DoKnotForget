@@ -19,7 +19,7 @@ export default function SmartSuggestionCard({
   noLabel,
   maybeLabel,
 }: Props) {
-  const resolvedYesLabel = yesLabel ?? (variant === "discover" ? "Yes" : "Text her");
+  const resolvedYesLabel = yesLabel ?? (variant === "discover" ? "Yes" : "Text");
   const resolvedNoLabel = noLabel ?? (variant === "discover" ? "No" : "Skip");
   const resolvedMaybeLabel = maybeLabel ?? (variant === "discover" ? "Not sure" : "Remind me Sunday");
 

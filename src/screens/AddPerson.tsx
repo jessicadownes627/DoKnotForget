@@ -21,7 +21,7 @@ export default function AddPerson() {
   const [phone, setPhone] = useState("");
   const [hasKids, setHasKids] = useState(false);
   const [parentRole, setParentRole] = useState<Person["parentRole"]>("parent");
-  const [religionCulture, setReligionCulture] = useState<Person["religionCulture"] | "">("");
+  const [religionCulture, setReligionCulture] = useState<NonNullable<Person["religionCulture"]>>([]);
   const [children, setChildren] = useState<Child[]>([]);
   const [childEditingIndex, setChildEditingIndex] = useState<number | null>(null);
   const [childDraftMonthDay, setChildDraftMonthDay] = useState("");
@@ -110,6 +110,24 @@ export default function AddPerson() {
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
+  const firstName = (name.trim().split(" ")[0] || "this person").trim();
+
+  function toggleReligionCulture(value: NonNullable<Person["religionCulture"]>[number]) {
+    setReligionCulture((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+
+      if (value === "none") {
+        return next.has("none") ? ["none"] : [];
+      }
+
+      // Selecting anything else clears "none".
+      next.delete("none");
+      return Array.from(next);
+    });
+  }
+
   function toDraftFromIso(value: string) {
     const parts = parseYmd(value);
     if (!parts) return { monthDay: "", year: "" };
@@ -180,7 +198,7 @@ export default function AddPerson() {
       anniversary: anniversary || undefined,
       hasKids: hasKids || (children.length ? true : undefined),
       parentRole: hasKids ? parentRole : undefined,
-      religionCulture: religionCulture || undefined,
+      religionCulture: religionCulture.length ? religionCulture : undefined,
       children: hasKids ? children : undefined,
       importantDates: moments.filter((m) => m.type === "custom"),
     };
@@ -544,21 +562,33 @@ export default function AddPerson() {
             ) : null}
 
             <div style={{ display: "grid", gap: "0.45rem" }}>
-              <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Religion / culture</div>
-              <select
-                value={religionCulture ?? ""}
-                onChange={(e) => setReligionCulture((e.target.value as Person["religionCulture"]) || "")}
-                style={{ width: "100%", padding: "0.65rem 0.75rem", borderRadius: "12px" }}
-              >
-                <option value="">Optional</option>
-                <option value="christian">Christian</option>
-                <option value="orthodox">Orthodox</option>
-                <option value="jewish">Jewish</option>
-                <option value="muslim">Muslim</option>
-                <option value="none">None</option>
-              </select>
               <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-                Helps surface holidays like Easter, Hanukkah, or Ramadan.
+                Holidays to remember for {firstName}
+              </div>
+              <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Choose any that apply.</div>
+
+              <div style={{ display: "grid", gap: "0.6rem", marginTop: "4px" }}>
+                {(
+                  [
+                    { id: "christian", label: "Christian" },
+                    { id: "orthodox", label: "Orthodox" },
+                    { id: "jewish", label: "Jewish" },
+                    { id: "muslim", label: "Muslim" },
+                    { id: "none", label: "None" },
+                  ] as const
+                ).map((opt) => (
+                  <label
+                    key={opt.id}
+                    style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={religionCulture.includes(opt.id)}
+                      onChange={() => toggleReligionCulture(opt.id)}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
               </div>
             </div>
 

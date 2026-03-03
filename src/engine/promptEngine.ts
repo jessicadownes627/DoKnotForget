@@ -184,7 +184,7 @@ export function getMotherPrompts(people: Person[]): MotherPromptItem[] {
       prompts.push({
         type: "NUDGE_MOTHERS_DAY",
         personId: person.id,
-        message: `Mother’s Day is approaching.\nWould you like to send her something warm?`,
+        message: `Mother’s Day is approaching.\nWould you like to send a warm note?`,
       });
     }
   }
@@ -224,7 +224,7 @@ export function getFatherPrompts(people: Person[]): FatherPromptItem[] {
       prompts.push({
         type: "NUDGE_FATHERS_DAY",
         personId: person.id,
-        message: `Father’s Day is coming up.\nWould you like to reach out to him?`,
+        message: `Father’s Day is coming up.\nWould you like to reach out?`,
       });
     }
   }
@@ -297,7 +297,7 @@ export function getAnniversaryPrompts(people: Person[]): AnniversaryPromptItem[]
         type: "ANNIVERSARY_TODAY",
         personId: person.id,
         partnerId: partner.id,
-        message: `It’s their anniversary today.\nA kind note might mean a lot.`,
+        message: `It’s ${person.name} and ${partner.name}’s anniversary today.\nA kind message could make today feel special.`,
         daysUntilAnniversary: until,
         anniversaryIso,
         year,
@@ -310,7 +310,7 @@ export function getAnniversaryPrompts(people: Person[]): AnniversaryPromptItem[]
         type: "ANNIVERSARY_TOMORROW",
         personId: person.id,
         partnerId: partner.id,
-        message: `Their anniversary is tomorrow.\nWould you like to send a warm message?`,
+        message: `${person.name} and ${partner.name}’s anniversary is tomorrow.\nWould you like to send a warm message?`,
         daysUntilAnniversary: until,
         anniversaryIso,
         year,
@@ -337,16 +337,27 @@ export function getAnniversaryPrompts(people: Person[]): AnniversaryPromptItem[]
 export function getBirthdayPrompts(people: Person[]): BirthdayPromptItem[] {
   const prompts: BirthdayPromptItem[] = [];
 
+  function firstName(fullName: string) {
+    return (fullName ?? "").trim().split(" ")[0] || fullName;
+  }
+
+  function timeframe(daysUntilBirthday: number) {
+    if (daysUntilBirthday === 0) return "today";
+    if (daysUntilBirthday === 1) return "tomorrow";
+    return `in ${daysUntilBirthday} days`;
+  }
+
   for (const person of people) {
     if (!person?.id) continue;
 
     const birthdayMoment = (person.moments ?? []).find((m) => m.type === "birthday") ?? null;
 
     if (!birthdayMoment?.date) {
+      const who = firstName(person.name);
       prompts.push({
         type: "DISCOVER_BIRTHDAY",
         personId: person.id,
-        message: `Do you happen to know ${person.name}’s birthday?\nIt would help us plan thoughtfully for her.`,
+        message: `Do you happen to know ${who}’s birthday?\nIt helps keep the right days close.`,
         year: new Date().getFullYear(),
       });
       continue;
@@ -356,12 +367,16 @@ export function getBirthdayPrompts(people: Person[]): BirthdayPromptItem[] {
     if (!next) continue;
 
     const { daysUntilBirthday, iso, year } = next;
+    const who = firstName(person.name);
+    const birthYear = Number((birthdayMoment.date ?? "").split("-")[0]);
+    const age = !Number.isNaN(birthYear) && birthYear > 0 ? Math.max(0, year - birthYear) : null;
+    const when = timeframe(daysUntilBirthday);
 
     if (daysUntilBirthday === 0) {
       prompts.push({
         type: "TODAY_BIRTHDAY",
         personId: person.id,
-        message: `It’s ${person.name}’s birthday today.\nA kind message might mean a lot to her.`,
+        message: `It’s ${who}’s birthday today.\nA kind message could make today feel special.`,
         daysUntilBirthday,
         birthdayIso: iso,
         year,
@@ -373,7 +388,7 @@ export function getBirthdayPrompts(people: Person[]): BirthdayPromptItem[] {
       prompts.push({
         type: "TOMORROW_BIRTHDAY",
         personId: person.id,
-        message: `${person.name}’s birthday is tomorrow.\nWould you like to send her a note?`,
+        message: `${who}’s birthday is ${when}.\nWant to reach out?`,
         daysUntilBirthday,
         birthdayIso: iso,
         year,
@@ -385,7 +400,10 @@ export function getBirthdayPrompts(people: Person[]): BirthdayPromptItem[] {
       prompts.push({
         type: "PREP_BIRTHDAY",
         personId: person.id,
-        message: `${person.name}’s birthday is coming up.\nWould you like a gentle reminder to reach out?`,
+        message:
+          age !== null && age > 0
+            ? `${who} turns ${age} ${when}.\nWant to reach out?`
+            : `${who}’s birthday is ${when}.\nWant to reach out?`,
         daysUntilBirthday,
         birthdayIso: iso,
         year,

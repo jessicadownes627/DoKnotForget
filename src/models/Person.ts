@@ -43,7 +43,9 @@ export type Person = {
   anniversary?: string | null; // MM-DD
   hasKids?: boolean;
   parentRole?: "mother" | "father" | "parent";
-  religionCulture?: "christian" | "orthodox" | "jewish" | "muslim" | "none";
+  // Holiday traditions to remember (multi-select).
+  // Back-compat note: older records stored this as a single string.
+  religionCulture?: Array<"christian" | "orthodox" | "jewish" | "muslim" | "none">;
   religionTag?: string; // legacy free-text
   holidayPrefs?: { mothersDay?: boolean; fathersDay?: boolean };
   importantDates?: Moment[];

@@ -136,8 +136,17 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
   const [name, setName] = useState(person.name ?? "");
   const [phone, setPhone] = useState(person.phone ?? "");
   const [hasKids, setHasKids] = useState(Boolean(person.hasKids || (person.children?.length ?? 0) > 0));
-  const [religionCulture, setReligionCulture] = useState<Person["religionCulture"] | "">(
-    person.religionCulture ?? ""
+  function normalizeReligionCulture(value: unknown): NonNullable<Person["religionCulture"]> {
+    if (Array.isArray(value)) return value as NonNullable<Person["religionCulture"]>;
+    if (typeof value === "string" && value.trim()) {
+      // Back-compat: older records stored a single string.
+      return [value.trim() as NonNullable<Person["religionCulture"]>[number]];
+    }
+    return [];
+  }
+
+  const [religionCulture, setReligionCulture] = useState<NonNullable<Person["religionCulture"]>>(
+    normalizeReligionCulture((person as any).religionCulture)
   );
   const [mothersDayPref, setMothersDayPref] = useState<"" | "include" | "exclude">(
     person.holidayPrefs?.mothersDay === true ? "include" : person.holidayPrefs?.mothersDay === false ? "exclude" : ""
@@ -176,7 +185,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
     setName(person.name ?? "");
     setPhone(person.phone ?? "");
     setHasKids(Boolean(person.hasKids || (person.children?.length ?? 0) > 0));
-    setReligionCulture(person.religionCulture ?? "");
+    setReligionCulture(normalizeReligionCulture((person as any).religionCulture));
     setMothersDayPref(
       person.holidayPrefs?.mothersDay === true ? "include" : person.holidayPrefs?.mothersDay === false ? "exclude" : ""
     );
@@ -199,6 +208,23 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
   }, [isOpen, person]);
 
   if (!isOpen) return null;
+
+  const firstName = (name.trim().split(" ")[0] || "this person").trim();
+
+  function toggleReligionCulture(value: NonNullable<Person["religionCulture"]>[number]) {
+    setReligionCulture((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+
+      if (value === "none") {
+        return next.has("none") ? ["none"] : [];
+      }
+
+      next.delete("none");
+      return Array.from(next);
+    });
+  }
 
   function save() {
     if (!name.trim()) return;
@@ -223,7 +249,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
       name: name.trim(),
       phone: phone.trim() ? phone.trim() : undefined,
       hasKids: hasKids ? true : false,
-      religionCulture: religionCulture || undefined,
+      religionCulture: religionCulture.length ? religionCulture : undefined,
       holidayPrefs: hasKids
         ? {
             mothersDay: mothersDayPref === "" ? undefined : mothersDayPref === "include",
@@ -596,28 +622,36 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
               ) : null}
 
               <div style={{ marginTop: "12px" }}>
-                <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Religion / Culture</div>
-                <select
-                  value={religionCulture ?? ""}
-                  onChange={(e) => setReligionCulture((e.target.value as Person["religionCulture"]) || "")}
-                  style={{
-                    width: "100%",
-                    padding: "0.75rem 0.85rem",
-                    borderRadius: "12px",
-                    border: "1px solid var(--border-strong)",
-                    background: "var(--card)",
-                    color: "var(--ink)",
-                    fontSize: "1rem",
-                    marginTop: "6px",
-                  }}
-                >
-                  <option value="">Not set</option>
-                  <option value="christian">Christian</option>
-                  <option value="orthodox">Orthodox</option>
-                  <option value="jewish">Jewish</option>
-                  <option value="muslim">Muslim</option>
-                  <option value="none">None</option>
-                </select>
+                <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                  Holidays to remember for {firstName}
+                </div>
+                <div style={{ color: "var(--muted)", fontSize: "0.85rem", marginTop: "4px" }}>
+                  Choose any that apply.
+                </div>
+
+                <div style={{ display: "grid", gap: "0.6rem", marginTop: "10px" }}>
+                  {(
+                    [
+                      { id: "christian", label: "Christian" },
+                      { id: "orthodox", label: "Orthodox" },
+                      { id: "jewish", label: "Jewish" },
+                      { id: "muslim", label: "Muslim" },
+                      { id: "none", label: "None" },
+                    ] as const
+                  ).map((opt) => (
+                    <label
+                      key={opt.id}
+                      style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={religionCulture.includes(opt.id)}
+                        onChange={() => toggleReligionCulture(opt.id)}
+                      />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
               </div>
 
               {hasKids ? (

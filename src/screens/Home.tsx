@@ -1102,7 +1102,7 @@ export default function Home({
                 Start by adding someone important.
               </div>
               <div style={{ marginTop: "0.6rem", color: "var(--muted)", lineHeight: 1.6 }}>
-                When you add people, their important dates will appear here.
+                When you add people, important dates will appear here.
               </div>
               <div style={{ marginTop: "1.5rem" }}>
                 <button
@@ -1192,31 +1192,43 @@ export default function Home({
                 {visibleBirthdayPrompts.length || visibleKidsBirthdayPrompts.length || visibleAnniversaryPrompts.length || visibleFatherPrompts.length || visibleMotherPrompts.length || partnerLinkPrompt ? (
                   <div style={{ display: "grid", gap: "12px", marginBottom: "16px" }}>
                     {visibleMotherPrompts.map((p) => (
-                      <SmartSuggestionCard
-                        key={`${p.personId}_${p.type}`}
-                        variant={p.type === "DISCOVER_MOTHER" ? "discover" : "nudge"}
-                        message={p.message}
-                        yesLabel={p.type === "DISCOVER_MOTHER" ? "Yes" : "Text her"}
-                        noLabel={p.type === "DISCOVER_MOTHER" ? "No" : "Not now"}
-                        maybeLabel={p.type === "DISCOVER_MOTHER" ? "Not sure" : "Remind me Sunday"}
-                        onYes={() => handleMotherPromptYes(p)}
-                        onNo={() => handleMotherPromptNo(p)}
-                        onMaybe={() => handleMotherPromptMaybe(p)}
-                      />
+                      (() => {
+                        const personName = people.find((x) => x.id === p.personId)?.name ?? "";
+                        const first = personName.trim().split(" ")[0] || "Text";
+                        return (
+                          <SmartSuggestionCard
+                            key={`${p.personId}_${p.type}`}
+                            variant={p.type === "DISCOVER_MOTHER" ? "discover" : "nudge"}
+                            message={p.message}
+                            yesLabel={p.type === "DISCOVER_MOTHER" ? "Yes" : `Text ${first}`}
+                            noLabel={p.type === "DISCOVER_MOTHER" ? "No" : "Not now"}
+                            maybeLabel={p.type === "DISCOVER_MOTHER" ? "Not sure" : "Remind me Sunday"}
+                            onYes={() => handleMotherPromptYes(p)}
+                            onNo={() => handleMotherPromptNo(p)}
+                            onMaybe={() => handleMotherPromptMaybe(p)}
+                          />
+                        );
+                      })()
                     ))}
 
                     {visibleFatherPrompts.map((p) => (
-                      <SmartSuggestionCard
-                        key={`${p.personId}_${p.type}`}
-                        variant={p.type === "DISCOVER_FATHER" ? "discover" : "nudge"}
-                        message={p.message}
-                        yesLabel={p.type === "DISCOVER_FATHER" ? "Yes" : "Text him"}
-                        noLabel={p.type === "DISCOVER_FATHER" ? "No" : "Not now"}
-                        maybeLabel={p.type === "DISCOVER_FATHER" ? "Not sure" : "Remind me Sunday"}
-                        onYes={() => handleFatherPromptYes(p)}
-                        onNo={() => handleFatherPromptNo(p)}
-                        onMaybe={() => handleFatherPromptMaybe(p)}
-                      />
+                      (() => {
+                        const personName = people.find((x) => x.id === p.personId)?.name ?? "";
+                        const first = personName.trim().split(" ")[0] || "Text";
+                        return (
+                          <SmartSuggestionCard
+                            key={`${p.personId}_${p.type}`}
+                            variant={p.type === "DISCOVER_FATHER" ? "discover" : "nudge"}
+                            message={p.message}
+                            yesLabel={p.type === "DISCOVER_FATHER" ? "Yes" : `Text ${first}`}
+                            noLabel={p.type === "DISCOVER_FATHER" ? "No" : "Not now"}
+                            maybeLabel={p.type === "DISCOVER_FATHER" ? "Not sure" : "Remind me Sunday"}
+                            onYes={() => handleFatherPromptYes(p)}
+                            onNo={() => handleFatherPromptNo(p)}
+                            onMaybe={() => handleFatherPromptMaybe(p)}
+                          />
+                        );
+                      })()
                     ))}
 
                     {visibleAnniversaryPrompts.map((p) => (
@@ -1253,7 +1265,7 @@ export default function Home({
                       <SmartSuggestionCard
                         key={`${partnerLinkPrompt.personId}_${partnerLinkPrompt.partnerId}_PARTNER_LINK`}
                         variant="nudge"
-                        message={`Would you like to connect ${partnerLinkPrompt.personName} with ${partnerLinkPrompt.partnerName} so their dates stay together?`}
+                        message={`Would you like to connect ${partnerLinkPrompt.personName} with ${partnerLinkPrompt.partnerName} so dates stay together?`}
                         yesLabel="Link them"
                         maybeLabel="Not now"
                         noLabel="Never show again"
@@ -1326,16 +1338,34 @@ export default function Home({
                     ))}
 
                     {visibleBirthdayPrompts.map((p) => (
-                      <SmartSuggestionCard
-                        key={`${p.personId}_${p.type}`}
-                        variant={p.type === "DISCOVER_BIRTHDAY" ? "discover" : "nudge"}
-                        message={p.message}
-                        yesLabel={p.type === "DISCOVER_BIRTHDAY" ? "Add birthday" : p.type === "PREP_BIRTHDAY" ? "Yes, remind me" : "Text her"}
-                        noLabel={p.type === "DISCOVER_BIRTHDAY" ? "Not now" : p.type === "PREP_BIRTHDAY" ? "Skip" : "Not now"}
-                        onYes={() => handleBirthdayPromptYes(p)}
-                        onNo={() => handleBirthdayPromptNo(p)}
-                        onMaybe={undefined}
-                      />
+                      (() => {
+                        const personName = people.find((x) => x.id === p.personId)?.name ?? "";
+                        const first = personName.trim().split(" ")[0] || "Text";
+                        const yesLabel =
+                          p.type === "DISCOVER_BIRTHDAY"
+                            ? "Add birthday"
+                            : p.type === "PREP_BIRTHDAY"
+                              ? "See ideas"
+                              : `Text ${first}`;
+                        const noLabel =
+                          p.type === "DISCOVER_BIRTHDAY"
+                            ? "Not now"
+                            : p.type === "PREP_BIRTHDAY"
+                              ? "Not now"
+                              : "Not now";
+                        return (
+                          <SmartSuggestionCard
+                            key={`${p.personId}_${p.type}`}
+                            variant={p.type === "DISCOVER_BIRTHDAY" ? "discover" : "nudge"}
+                            message={p.message}
+                            yesLabel={yesLabel}
+                            noLabel={noLabel}
+                            onYes={() => handleBirthdayPromptYes(p)}
+                            onNo={() => handleBirthdayPromptNo(p)}
+                            onMaybe={undefined}
+                          />
+                        );
+                      })()
                     ))}
                   </div>
                 ) : null}
@@ -1387,7 +1417,7 @@ export default function Home({
                     ) : (
                       <>
                         <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>
-                          When you add people, their important dates will appear here.
+                          When you add people, important dates will appear here.
                         </div>
                       </>
                     )}
