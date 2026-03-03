@@ -1225,6 +1225,19 @@ export default function Home({
                     if (!opened) window.location.href = url;
                   }
 
+                  function openExternalUrl(url: string) {
+                    const opened = window.open(url, "_blank", "noopener,noreferrer");
+                    if (!opened) window.location.href = url;
+                  }
+
+                  function remindInDays(personId: string, label: string, days: number) {
+                    const person = people.find((x) => x.id === personId) ?? null;
+                    if (!person) return;
+                    const d = new Date(today);
+                    d.setDate(d.getDate() + days);
+                    updatePerson(addCustomMomentIfMissing(person, label, formatYmd(d)));
+                  }
+
                   const todayBirthdayPrompts = visibleBirthdayPrompts.filter((p) => p.type === "TODAY_BIRTHDAY");
                   const comingBirthdayPrompts = visibleBirthdayPrompts.filter(
                     (p) => p.type === "TOMORROW_BIRTHDAY" || p.type === "PREP_BIRTHDAY"
@@ -1361,15 +1374,25 @@ export default function Home({
                                     key={`${p.personId}_${p.type}`}
                                     variant="nudge"
                                     message={p.message}
-                                    yesLabel={yesLabel}
-                                    maybeLabel="See ideas"
-                                    noLabel="Hide this reminder"
-                                    onYes={() => handleAnniversaryPromptYes(p)}
-                                    onNo={() => handleAnniversaryPromptNo(p)}
-                                    onMaybe={() => {
-                                      openIdeasSearch("anniversary message ideas");
-                                      dismissPrompt(p);
-                                    }}
+                                    actions={[
+                                      { label: yesLabel, onClick: () => handleAnniversaryPromptYes(p) },
+                                      {
+                                        label: "Send e-card",
+                                        onClick: () => {
+                                          openExternalUrl("https://www.americangreetings.com/ecards");
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      {
+                                        label: "Buy coffee",
+                                        onClick: () => {
+                                          openExternalUrl("https://www.starbucks.com/gift");
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      { label: "Mute reminder", onClick: () => dismissPrompt(p) },
+                                    ]}
+                                    onMaybe={undefined}
                                   />
                                 );
                               })}
@@ -1382,15 +1405,25 @@ export default function Home({
                                     key={`${p.parentId}_${p.childId}_${p.type}`}
                                     variant="nudge"
                                     message={p.message}
-                                    yesLabel={`Text ${first}`}
-                                    maybeLabel="See ideas"
-                                    noLabel="Hide this reminder"
-                                    onYes={() => handleKidsBirthdayPromptYes(p)}
-                                    onNo={() => handleKidsBirthdayPromptNo(p)}
-                                    onMaybe={() => {
-                                      openIdeasSearch(`birthday message ideas for ${p.childName}`);
-                                      dismissPrompt(p);
-                                    }}
+                                    actions={[
+                                      { label: `Text ${first}`, onClick: () => handleKidsBirthdayPromptYes(p) },
+                                      {
+                                        label: "Send e-card",
+                                        onClick: () => {
+                                          openExternalUrl("https://www.americangreetings.com/ecards/birthday");
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      {
+                                        label: "Buy coffee",
+                                        onClick: () => {
+                                          openExternalUrl("https://www.starbucks.com/gift");
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      { label: "Mute reminder", onClick: () => dismissPrompt(p) },
+                                    ]}
+                                    onMaybe={undefined}
                                   />
                                 );
                               })}
@@ -1403,15 +1436,25 @@ export default function Home({
                                     key={`${p.personId}_${p.type}`}
                                     variant="nudge"
                                     message={p.message}
-                                    yesLabel={`Text ${first}`}
-                                    maybeLabel="See ideas"
-                                    noLabel="Hide this reminder"
-                                    onYes={() => handleBirthdayPromptYes(p)}
-                                    onNo={() => handleBirthdayPromptNo(p)}
-                                    onMaybe={() => {
-                                      openIdeasSearch(`birthday message ideas for ${first}`);
-                                      dismissPrompt(p);
-                                    }}
+                                    actions={[
+                                      { label: `Text ${first}`, onClick: () => handleBirthdayPromptYes(p) },
+                                      {
+                                        label: "Send e-card",
+                                        onClick: () => {
+                                          openExternalUrl("https://www.americangreetings.com/ecards/birthday");
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      {
+                                        label: "Buy coffee",
+                                        onClick: () => {
+                                          openExternalUrl("https://www.starbucks.com/gift");
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      { label: "Mute reminder", onClick: () => dismissPrompt(p) },
+                                    ]}
+                                    onMaybe={undefined}
                                   />
                                 );
                               })}
@@ -1433,12 +1476,31 @@ export default function Home({
                                     key={`${p.personId}_${p.type}`}
                                     variant="nudge"
                                     message={p.message}
-                                    yesLabel={`Text ${first}`}
-                                    noLabel="Not now"
-                                    maybeLabel="Remind me Sunday"
-                                    onYes={() => handleMotherPromptYes(p)}
-                                    onNo={() => handleMotherPromptNo(p)}
-                                    onMaybe={() => handleMotherPromptMaybe(p)}
+                                    actions={[
+                                      {
+                                        label: "Browse gift ideas",
+                                        onClick: () => {
+                                          openIdeasSearch("Mother’s Day gift ideas");
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      {
+                                        label: "Remind tomorrow",
+                                        onClick: () => {
+                                          remindInDays(p.personId, `Mother’s Day · ${first}`, 1);
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      {
+                                        label: "Remind next week",
+                                        onClick: () => {
+                                          remindInDays(p.personId, `Mother’s Day · ${first}`, 7);
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      { label: "Hide for now", onClick: () => dismissPrompt(p) },
+                                    ]}
+                                    onMaybe={undefined}
                                   />
                                 );
                               })}
@@ -1451,12 +1513,31 @@ export default function Home({
                                     key={`${p.personId}_${p.type}`}
                                     variant="nudge"
                                     message={p.message}
-                                    yesLabel={`Text ${first}`}
-                                    noLabel="Not now"
-                                    maybeLabel="Remind me Sunday"
-                                    onYes={() => handleFatherPromptYes(p)}
-                                    onNo={() => handleFatherPromptNo(p)}
-                                    onMaybe={() => handleFatherPromptMaybe(p)}
+                                    actions={[
+                                      {
+                                        label: "Browse gift ideas",
+                                        onClick: () => {
+                                          openIdeasSearch("Father’s Day gift ideas");
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      {
+                                        label: "Remind tomorrow",
+                                        onClick: () => {
+                                          remindInDays(p.personId, `Father’s Day · ${first}`, 1);
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      {
+                                        label: "Remind next week",
+                                        onClick: () => {
+                                          remindInDays(p.personId, `Father’s Day · ${first}`, 7);
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      { label: "Hide for now", onClick: () => dismissPrompt(p) },
+                                    ]}
+                                    onMaybe={undefined}
                                   />
                                 );
                               })}
@@ -1464,38 +1545,73 @@ export default function Home({
                               {comingAnniversaryPrompts.map((p) => {
                                 const personName = people.find((x) => x.id === p.personId)?.name ?? "";
                                 const first = firstOf(personName);
-                                const yesLabel =
-                                  p.type === "PREP_ANNIVERSARY" ? "Yes, remind me" : `Text ${first}`;
-                                const noLabel = p.type === "PREP_ANNIVERSARY" ? "Skip" : "Not now";
+                                const browseQuery =
+                                  p.type === "PREP_ANNIVERSARY" ? "anniversary ideas" : "anniversary message ideas";
                                 return (
                                   <SmartSuggestionCard
                                     key={`${p.personId}_${p.type}`}
                                     variant="nudge"
                                     message={p.message}
-                                    yesLabel={yesLabel}
-                                    noLabel={noLabel}
-                                    onYes={() => handleAnniversaryPromptYes(p)}
-                                    onNo={() => handleAnniversaryPromptNo(p)}
+                                    actions={[
+                                      {
+                                        label: "Browse gift ideas",
+                                        onClick: () => {
+                                          openIdeasSearch(browseQuery);
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      {
+                                        label: "Remind tomorrow",
+                                        onClick: () => {
+                                          remindInDays(p.personId, `Anniversary · ${first}`, 1);
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      {
+                                        label: "Remind next week",
+                                        onClick: () => {
+                                          remindInDays(p.personId, `Anniversary · ${first}`, 7);
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      { label: "Hide for now", onClick: () => dismissPrompt(p) },
+                                    ]}
                                     onMaybe={undefined}
                                   />
                                 );
                               })}
 
                               {comingKidsBirthdayPrompts.map((p) => {
-                                const parentName = people.find((x) => x.id === p.parentId)?.name ?? "";
-                                const first = firstOf(parentName);
-                                const yesLabel =
-                                  p.type === "PREP_CHILD_BIRTHDAY" ? "See ideas" : `Text ${first}`;
-                                const noLabel = p.type === "PREP_CHILD_BIRTHDAY" ? "Not now" : "Not now";
+                                const browseQuery = "kids birthday gift ideas";
                                 return (
                                   <SmartSuggestionCard
                                     key={`${p.parentId}_${p.childId}_${p.type}`}
                                     variant="nudge"
                                     message={p.message}
-                                    yesLabel={yesLabel}
-                                    noLabel={noLabel}
-                                    onYes={() => handleKidsBirthdayPromptYes(p)}
-                                    onNo={() => handleKidsBirthdayPromptNo(p)}
+                                    actions={[
+                                      {
+                                        label: "Browse gift ideas",
+                                        onClick: () => {
+                                          openIdeasSearch(browseQuery);
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      {
+                                        label: "Remind tomorrow",
+                                        onClick: () => {
+                                          remindInDays(p.parentId, `Birthday · ${p.childName}`, 1);
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      {
+                                        label: "Remind next week",
+                                        onClick: () => {
+                                          remindInDays(p.parentId, `Birthday · ${p.childName}`, 7);
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      { label: "Hide for now", onClick: () => dismissPrompt(p) },
+                                    ]}
                                     onMaybe={undefined}
                                   />
                                 );
@@ -1504,17 +1620,35 @@ export default function Home({
                               {comingBirthdayPrompts.map((p) => {
                                 const personName = people.find((x) => x.id === p.personId)?.name ?? "";
                                 const first = firstOf(personName);
-                                const yesLabel =
-                                  p.type === "PREP_BIRTHDAY" ? "See ideas" : `Text ${first}`;
                                 return (
                                   <SmartSuggestionCard
                                     key={`${p.personId}_${p.type}`}
                                     variant="nudge"
                                     message={p.message}
-                                    yesLabel={yesLabel}
-                                    noLabel="Not now"
-                                    onYes={() => handleBirthdayPromptYes(p)}
-                                    onNo={() => handleBirthdayPromptNo(p)}
+                                    actions={[
+                                      {
+                                        label: "Browse gift ideas",
+                                        onClick: () => {
+                                          openIdeasSearch(`gift ideas for ${first}`);
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      {
+                                        label: "Remind tomorrow",
+                                        onClick: () => {
+                                          remindInDays(p.personId, `Birthday · ${first}`, 1);
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      {
+                                        label: "Remind next week",
+                                        onClick: () => {
+                                          remindInDays(p.personId, `Birthday · ${first}`, 7);
+                                          dismissPrompt(p);
+                                        },
+                                      },
+                                      { label: "Hide for now", onClick: () => dismissPrompt(p) },
+                                    ]}
                                     onMaybe={undefined}
                                   />
                                 );
