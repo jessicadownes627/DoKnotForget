@@ -254,9 +254,9 @@ function milestoneInsight(turningAge: number | null) {
 function parentInsight(person: Person) {
   const hasKids = Boolean(person.hasKids || (person.children?.length ?? 0) > 0);
   if (!hasKids) return null;
-  if (person.parentRole === "mother") return "Her kids have a big week ahead.";
-  if (person.parentRole === "father") return "His family may appreciate a quick check-in.";
-  return "Their family may appreciate a quick check-in.";
+  if (person.parentRole === "mother") return "Kids have a big week ahead.";
+  if (person.parentRole === "father") return "Family may appreciate a quick check-in.";
+  return "Family may appreciate a quick check-in.";
 }
 
 function timelineCategoryFromDays(daysUntil: number): CareSuggestion["timelineCategory"] {

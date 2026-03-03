@@ -1189,240 +1189,442 @@ export default function Home({
                   </div>
                 </div>
 
-                {visibleBirthdayPrompts.length || visibleKidsBirthdayPrompts.length || visibleAnniversaryPrompts.length || visibleFatherPrompts.length || visibleMotherPrompts.length || partnerLinkPrompt ? (
-                  <div style={{ display: "grid", gap: "12px", marginBottom: "16px" }}>
-                    {visibleMotherPrompts.map((p) => (
-                      (() => {
-                        const personName = people.find((x) => x.id === p.personId)?.name ?? "";
-                        const first = personName.trim().split(" ")[0] || "Text";
-                        return (
-                          <SmartSuggestionCard
-                            key={`${p.personId}_${p.type}`}
-                            variant={p.type === "DISCOVER_MOTHER" ? "discover" : "nudge"}
-                            message={p.message}
-                            yesLabel={p.type === "DISCOVER_MOTHER" ? "Yes" : `Text ${first}`}
-                            noLabel={p.type === "DISCOVER_MOTHER" ? "No" : "Not now"}
-                            maybeLabel={p.type === "DISCOVER_MOTHER" ? "Not sure" : "Remind me Sunday"}
-                            onYes={() => handleMotherPromptYes(p)}
-                            onNo={() => handleMotherPromptNo(p)}
-                            onMaybe={() => handleMotherPromptMaybe(p)}
-                          />
-                        );
-                      })()
-                    ))}
+                {(() => {
+                  const headerStyle: React.CSSProperties = {
+                    fontSize: "18px",
+                    fontWeight: 600,
+                    color: "var(--muted)",
+                    letterSpacing: "-0.01em",
+                    marginTop: "18px",
+                    marginBottom: "10px",
+                  };
 
-                    {visibleFatherPrompts.map((p) => (
-                      (() => {
-                        const personName = people.find((x) => x.id === p.personId)?.name ?? "";
-                        const first = personName.trim().split(" ")[0] || "Text";
-                        return (
-                          <SmartSuggestionCard
-                            key={`${p.personId}_${p.type}`}
-                            variant={p.type === "DISCOVER_FATHER" ? "discover" : "nudge"}
-                            message={p.message}
-                            yesLabel={p.type === "DISCOVER_FATHER" ? "Yes" : `Text ${first}`}
-                            noLabel={p.type === "DISCOVER_FATHER" ? "No" : "Not now"}
-                            maybeLabel={p.type === "DISCOVER_FATHER" ? "Not sure" : "Remind me Sunday"}
-                            onYes={() => handleFatherPromptYes(p)}
-                            onNo={() => handleFatherPromptNo(p)}
-                            onMaybe={() => handleFatherPromptMaybe(p)}
-                          />
-                        );
-                      })()
-                    ))}
+                  const firstOf = (fullName: string) => (fullName ?? "").trim().split(" ")[0] || fullName || "Text";
 
-                    {visibleAnniversaryPrompts.map((p) => (
-                      (() => {
-                        const personName = people.find((x) => x.id === p.personId)?.name ?? "them";
-                        const yesLabel =
-                          p.type === "DISCOVER_ANNIVERSARY"
-                            ? "Add anniversary"
-                            : p.type === "PREP_ANNIVERSARY"
-                              ? "Yes, remind me"
-                              : `Text ${personName}`;
-                        const noLabel =
-                          p.type === "DISCOVER_ANNIVERSARY"
-                            ? "Not now"
-                            : p.type === "PREP_ANNIVERSARY"
-                              ? "Skip"
-                              : "Not now";
-                        return (
-                      <SmartSuggestionCard
-                        key={`${p.personId}_${p.type}`}
-                        variant={p.type === "DISCOVER_ANNIVERSARY" ? "discover" : "nudge"}
-                        message={p.message}
-                        yesLabel={yesLabel}
-                        noLabel={noLabel}
-                        onYes={() => handleAnniversaryPromptYes(p)}
-                        onNo={() => handleAnniversaryPromptNo(p)}
-                        onMaybe={undefined}
-                      />
-                        );
-                      })()
-                    ))}
+                  const todayBirthdayPrompts = visibleBirthdayPrompts.filter((p) => p.type === "TODAY_BIRTHDAY");
+                  const comingBirthdayPrompts = visibleBirthdayPrompts.filter(
+                    (p) => p.type === "TOMORROW_BIRTHDAY" || p.type === "PREP_BIRTHDAY"
+                  );
+                  const suggestionBirthdayPrompts = visibleBirthdayPrompts.filter((p) => p.type === "DISCOVER_BIRTHDAY");
 
-                    {partnerLinkPrompt ? (
-                      <SmartSuggestionCard
-                        key={`${partnerLinkPrompt.personId}_${partnerLinkPrompt.partnerId}_PARTNER_LINK`}
-                        variant="nudge"
-                        message={`Would you like to connect ${partnerLinkPrompt.personName} with ${partnerLinkPrompt.partnerName} so dates stay together?`}
-                        yesLabel="Link them"
-                        maybeLabel="Not now"
-                        noLabel="Never show again"
-                        onYes={() => {
-                          const personId = partnerLinkPrompt.personId;
-                          const partnerId = partnerLinkPrompt.partnerId;
-                          const pairKey = `${personId}_${partnerId}`;
-                          updatePersonFields(partnerId, { partnerId: personId });
-                          try {
-                            window.localStorage.setItem(`doknotforget_dismissed_PARTNER_LINK_never_${pairKey}`, "1");
-                          } catch {
-                            // ignore
+                  const todayKidsBirthdayPrompts = visibleKidsBirthdayPrompts.filter((p) => p.type === "TODAY_CHILD_BIRTHDAY");
+                  const comingKidsBirthdayPrompts = visibleKidsBirthdayPrompts.filter(
+                    (p) => p.type === "TOMORROW_CHILD_BIRTHDAY" || p.type === "PREP_CHILD_BIRTHDAY"
+                  );
+                  const suggestionKidsBirthdayPrompts = visibleKidsBirthdayPrompts.filter((p) => p.type === "DISCOVER_CHILD_BIRTHDAY");
+
+                  const todayAnniversaryPrompts = visibleAnniversaryPrompts.filter((p) => p.type === "ANNIVERSARY_TODAY");
+                  const comingAnniversaryPrompts = visibleAnniversaryPrompts.filter((p) => {
+                    if (p.type === "ANNIVERSARY_TOMORROW") return true;
+                    if (p.type === "PREP_ANNIVERSARY") return (p as any).daysUntilAnniversary <= 7;
+                    return false;
+                  });
+                  const suggestionAnniversaryPrompts = visibleAnniversaryPrompts.filter((p) => {
+                    if (p.type === "DISCOVER_ANNIVERSARY") return true;
+                    if (p.type === "PREP_ANNIVERSARY") return (p as any).daysUntilAnniversary > 7;
+                    return false;
+                  });
+
+                  const comingMotherPrompts = visibleMotherPrompts.filter((p) => p.type === "NUDGE_MOTHERS_DAY");
+                  const suggestionMotherPrompts = visibleMotherPrompts.filter((p) => p.type === "DISCOVER_MOTHER");
+
+                  const comingFatherPrompts = visibleFatherPrompts.filter((p) => p.type === "NUDGE_FATHERS_DAY");
+                  const suggestionFatherPrompts = visibleFatherPrompts.filter((p) => p.type === "DISCOVER_FATHER");
+
+                  const careQuestions = visibleCareSuggestions.filter((s) => s.type === "question" && s.question);
+                  const careNonQuestions = visibleCareSuggestions.filter((s) => s.type !== "question");
+                  const careToday = careNonQuestions.filter((s) => s.sortDaysUntil === 0);
+                  const careComing = careNonQuestions.filter((s) => s.sortDaysUntil >= 1 && s.sortDaysUntil <= 7);
+                  const careLater = careNonQuestions.filter((s) => s.sortDaysUntil > 7);
+
+                  const hasToday =
+                    todayBirthdayPrompts.length ||
+                    todayKidsBirthdayPrompts.length ||
+                    todayAnniversaryPrompts.length ||
+                    careToday.length;
+
+                  const hasComing =
+                    comingBirthdayPrompts.length ||
+                    comingKidsBirthdayPrompts.length ||
+                    comingAnniversaryPrompts.length ||
+                    comingMotherPrompts.length ||
+                    comingFatherPrompts.length ||
+                    careComing.length;
+
+                  const hasSuggestions =
+                    suggestionBirthdayPrompts.length ||
+                    suggestionKidsBirthdayPrompts.length ||
+                    suggestionAnniversaryPrompts.length ||
+                    suggestionMotherPrompts.length ||
+                    suggestionFatherPrompts.length ||
+                    Boolean(partnerLinkPrompt) ||
+                    careQuestions.length ||
+                    careLater.length;
+
+                  const renderCareList = (list: typeof visibleCareSuggestions) => {
+                    if (!list.length) return null;
+                    return (
+                      <div
+                        key={`${arrivalTick}_${list.length}`}
+                        className={arrivalTick ? "dkf-arrival" : undefined}
+                        style={{ marginTop: "1.1rem", display: "grid", gap: "1.75rem" }}
+                      >
+                        {list.flatMap((suggestion, idx) => {
+                          const items: React.ReactNode[] = [];
+
+                          if (idx === 6 && list.length > 6) {
+                            items.push(
+                              <div key="more-break" style={{ marginTop: "8px" }}>
+                                <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>More moments ahead</div>
+                              </div>
+                            );
                           }
-                          setPartnerLinkPrompt(null);
-                        }}
-                        onMaybe={() => {
-                          const year = new Date().getFullYear();
-                          const personId = partnerLinkPrompt.personId;
-                          const partnerId = partnerLinkPrompt.partnerId;
-                          const pairKey = `${personId}_${partnerId}`;
-                          try {
-                            window.localStorage.setItem(`doknotforget_dismissed_PARTNER_LINK_${year}_${pairKey}`, "1");
-                          } catch {
-                            // ignore
-                          }
-                          setPartnerLinkPrompt(null);
-                        }}
-                        onNo={() => {
-                          const personId = partnerLinkPrompt.personId;
-                          const partnerId = partnerLinkPrompt.partnerId;
-                          const pairKey = `${personId}_${partnerId}`;
-                          try {
-                            window.localStorage.setItem(`doknotforget_dismissed_PARTNER_LINK_never_${pairKey}`, "1");
-                          } catch {
-                            // ignore
-                          }
-                          setPartnerLinkPrompt(null);
-                        }}
-                      />
-                    ) : null}
 
-                    {visibleKidsBirthdayPrompts.map((p) => (
-                      (() => {
-                        const parentName = people.find((x) => x.id === p.parentId)?.name ?? "them";
-                        const yesLabel =
-                          p.type === "DISCOVER_CHILD_BIRTHDAY"
-                            ? "Add birthday"
-                            : p.type === "PREP_CHILD_BIRTHDAY"
-                              ? "Yes, remind me"
-                              : `Text ${parentName}`;
-                        const noLabel =
-                          p.type === "DISCOVER_CHILD_BIRTHDAY"
-                            ? "Not now"
-                            : p.type === "PREP_CHILD_BIRTHDAY"
-                              ? "Skip"
-                              : "Not now";
-                        return (
-                      <SmartSuggestionCard
-                        key={`${p.parentId}_${p.childId}_${p.type}`}
-                        variant={p.type === "DISCOVER_CHILD_BIRTHDAY" ? "discover" : "nudge"}
-                        message={p.message}
-                        yesLabel={yesLabel}
-                        noLabel={noLabel}
-                        onYes={() => handleKidsBirthdayPromptYes(p)}
-                        onNo={() => handleKidsBirthdayPromptNo(p)}
-                        onMaybe={undefined}
-                      />
-                        );
-                      })()
-                    ))}
+                          items.push(
+                            <div key={suggestion.id} className="dkf-enter" style={{ animationDelay: `${idx * 12}ms` }}>
+                              {suggestion.type === "question" && suggestion.question ? (
+                                <MicroQuestionCard
+                                  suggestion={suggestion}
+                                  onChoose={(optionId, data) => handleQuestionChoose(suggestion.id, optionId, data)}
+                                  onDismiss={() => handleQuestionDismiss(suggestion.id)}
+                                />
+                              ) : (
+                                <CareSuggestionCard
+                                  suggestion={suggestion}
+                                  onAction={() => handleSuggestionAction(suggestion.id)}
+                                  onSnooze={() => setQuestionTick((v) => v + 1)}
+                                />
+                              )}
+                            </div>
+                          );
 
-                    {visibleBirthdayPrompts.map((p) => (
-                      (() => {
-                        const personName = people.find((x) => x.id === p.personId)?.name ?? "";
-                        const first = personName.trim().split(" ")[0] || "Text";
-                        const yesLabel =
-                          p.type === "DISCOVER_BIRTHDAY"
-                            ? "Add birthday"
-                            : p.type === "PREP_BIRTHDAY"
-                              ? "See ideas"
-                              : `Text ${first}`;
-                        const noLabel =
-                          p.type === "DISCOVER_BIRTHDAY"
-                            ? "Not now"
-                            : p.type === "PREP_BIRTHDAY"
-                              ? "Not now"
-                              : "Not now";
-                        return (
-                          <SmartSuggestionCard
-                            key={`${p.personId}_${p.type}`}
-                            variant={p.type === "DISCOVER_BIRTHDAY" ? "discover" : "nudge"}
-                            message={p.message}
-                            yesLabel={yesLabel}
-                            noLabel={noLabel}
-                            onYes={() => handleBirthdayPromptYes(p)}
-                            onNo={() => handleBirthdayPromptNo(p)}
-                            onMaybe={undefined}
-                          />
-                        );
-                      })()
-                    ))}
-                  </div>
-                ) : null}
+                          return items;
+                        })}
+                      </div>
+                    );
+                  };
 
-                {visibleCareSuggestions.length ? (
-                  <div key={arrivalTick} className={arrivalTick ? "dkf-arrival" : undefined} style={{ marginTop: "1.5rem", display: "grid", gap: "1.75rem" }}>
-                    {visibleCareSuggestions.flatMap((suggestion, idx) => {
-                      const items: React.ReactNode[] = [];
+                  const renderPromptGrid = (children: React.ReactNode) => (
+                    <div style={{ display: "grid", gap: "12px", marginBottom: "8px" }}>{children}</div>
+                  );
 
-                      if (idx === 6 && visibleCareSuggestions.length > 6) {
-                        items.push(
-                          <div key="more-break" style={{ marginTop: "8px" }}>
-                            <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>More moments ahead</div>
-                          </div>
-                        );
-                      }
-
-                      items.push(
-                        <div
-                          key={suggestion.id}
-                          className="dkf-enter"
-                          style={{ animationDelay: `${idx * 12}ms` }}
-                        >
-                          {suggestion.type === "question" && suggestion.question ? (
-                            <MicroQuestionCard
-                              suggestion={suggestion}
-                              onChoose={(optionId, data) => handleQuestionChoose(suggestion.id, optionId, data)}
-                              onDismiss={() => handleQuestionDismiss(suggestion.id)}
-                            />
-                          ) : (
-                            <CareSuggestionCard
-                              suggestion={suggestion}
-                              onAction={() => handleSuggestionAction(suggestion.id)}
-                              onSnooze={() => setQuestionTick((v) => v + 1)}
-                            />
-                          )}
-                        </div>
-                      );
-
-                      return items;
-                    })}
-                  </div>
-                ) : (
-                  <div style={{ marginTop: "1.5rem", padding: "2.25rem 0", textAlign: "center" }}>
-                    {searchTerm.trim() && filteredPeople.length === 0 ? (
-                      <>
+                  const renderEmpty = () => (
+                    <div style={{ marginTop: "1.5rem", padding: "2.25rem 0", textAlign: "center" }}>
+                      {searchTerm.trim() && filteredPeople.length === 0 ? (
                         <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>No match found.</div>
-                      </>
-                    ) : (
-                      <>
+                      ) : (
                         <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>
                           When you add people, important dates will appear here.
                         </div>
-                      </>
-                    )}
-                  </div>
-                )}
+                      )}
+                    </div>
+                  );
+
+                  if (!hasToday && !hasComing && !hasSuggestions) return renderEmpty();
+
+                  return (
+                    <>
+                      {hasToday ? (
+                        <>
+                          <div style={headerStyle}>Happening today</div>
+                          {renderPromptGrid(
+                            <>
+                              {todayAnniversaryPrompts.map((p) => {
+                                const personName = people.find((x) => x.id === p.personId)?.name ?? "";
+                                const first = firstOf(personName);
+                                const yesLabel = `Text ${first}`;
+                                return (
+                                  <SmartSuggestionCard
+                                    key={`${p.personId}_${p.type}`}
+                                    variant="nudge"
+                                    message={p.message}
+                                    yesLabel={yesLabel}
+                                    noLabel="Not now"
+                                    onYes={() => handleAnniversaryPromptYes(p)}
+                                    onNo={() => handleAnniversaryPromptNo(p)}
+                                    onMaybe={undefined}
+                                  />
+                                );
+                              })}
+
+                              {todayKidsBirthdayPrompts.map((p) => {
+                                const parentName = people.find((x) => x.id === p.parentId)?.name ?? "";
+                                const first = firstOf(parentName);
+                                return (
+                                  <SmartSuggestionCard
+                                    key={`${p.parentId}_${p.childId}_${p.type}`}
+                                    variant="nudge"
+                                    message={p.message}
+                                    yesLabel={`Text ${first}`}
+                                    noLabel="Not now"
+                                    onYes={() => handleKidsBirthdayPromptYes(p)}
+                                    onNo={() => handleKidsBirthdayPromptNo(p)}
+                                    onMaybe={undefined}
+                                  />
+                                );
+                              })}
+
+                              {todayBirthdayPrompts.map((p) => {
+                                const personName = people.find((x) => x.id === p.personId)?.name ?? "";
+                                const first = firstOf(personName);
+                                return (
+                                  <SmartSuggestionCard
+                                    key={`${p.personId}_${p.type}`}
+                                    variant="nudge"
+                                    message={p.message}
+                                    yesLabel={`Text ${first}`}
+                                    noLabel="Not now"
+                                    onYes={() => handleBirthdayPromptYes(p)}
+                                    onNo={() => handleBirthdayPromptNo(p)}
+                                    onMaybe={undefined}
+                                  />
+                                );
+                              })}
+                            </>
+                          )}
+                          {renderCareList(careToday)}
+                        </>
+                      ) : null}
+
+                      {hasComing ? (
+                        <>
+                          <div style={headerStyle}>Coming up</div>
+                          {renderPromptGrid(
+                            <>
+                              {comingMotherPrompts.map((p) => {
+                                const personName = people.find((x) => x.id === p.personId)?.name ?? "";
+                                const first = firstOf(personName);
+                                return (
+                                  <SmartSuggestionCard
+                                    key={`${p.personId}_${p.type}`}
+                                    variant="nudge"
+                                    message={p.message}
+                                    yesLabel={`Text ${first}`}
+                                    noLabel="Not now"
+                                    maybeLabel="Remind me Sunday"
+                                    onYes={() => handleMotherPromptYes(p)}
+                                    onNo={() => handleMotherPromptNo(p)}
+                                    onMaybe={() => handleMotherPromptMaybe(p)}
+                                  />
+                                );
+                              })}
+
+                              {comingFatherPrompts.map((p) => {
+                                const personName = people.find((x) => x.id === p.personId)?.name ?? "";
+                                const first = firstOf(personName);
+                                return (
+                                  <SmartSuggestionCard
+                                    key={`${p.personId}_${p.type}`}
+                                    variant="nudge"
+                                    message={p.message}
+                                    yesLabel={`Text ${first}`}
+                                    noLabel="Not now"
+                                    maybeLabel="Remind me Sunday"
+                                    onYes={() => handleFatherPromptYes(p)}
+                                    onNo={() => handleFatherPromptNo(p)}
+                                    onMaybe={() => handleFatherPromptMaybe(p)}
+                                  />
+                                );
+                              })}
+
+                              {comingAnniversaryPrompts.map((p) => {
+                                const personName = people.find((x) => x.id === p.personId)?.name ?? "";
+                                const first = firstOf(personName);
+                                const yesLabel =
+                                  p.type === "PREP_ANNIVERSARY" ? "Yes, remind me" : `Text ${first}`;
+                                const noLabel = p.type === "PREP_ANNIVERSARY" ? "Skip" : "Not now";
+                                return (
+                                  <SmartSuggestionCard
+                                    key={`${p.personId}_${p.type}`}
+                                    variant="nudge"
+                                    message={p.message}
+                                    yesLabel={yesLabel}
+                                    noLabel={noLabel}
+                                    onYes={() => handleAnniversaryPromptYes(p)}
+                                    onNo={() => handleAnniversaryPromptNo(p)}
+                                    onMaybe={undefined}
+                                  />
+                                );
+                              })}
+
+                              {comingKidsBirthdayPrompts.map((p) => {
+                                const parentName = people.find((x) => x.id === p.parentId)?.name ?? "";
+                                const first = firstOf(parentName);
+                                const yesLabel =
+                                  p.type === "PREP_CHILD_BIRTHDAY" ? "See ideas" : `Text ${first}`;
+                                const noLabel = p.type === "PREP_CHILD_BIRTHDAY" ? "Not now" : "Not now";
+                                return (
+                                  <SmartSuggestionCard
+                                    key={`${p.parentId}_${p.childId}_${p.type}`}
+                                    variant="nudge"
+                                    message={p.message}
+                                    yesLabel={yesLabel}
+                                    noLabel={noLabel}
+                                    onYes={() => handleKidsBirthdayPromptYes(p)}
+                                    onNo={() => handleKidsBirthdayPromptNo(p)}
+                                    onMaybe={undefined}
+                                  />
+                                );
+                              })}
+
+                              {comingBirthdayPrompts.map((p) => {
+                                const personName = people.find((x) => x.id === p.personId)?.name ?? "";
+                                const first = firstOf(personName);
+                                const yesLabel =
+                                  p.type === "PREP_BIRTHDAY" ? "See ideas" : `Text ${first}`;
+                                return (
+                                  <SmartSuggestionCard
+                                    key={`${p.personId}_${p.type}`}
+                                    variant="nudge"
+                                    message={p.message}
+                                    yesLabel={yesLabel}
+                                    noLabel="Not now"
+                                    onYes={() => handleBirthdayPromptYes(p)}
+                                    onNo={() => handleBirthdayPromptNo(p)}
+                                    onMaybe={undefined}
+                                  />
+                                );
+                              })}
+                            </>
+                          )}
+                          {renderCareList(careComing)}
+                        </>
+                      ) : null}
+
+                      {hasSuggestions ? (
+                        <>
+                          <div style={headerStyle}>Suggestions</div>
+                          {renderPromptGrid(
+                            <>
+                              {suggestionMotherPrompts.map((p) => (
+                                <SmartSuggestionCard
+                                  key={`${p.personId}_${p.type}`}
+                                  variant="discover"
+                                  message={p.message}
+                                  yesLabel="Yes"
+                                  noLabel="No"
+                                  maybeLabel="Not sure"
+                                  onYes={() => handleMotherPromptYes(p)}
+                                  onNo={() => handleMotherPromptNo(p)}
+                                  onMaybe={() => handleMotherPromptMaybe(p)}
+                                />
+                              ))}
+
+                              {suggestionFatherPrompts.map((p) => (
+                                <SmartSuggestionCard
+                                  key={`${p.personId}_${p.type}`}
+                                  variant="discover"
+                                  message={p.message}
+                                  yesLabel="Yes"
+                                  noLabel="No"
+                                  maybeLabel="Not sure"
+                                  onYes={() => handleFatherPromptYes(p)}
+                                  onNo={() => handleFatherPromptNo(p)}
+                                  onMaybe={() => handleFatherPromptMaybe(p)}
+                                />
+                              ))}
+
+                              {suggestionAnniversaryPrompts.map((p) => (
+                                <SmartSuggestionCard
+                                  key={`${p.personId}_${p.type}`}
+                                  variant="discover"
+                                  message={p.message}
+                                  yesLabel="Add anniversary"
+                                  noLabel="Not now"
+                                  onYes={() => handleAnniversaryPromptYes(p)}
+                                  onNo={() => handleAnniversaryPromptNo(p)}
+                                  onMaybe={undefined}
+                                />
+                              ))}
+
+                              {partnerLinkPrompt ? (
+                                <SmartSuggestionCard
+                                  key={`${partnerLinkPrompt.personId}_${partnerLinkPrompt.partnerId}_PARTNER_LINK`}
+                                  variant="nudge"
+                                  message={`Would you like to connect ${partnerLinkPrompt.personName} with ${partnerLinkPrompt.partnerName} so dates stay together?`}
+                                  yesLabel="Link them"
+                                  maybeLabel="Not now"
+                                  noLabel="Never show again"
+                                  onYes={() => {
+                                    const personId = partnerLinkPrompt.personId;
+                                    const partnerId = partnerLinkPrompt.partnerId;
+                                    const pairKey = `${personId}_${partnerId}`;
+                                    updatePersonFields(partnerId, { partnerId: personId });
+                                    try {
+                                      window.localStorage.setItem(
+                                        `doknotforget_dismissed_PARTNER_LINK_never_${pairKey}`,
+                                        "1"
+                                      );
+                                    } catch {
+                                      // ignore
+                                    }
+                                    setPartnerLinkPrompt(null);
+                                  }}
+                                  onMaybe={() => {
+                                    const year = new Date().getFullYear();
+                                    const personId = partnerLinkPrompt.personId;
+                                    const partnerId = partnerLinkPrompt.partnerId;
+                                    const pairKey = `${personId}_${partnerId}`;
+                                    try {
+                                      window.localStorage.setItem(
+                                        `doknotforget_dismissed_PARTNER_LINK_${year}_${pairKey}`,
+                                        "1"
+                                      );
+                                    } catch {
+                                      // ignore
+                                    }
+                                    setPartnerLinkPrompt(null);
+                                  }}
+                                  onNo={() => {
+                                    const personId = partnerLinkPrompt.personId;
+                                    const partnerId = partnerLinkPrompt.partnerId;
+                                    const pairKey = `${personId}_${partnerId}`;
+                                    try {
+                                      window.localStorage.setItem(
+                                        `doknotforget_dismissed_PARTNER_LINK_never_${pairKey}`,
+                                        "1"
+                                      );
+                                    } catch {
+                                      // ignore
+                                    }
+                                    setPartnerLinkPrompt(null);
+                                  }}
+                                />
+                              ) : null}
+
+                              {suggestionKidsBirthdayPrompts.map((p) => (
+                                <SmartSuggestionCard
+                                  key={`${p.parentId}_${p.childId}_${p.type}`}
+                                  variant="discover"
+                                  message={p.message}
+                                  yesLabel="Add birthday"
+                                  noLabel="Not now"
+                                  onYes={() => handleKidsBirthdayPromptYes(p)}
+                                  onNo={() => handleKidsBirthdayPromptNo(p)}
+                                  onMaybe={undefined}
+                                />
+                              ))}
+
+                              {suggestionBirthdayPrompts.map((p) => (
+                                <SmartSuggestionCard
+                                  key={`${p.personId}_${p.type}`}
+                                  variant="discover"
+                                  message={p.message}
+                                  yesLabel="Add birthday"
+                                  noLabel="Not now"
+                                  onYes={() => handleBirthdayPromptYes(p)}
+                                  onNo={() => handleBirthdayPromptNo(p)}
+                                  onMaybe={undefined}
+                                />
+                              ))}
+                            </>
+                          )}
+                          {renderCareList([...careQuestions, ...careLater])}
+                        </>
+                      ) : null}
+                    </>
+                  );
+                })()}
               </section>
 
               <div
