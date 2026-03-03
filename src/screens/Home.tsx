@@ -1196,7 +1196,7 @@ export default function Home({
                     color: "var(--muted)",
                     letterSpacing: "-0.01em",
                     marginTop: "18px",
-                    marginBottom: "10px",
+                    marginBottom: "6px",
                   };
 
                   const firstOf = (fullName: string) => (fullName ?? "").trim().split(" ")[0] || fullName || "Text";
