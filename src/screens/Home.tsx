@@ -29,6 +29,7 @@ import { daysUntilDate, getNextBirthdayFromIso } from "../utils/birthdayUtils";
 import MomentDatePicker from "../components/MomentDatePicker";
 import { RaisedGoldBullet } from "../components/common/GoldBullets";
 import GoldenSunDivider from "../components/GoldenSunDivider";
+import GoldenStarDivider from "../components/GoldenStarDivider";
 import ContactsSearchResults from "../components/ContactsSearchResults";
 import { filterContacts } from "../utils/contactSearch";
 
@@ -1394,6 +1395,7 @@ export default function Home({
                       {hasToday ? (
                         <>
                           <div style={headerStyle}>Happening today</div>
+                          <GoldenStarDivider />
                           {renderPromptGrid(
                             <>
                               {todayAnniversaryPrompts.map((p) => {
