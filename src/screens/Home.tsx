@@ -1168,12 +1168,10 @@ export default function Home({
                     padding: "18px",
                     background: "rgba(255,255,255,0.7)",
                     boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-                    marginBottom: "10px",
+                    marginBottom: "18px",
                   }}
                 >
-                  <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)" }}>
-                    Here’s what’s on the horizon…
-                  </div>
+                  <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)" }}>On the horizon</div>
                   <GoldenSunDivider />
                   <div style={{ marginTop: "10px", display: "grid", gap: "8px", color: "var(--muted)", fontSize: "16px", lineHeight: 1.45 }}>
                     {gentleForecast && gentleForecast.length ? (
@@ -1195,8 +1193,8 @@ export default function Home({
                     fontWeight: 600,
                     color: "var(--muted)",
                     letterSpacing: "-0.01em",
-                    marginTop: "12px",
-                    marginBottom: "4px",
+                    marginTop: "6px",
+                    marginBottom: "2px",
                   };
 
                   const firstOf = (fullName: string) => (fullName ?? "").trim().split(" ")[0] || fullName || "Text";
