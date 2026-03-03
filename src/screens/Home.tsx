@@ -1199,6 +1199,13 @@ export default function Home({
 
                   const firstOf = (fullName: string) => (fullName ?? "").trim().split(" ")[0] || fullName || "Text";
 
+                  function openIdeasSearch(query: string) {
+                    const q = encodeURIComponent(query);
+                    const url = `https://www.google.com/search?q=${q}`;
+                    const opened = window.open(url, "_blank", "noopener,noreferrer");
+                    if (!opened) window.location.href = url;
+                  }
+
                   const todayBirthdayPrompts = visibleBirthdayPrompts.filter((p) => p.type === "TODAY_BIRTHDAY");
                   const comingBirthdayPrompts = visibleBirthdayPrompts.filter(
                     (p) => p.type === "TOMORROW_BIRTHDAY" || p.type === "PREP_BIRTHDAY"
@@ -1337,10 +1344,14 @@ export default function Home({
                                     variant="nudge"
                                     message={p.message}
                                     yesLabel={yesLabel}
-                                    noLabel="Not now"
+                                    maybeLabel="See ideas"
+                                    noLabel="Hide this reminder"
                                     onYes={() => handleAnniversaryPromptYes(p)}
                                     onNo={() => handleAnniversaryPromptNo(p)}
-                                    onMaybe={undefined}
+                                    onMaybe={() => {
+                                      openIdeasSearch("anniversary message ideas");
+                                      dismissPrompt(p);
+                                    }}
                                   />
                                 );
                               })}
@@ -1354,10 +1365,14 @@ export default function Home({
                                     variant="nudge"
                                     message={p.message}
                                     yesLabel={`Text ${first}`}
-                                    noLabel="Not now"
+                                    maybeLabel="See ideas"
+                                    noLabel="Hide this reminder"
                                     onYes={() => handleKidsBirthdayPromptYes(p)}
                                     onNo={() => handleKidsBirthdayPromptNo(p)}
-                                    onMaybe={undefined}
+                                    onMaybe={() => {
+                                      openIdeasSearch(`birthday message ideas for ${p.childName}`);
+                                      dismissPrompt(p);
+                                    }}
                                   />
                                 );
                               })}
@@ -1371,10 +1386,14 @@ export default function Home({
                                     variant="nudge"
                                     message={p.message}
                                     yesLabel={`Text ${first}`}
-                                    noLabel="Not now"
+                                    maybeLabel="See ideas"
+                                    noLabel="Hide this reminder"
                                     onYes={() => handleBirthdayPromptYes(p)}
                                     onNo={() => handleBirthdayPromptNo(p)}
-                                    onMaybe={undefined}
+                                    onMaybe={() => {
+                                      openIdeasSearch(`birthday message ideas for ${first}`);
+                                      dismissPrompt(p);
+                                    }}
                                   />
                                 );
                               })}
