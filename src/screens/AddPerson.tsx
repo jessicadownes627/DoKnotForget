@@ -1,13 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Child, Moment, Person } from "../models/Person";
 import type { Relationship, RelationshipType } from "../models/Relationship";
 import MomentDatePicker from "../components/MomentDatePicker";
 import { useAppState } from "../appState";
-import { useNavigate } from "../router";
+import { useLocation, useNavigate } from "../router";
 
 export default function AddPerson() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { people, savePerson } = useAppState();
+
+  const editPersonId =
+    (location.state as any)?.personId ?? (location.state as any)?.editPersonId ?? null;
+  const editingPerson =
+    (editPersonId ? people.find((p) => p.id === editPersonId) : null) ??
+    ((location.state as any)?.person as Person | undefined) ??
+    null;
   const [name, setName] = useState("");
   const [birthdayMonthDay, setBirthdayMonthDay] = useState("");
   const [birthdayYear, setBirthdayYear] = useState("");
@@ -18,7 +26,7 @@ export default function AddPerson() {
   const [anniversary, setAnniversary] = useState(""); // MM-DD
   const [anniversaryDraftMonthDay, setAnniversaryDraftMonthDay] = useState("");
   const [anniversaryDraftYear, setAnniversaryDraftYear] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(editingPerson?.phone || "");
   const [hasKids, setHasKids] = useState(false);
   const [parentRole, setParentRole] = useState<Person["parentRole"]>("parent");
   const [religionCulture, setReligionCulture] = useState<NonNullable<Person["religionCulture"]>>([]);
@@ -47,6 +55,11 @@ export default function AddPerson() {
   const [openRow, setOpenRow] = useState<
     "name" | "phone" | "partner" | "family" | "birthday" | "anniversary" | "custom" | "related" | null
   >(null);
+
+  useEffect(() => {
+    if (!editingPerson) return;
+    setPhone(editingPerson.phone || "");
+  }, [editingPerson?.id]);
 
   const dateFormatter = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" });
   const dateWithYearFormatter = new Intl.DateTimeFormat("en-US", {
