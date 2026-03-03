@@ -39,7 +39,7 @@ export default function Onboarding() {
               }}
             >
               <span className="dkf-fade-in-140" style={{ display: "inline-block" }}>
-                <BowIcon size={28} />
+                <BowIcon size={34} />
               </span>
               <Brand />
             </h1>

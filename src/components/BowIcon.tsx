@@ -1,18 +1,22 @@
-import ivoryMarkSrc from "../assets/ivory.png";
+import blueMarkSrc from "../assets/finaliconblue.png";
 
 type Props = {
   size?: number;
-  color?: string;
 };
 
-export default function BowIcon({ size = 26 }: Props) {
+export default function BowIcon({ size = 32 }: Props) {
   return (
     <img
-      src={ivoryMarkSrc}
+      src={blueMarkSrc}
       alt="DoKnotForget mark."
       width={size}
       height={size}
-      style={{ display: "block", borderRadius: 10 }}
+      style={{
+        display: "block",
+        borderRadius: 12,
+        boxShadow: "0 1px 4px rgba(0,0,0,0.10)",
+        border: "1px solid rgba(10, 27, 42, 0.08)",
+      }}
       draggable={false}
     />
   );

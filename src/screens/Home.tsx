@@ -991,7 +991,7 @@ export default function Home({
             >
               <span style={{ color: "var(--ink)" }}>
                 <span className={shouldPulseBow ? "dkf-bow-pulse" : undefined} style={{ display: "inline-block" }}>
-                  <BowIcon size={26} />
+                  <BowIcon size={32} />
                 </span>
               </span>
               <Brand />
