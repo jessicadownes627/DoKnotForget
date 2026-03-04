@@ -27,24 +27,6 @@ export default function SmartSuggestionCard({
   maybeLabel,
   actions,
 }: Props) {
-  // eslint-disable-next-line no-console
-  console.log("SMART CARD PROPS:", {
-    variant,
-    message,
-    onYes,
-    onNo,
-    onMaybe,
-    yesLabel,
-    noLabel,
-    maybeLabel,
-    actions,
-  });
-
-  if (false) {
-    // eslint-disable-next-line no-console
-    console.log("SMART CARD EXITING EARLY");
-    return null;
-  }
   const noop = () => {};
   const resolvedYesLabel = yesLabel ?? (variant === "discover" ? "Yes" : "Text");
   const resolvedNoLabel = noLabel ?? (variant === "discover" ? "No" : "Skip");

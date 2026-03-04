@@ -10,13 +10,7 @@ declare global {
   }
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <RouterProvider>
-      <App />
-    </RouterProvider>
-  </StrictMode>,
-)
+const root = createRoot(document.getElementById('root')!)
 
 const removeLaunch = () => {
   document.documentElement.classList.remove('dkf-launch-active')
@@ -29,4 +23,17 @@ const launchStart = window.__dkfLaunchStart
 const elapsed = typeof launchStart === 'number' ? performance.now() - launchStart : 0
 const remaining = Math.max(0, LAUNCH_MIN_MS - elapsed)
 
-window.setTimeout(removeLaunch, remaining)
+const mountApp = () => {
+  root.render(
+    <StrictMode>
+      <RouterProvider>
+        <App />
+      </RouterProvider>
+    </StrictMode>,
+  )
+}
+
+window.setTimeout(() => {
+  removeLaunch()
+  mountApp()
+}, remaining)

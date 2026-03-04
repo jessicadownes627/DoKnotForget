@@ -13,6 +13,7 @@
       body.dkf-launch-active {
         height: 100%;
         overflow: hidden;
+        background: #0a1a3a; /* match splash navy */
       }
 
       #dkf-launch {
@@ -33,6 +34,12 @@
         display: block;
         width: min(84vw, 420px);
         height: auto;
+      }
+
+      html.dkf-launch-active #root,
+      body.dkf-launch-active #root {
+        background: #0a1a3a; /* match splash navy */
+        min-height: 100vh;
       }
     </style>
     <script>

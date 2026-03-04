@@ -23,6 +23,7 @@ import { RaisedGoldBullet } from "../components/common/GoldBullets";
 import GoldenSunDivider from "../components/GoldenSunDivider";
 import ContactsSearchResults from "../components/ContactsSearchResults";
 import { filterContacts } from "../utils/contactSearch";
+import SmartMessageSuggestionsModal from "../components/SmartMessageSuggestionsModal";
 
 const headerDateFormatter = new Intl.DateTimeFormat("en-US", {
   weekday: "long",
@@ -41,10 +42,6 @@ export default function Home({
   const navigate = useNavigate();
   const location = useLocation();
   const { people, updatePerson, updatePersonFields } = useAppState();
-  // eslint-disable-next-line no-console
-  console.log("HOME PEOPLE:", people);
-  // eslint-disable-next-line no-console
-  console.log("HOME RAW MOMENTS FROM PEOPLE:", people.map((p) => p.moments));
   const initialTab = location.state?.defaultTab === "contacts" ? "contacts" : "home";
   const [activeTab, setActiveTab] = useState<"home" | "contacts">(initialTab);
   const [searchTerm, setSearchTerm] = useState("");
@@ -52,9 +49,41 @@ export default function Home({
   const [shouldPulseBow, setShouldPulseBow] = useState(false);
   const [arrivalTick, setArrivalTick] = useState(0);
   const [showNiceStart, setShowNiceStart] = useState(false);
+  const [handledReminderActions, setHandledReminderActions] = useState<Record<string, true>>(() => {
+    try {
+      const raw = window.localStorage.getItem("doknotforget_handled_reminder_actions_v1");
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== "object") return {};
+      return parsed as Record<string, true>;
+    } catch {
+      return {};
+    }
+  });
+  const [smsSuggestions, setSmsSuggestions] = useState<null | {
+    personName: string;
+    phone: string;
+    suggestions: Array<{ id: "quick" | "funny" | "thoughtful" | "custom"; label: string; message: string }>;
+    onAfterSend?: () => void;
+  }>(null);
   const previousPeopleCountRef = useRef<number>(people.length);
 
   const today = useMemo(() => startOfToday(), []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("doknotforget_handled_reminder_actions_v1", JSON.stringify(handledReminderActions));
+    } catch {
+      // ignore
+    }
+  }, [handledReminderActions]);
+
+  function markReminderActionHandled(actionKey: string) {
+    setHandledReminderActions((prev) => {
+      if (prev[actionKey]) return prev;
+      return { ...prev, [actionKey]: true };
+    });
+  }
 
   const [birthdayPickerPersonId, setBirthdayPickerPersonId] = useState<string | null>(null);
   const [birthdayDraftMonthDay, setBirthdayDraftMonthDay] = useState("");
@@ -132,6 +161,15 @@ export default function Home({
       // ignore
     }
     setArrivalTick((t) => t + 1);
+  }
+
+  function openSmartMessageSuggestions(args: {
+    personName: string;
+    phone: string;
+    suggestions: Array<{ id: "quick" | "funny" | "thoughtful" | "custom"; label: string; message: string }>;
+    onAfterSend?: () => void;
+  }) {
+    setSmsSuggestions(args);
   }
 
   function dedupePrompts<T>(items: T[], getKey: (item: T) => string) {
@@ -237,14 +275,6 @@ export default function Home({
   const gentleForecast = useMemo(() => {
     if (activeTab !== "home") return null;
 
-    const debugHydration = (() => {
-      try {
-        return window.localStorage.getItem("dkf_debug_hydration") === "1";
-      } catch {
-        return false;
-      }
-    })();
-
     type ForecastItem = {
       key: string;
       firstName: string;
@@ -252,6 +282,7 @@ export default function Home({
       label: string;
       date: string;
       daysUntil: number;
+      occurrenceIso: string; // YYYY-MM-DD for the next occurrence (used for handled-action keys)
     };
 
     type ForecastGroups = {
@@ -276,11 +307,6 @@ export default function Home({
     const base = today;
     const horizonDays = 30;
     const all: ForecastItem[] = [];
-    const moments: ForecastItem[] = [];
-    let scannedMoments = 0;
-    let keptMoments = 0;
-    let scannedKidsBirthdays = 0;
-    let keptKidsBirthdays = 0;
 
     // Flat array of all moments for all people.
     for (const person of people) {
@@ -289,35 +315,25 @@ export default function Home({
 
       for (const moment of person.moments ?? []) {
         if (!moment?.id || !moment?.date) continue;
-        scannedMoments += 1;
 
         let until: number | null = null;
+        let occurrenceIso = "";
         if (moment.recurring) {
           const next = getNextBirthdayFromIso(moment.date, base);
-          if (next) until = next.daysUntilBirthday;
+          if (next) {
+            until = next.daysUntilBirthday;
+            occurrenceIso = next.iso;
+          }
         } else {
           const d = parseLocalYmd(moment.date);
-          if (d) until = daysUntilDate(d, base);
+          if (d) {
+            until = daysUntilDate(d, base);
+            occurrenceIso = formatYmd(d);
+          }
         }
         if (until === null) continue;
-        moments.push({
-          key: `${person.id}:${moment.id}`,
-          firstName,
-          type: moment.type,
-          label: moment.label || moment.type,
-          date: moment.date,
-          daysUntil: until,
-        });
         if (until < 0 || until > horizonDays) continue;
-
-        if (debugHydration && moment.type === "birthday") {
-          // eslint-disable-next-line no-console
-          console.log("[DKF DEBUG] birthday daysUntil:", {
-            firstName,
-            date: moment.date,
-            daysUntil: until,
-          });
-        }
+        if (!occurrenceIso) continue;
 
         all.push({
           key: `${person.id}:${moment.id}`,
@@ -326,8 +342,8 @@ export default function Home({
           label: moment.label || moment.type,
           date: moment.date,
           daysUntil: until,
+          occurrenceIso,
         });
-        keptMoments += 1;
       }
 
       // Kids birthdays (as synthetic moments)
@@ -335,18 +351,9 @@ export default function Home({
         const childName = (child.name ?? "").trim();
         const raw = (child.birthday ?? child.birthdate ?? "").trim();
         if (!child.id || !childName || !raw) continue;
-        scannedKidsBirthdays += 1;
         const next = getNextBirthdayFromIso(raw, base);
         if (!next) continue;
         const until = next.daysUntilBirthday;
-        moments.push({
-          key: `${person.id}:child:${child.id}`,
-          firstName: childName,
-          type: "kidBirthday",
-          label: "Birthday",
-          date: raw,
-          daysUntil: until,
-        });
         if (until < 0 || until > horizonDays) continue;
         all.push({
           key: `${person.id}:child:${child.id}`,
@@ -355,47 +362,16 @@ export default function Home({
           label: "Birthday",
           date: raw,
           daysUntil: until,
+          occurrenceIso: next.iso,
         });
-        keptKidsBirthdays += 1;
       }
-    }
-
-    // eslint-disable-next-line no-console
-    console.log("FLATTENED MOMENTS:", moments);
-    for (const moment of moments) {
-      // eslint-disable-next-line no-console
-      console.log("MOMENT CHECK:", moment.firstName, moment.type, moment.date, moment.daysUntil);
-    }
-
-    if (debugHydration) {
-      // eslint-disable-next-line no-console
-      console.log("ALL MOMENTS BEFORE FILTER:", moments);
-      // eslint-disable-next-line no-console
-      console.log("[DKF DEBUG] moments scan summary:", {
-        scannedMoments,
-        keptMoments,
-        scannedKidsBirthdays,
-        keptKidsBirthdays,
-      });
     }
 
     all.sort((a, b) => (a.daysUntil - b.daysUntil) || a.firstName.localeCompare(b.firstName) || a.label.localeCompare(b.label));
 
-    if (debugHydration) {
-      // eslint-disable-next-line no-console
-      console.log(
-        "[DKF DEBUG] gentleForecast items:",
-        all.map((i) => ({ key: i.key, firstName: i.firstName, type: i.type, label: i.label, daysUntil: i.daysUntil }))
-      );
-    }
-
     const groups: ForecastGroups = { today: [], tomorrow: [], week: [], month: [] };
     const todayMoments = all.filter((m) => m.daysUntil === 0);
     const horizonMoments = all.filter((m) => m.daysUntil > 0);
-    // eslint-disable-next-line no-console
-    console.log("TODAY MOMENTS:", todayMoments);
-    // eslint-disable-next-line no-console
-    console.log("HORIZON MOMENTS:", horizonMoments);
 
     groups.today = todayMoments;
 
@@ -1103,17 +1079,20 @@ export default function Home({
 
                   const todayAnniversaryPrompts = visibleAnniversaryPrompts.filter((p) => p.type === "ANNIVERSARY_TODAY");
 
-                  const todayMoments = gentleForecast?.today ?? [];
-                  const horizonMoments = gentleForecast
-                    ? [...gentleForecast.tomorrow, ...gentleForecast.week, ...gentleForecast.month]
-                    : [];
-                  void visibleCareSuggestions;
-                  void handleSuggestionAction;
-                  void handleQuestionChoose;
-                  void handleQuestionDismiss;
+	                  const todayMoments = gentleForecast?.today ?? [];
+	                  const tomorrowMoments = gentleForecast?.tomorrow ?? [];
+	                  const comingSoonMoments = gentleForecast?.week ?? [];
+	                  const horizonMoments = gentleForecast ? [...tomorrowMoments, ...comingSoonMoments, ...gentleForecast.month] : [];
+	                  void visibleCareSuggestions;
+	                  void handleSuggestionAction;
+	                  void handleQuestionChoose;
+	                  void handleQuestionDismiss;
                   void handleBirthdayPromptNo;
+                  void handleBirthdayPromptYes;
                   void handleAnniversaryPromptNo;
+                  void handleAnniversaryPromptYes;
                   void handleKidsBirthdayPromptNo;
+                  void handleKidsBirthdayPromptYes;
                   void partnerLinkPrompt;
 
                   const todayBirthdayByPersonId = new Map(todayBirthdayPrompts.map((p) => [p.personId, p] as const));
@@ -1122,9 +1101,72 @@ export default function Home({
                     todayKidsBirthdayPrompts.map((p) => [`${p.parentId}:${p.childId}`, p] as const)
                   );
 
-                  const renderPromptGrid = (children: React.ReactNode) => (
-                    <div style={{ display: "grid", gap: "12px", marginBottom: "6px" }}>{children}</div>
-                  );
+                  function displayNameForForecastItem(itemKey: string, fallbackFirstName: string) {
+                    const personId = itemKey.split(":")[0] ?? "";
+                    const person = people.find((p) => p.id === personId) ?? null;
+                    return person?.name?.trim() || fallbackFirstName;
+                  }
+
+                  function possessive(name: string) {
+                    const trimmed = (name ?? "").trim();
+                    if (!trimmed) return "";
+                    return `${trimmed}’s`;
+                  }
+
+	                  function formatMomentText(firstNameOrFull: string, type: string, label: string, daysUntil: number) {
+                    const name = (firstNameOrFull ?? "").trim();
+                    const bdayLike = type === "birthday" || type === "kidBirthday" || label.toLowerCase() === "birthday";
+                    const annLike = type === "anniversary" || label.toLowerCase() === "anniversary";
+
+                    if (bdayLike) {
+                      if (daysUntil === 0) return `Today is ${possessive(name)} birthday`;
+                      if (daysUntil === 1) return `${possessive(name)} birthday is tomorrow`;
+                      return `${possessive(name)} birthday is in ${daysUntil} days`;
+                    }
+
+                    if (annLike) {
+                      if (daysUntil === 0) return `Today is ${possessive(name)} anniversary`;
+                      if (daysUntil === 1) return `${possessive(name)} anniversary is tomorrow`;
+                      return `${possessive(name)} anniversary is in ${daysUntil} days`;
+                    }
+
+                    if (daysUntil === 0) return `${label} for ${name} is today`;
+                    if (daysUntil === 1) return `${label} for ${name} is tomorrow`;
+	                    return `${label} for ${name} is in ${daysUntil} days`;
+	                  }
+
+	                  const handledToday = todayMoments.filter((item) => {
+	                    const actionKey = `text|${item.key}|${item.occurrenceIso}`;
+	                    return Boolean(handledReminderActions[actionKey]) && item.daysUntil === 0;
+	                  });
+
+	                  function handledLine(item: (typeof todayMoments)[number]) {
+	                    const personId = item.key.split(":")[0] ?? "";
+	                    const person = people.find((p) => p.id === personId) ?? null;
+	                    const parentFirst = firstOf(person?.name ?? "");
+	                    const childName = (item.type === "kidBirthday" ? item.firstName : "").trim();
+	                    const first = firstOf(person?.name ?? item.firstName);
+
+	                    if (item.type === "kidBirthday" && childName) {
+	                      return `✓ Texted ${parentFirst} about ${childName}’s birthday`;
+	                    }
+
+	                    if (item.type === "anniversary" || item.label.toLowerCase() === "anniversary") {
+	                      return `✓ Sent anniversary message to ${first}`;
+	                    }
+
+	                    if (item.type === "birthday" || item.label.toLowerCase() === "birthday") {
+	                      return `✓ Texted ${first} for birthday`;
+	                    }
+
+	                    const label = (item.label ?? "").trim();
+	                    if (label) return `✓ Reached out to ${first} — ${label}`;
+	                    return `✓ Reached out to ${first}`;
+	                  }
+
+	                  const renderPromptGrid = (children: React.ReactNode) => (
+	                    <div style={{ display: "grid", gap: "12px", marginBottom: "6px" }}>{children}</div>
+	                  );
 
                   const renderEmpty = () => (
                     <div style={{ marginTop: "1.5rem", padding: "2.25rem 0", textAlign: "center" }}>
@@ -1144,32 +1186,31 @@ export default function Home({
 
                   return (
                     <>
-                      {/* eslint-disable-next-line no-console */}
-                      {console.log("RENDER TODAY SECTION:", gentleForecast?.today)}
-                      {/* eslint-disable-next-line no-console */}
-                      {console.log("RENDER HORIZON SECTION:", (gentleForecast as any)?.horizon)}
                       {todayMoments.length > 0 ? (
                         <>
                           <div style={{ ...headerStyle, display: "flex", alignItems: "center" }}>
                             <RaisedGoldBullet />
-                            <span>Happening today</span>
+                            <span>Today</span>
                           </div>
                           <div className="dkf-golden-sun-divider" aria-hidden="true" style={{ marginTop: "8px" }}>
                             <div className="dkf-golden-sun-divider-line" />
                           </div>
                           {renderPromptGrid(
                             <>
-                              {todayMoments.map((moment) => {
-                                const personId = moment.key.split(":")[0] ?? "";
-                                const childId = moment.key.includes(":child:") ? moment.key.split(":child:")[1] ?? "" : "";
-                                const person = people.find((p) => p.id === personId) ?? null;
-                                const first = firstOf(person?.name ?? moment.firstName);
-                                const fallbackMessage =
-                                  moment.type === "birthday" || moment.type === "kidBirthday"
-                                    ? `It’s ${moment.firstName}’s birthday today.\nA kind message could make today feel special.`
-                                    : moment.type === "anniversary"
-                                      ? `It’s ${moment.firstName}’s anniversary today.\nA kind message could make today feel special.`
-                                      : `Today: ${moment.firstName} · ${moment.label}`;
+	                              {todayMoments.map((moment) => {
+	                                const personId = moment.key.split(":")[0] ?? "";
+	                                const childId = moment.key.includes(":child:") ? moment.key.split(":child:")[1] ?? "" : "";
+	                                const person = people.find((p) => p.id === personId) ?? null;
+	                                const first = firstOf(person?.name ?? moment.firstName);
+	                                const actionKey = `text|${moment.key}|${moment.occurrenceIso}`;
+	                                const isUnhandled = !handledReminderActions[actionKey];
+	                                const isLateDay = new Date().getHours() >= 15;
+	                                const fallbackMessage =
+	                                  moment.type === "birthday" || moment.type === "kidBirthday"
+	                                    ? `It’s ${moment.firstName}’s birthday today.\nA kind message could make today feel special.`
+	                                    : moment.type === "anniversary"
+	                                      ? `It’s ${moment.firstName}’s anniversary today.\nA kind message could make today feel special.`
+	                                      : `Today: ${moment.firstName} · ${moment.label}`;
 
                                 const birthdayPrompt = moment.type === "birthday" ? todayBirthdayByPersonId.get(personId) ?? null : null;
                                 const anniversaryPrompt =
@@ -1185,37 +1226,93 @@ export default function Home({
                                   | KidsBirthdayPromptItem
                                   | null;
 
-                                const message = prompt?.message ?? fallbackMessage;
+	                                const baseMessage = prompt?.message ?? fallbackMessage;
+	                                const message =
+	                                  isLateDay && isUnhandled
+	                                    ? `${baseMessage}\nStill a great time to reach out.`
+	                                    : baseMessage;
 
-                                const actions = [
-                                  {
-                                    label: `Text ${first}`,
-                                    disabled: !person?.phone,
-                                    title: !person?.phone ? "Add a phone number to text them." : undefined,
-                                    onClick: () => {
-                                      if (prompt) {
-                                        if ((prompt as any).parentId && (prompt as any).childId) handleKidsBirthdayPromptYes(prompt as any);
-                                        else if ((prompt as any).partnerId) handleAnniversaryPromptYes(prompt as any);
-                                        else handleBirthdayPromptYes(prompt as any);
-                                      } else if (person?.phone) {
-                                        const firstName = (person.name ?? "").trim().split(" ")[0] || person.name;
-                                        const msg =
-                                          moment.type === "birthday"
-                                            ? `Happy birthday ${firstName}! Hope you have a great day 🎉`
-                                            : `Thinking of you, ${firstName}.`;
-                                        openSmsComposer(person.phone, msg);
-                                      }
+	                                const actions = [
+	                                  {
+	                                    label: (() => {
+	                                      const isChildBirthday = moment.key.includes(":child:") || moment.type === "kidBirthday";
+	                                      const baseLabel = isChildBirthday
+	                                        ? `Text ${first} about ${moment.firstName}’s birthday`
+	                                        : `Text ${first}`;
+	                                      return handledReminderActions[actionKey] ? `${baseLabel} ✓` : baseLabel;
+	                                    })(),
+	                                    disabled: !person?.phone,
+	                                    title: !person?.phone ? "Add a phone number to text them." : undefined,
+	                                    onClick: () => {
+	                                      if (!person?.phone) return;
+                                      markReminderActionHandled(`text|${moment.key}|${moment.occurrenceIso}`);
+
+                                      const toName = (person.name ?? "").trim().split(" ")[0] || person.name || first;
+                                      const isKidBirthday = moment.type === "kidBirthday";
+                                      const kidName = isKidBirthday ? (moment.firstName ?? "").trim() : "";
+
+                                      const isBirthday = moment.type === "birthday" || isKidBirthday;
+                                      const isAnniversary = moment.type === "anniversary" || moment.label?.toLowerCase() === "anniversary";
+
+                                      const birthdayName = kidName || toName;
+
+                                      const customTitle = moment.type === "custom" ? (moment.label ?? "").trim().toLowerCase() : "";
+                                      const sensitiveKeywords = ["thinking", "loss", "anniversary", "remembering", "tough", "support", "miss"] as const;
+                                      const isSensitiveCustom =
+                                        moment.type === "custom" && sensitiveKeywords.some((k) => customTitle.includes(k));
+
+                                      const quick = isSensitiveCustom
+                                        ? "Thinking of you today ❤️"
+                                        : isKidBirthday
+                                          ? `Happy birthday to ${birthdayName}! Hope ${birthdayName} has the best day 🎉`
+                                          : isBirthday
+                                            ? `Happy birthday ${birthdayName}! Hope you have an amazing day 🎉`
+                                            : isAnniversary
+                                              ? `Happy anniversary ${toName}! Hope today feels special 💛`
+                                              : "Thinking of you today and hoping everything goes well.";
+
+                                      const thoughtful = isSensitiveCustom
+                                        ? "Just wanted you to know you're on my mind today."
+                                        : isKidBirthday
+                                          ? `Happy birthday to ${birthdayName}! I hope ${birthdayName} has such a fun day celebrating.`
+                                          : isBirthday
+                                            ? `Happy birthday ${birthdayName}. Wishing you a wonderful year ahead.`
+                                            : isAnniversary
+                                              ? `Happy anniversary, ${toName}. Thinking of you and wishing you a beautiful day.`
+                                              : "Good luck today! You've got this.";
+
+                                      const funny = isSensitiveCustom
+                                        ? "Sending a little extra love your way today."
+                                        : isKidBirthday
+                                          ? `Can't believe ${birthdayName} is another year older! Hope ${birthdayName} has an amazing birthday.`
+                                          : isBirthday
+                                            ? `Happy birthday ${birthdayName}! I was going to send cake but apparently texting is faster.`
+                                            : isAnniversary
+                                              ? `Happy anniversary ${toName}! I remembered without Facebook — please be impressed.`
+                                              : "Just wanted to say I'm thinking of you today.";
+
+                                      openSmartMessageSuggestions({
+                                        personName: toName,
+                                        phone: person.phone,
+                                        suggestions: [
+                                          { id: "quick", label: "Quick message", message: quick },
+                                          { id: "funny", label: "Funny message", message: funny },
+                                          { id: "thoughtful", label: "Thoughtful message", message: thoughtful },
+                                          { id: "custom", label: "Write my own message", message: "" },
+                                        ],
+                                        onAfterSend: prompt ? () => dismissPrompt(prompt as any) : undefined,
+                                      });
                                     },
                                   },
                                   {
-                                    label: "Send e-card",
+                                    label: `Send ${first} a card`,
                                     href: "https://www.americangreetings.com/ecards",
                                     onClick: () => {
                                       if (prompt) dismissPrompt(prompt as any);
                                     },
                                   },
                                   {
-                                    label: "Buy coffee",
+                                    label: `Buy ${first} a gift`,
                                     href: "https://www.starbucks.com/gift",
                                     onClick: () => {
                                       if (prompt) dismissPrompt(prompt as any);
@@ -1242,22 +1339,62 @@ export default function Home({
                             </>
                           )}
                         </>
-                      ) : null}
+	                      ) : null}
 
-                      {horizonMoments.length > 0 ? (
-                        <div
-                          style={{
-                            border: "1px solid var(--border)",
-                            borderRadius: "16px",
-                            padding: "18px",
-                            background: "rgba(255,255,255,0.7)",
-                            boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-                            marginTop: todayMoments.length > 0 ? "22px" : 0,
-                            marginBottom: "18px",
-                          }}
-                        >
-                          <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)" }}>On the horizon</div>
-                          <GoldenSunDivider />
+	                      {tomorrowMoments.length > 0 ? (
+	                        <div
+	                          style={{
+	                            border: "1px solid var(--border)",
+	                            borderRadius: "16px",
+	                            padding: "18px",
+	                            background: "rgba(255,255,255,0.7)",
+	                            boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+	                            marginTop: todayMoments.length > 0 ? "22px" : 0,
+	                            marginBottom: "18px",
+	                          }}
+	                        >
+	                          <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)" }}>Tomorrow</div>
+	                          <div
+	                            style={{
+	                              marginTop: "12px",
+	                              display: "grid",
+	                              gap: "8px",
+	                              color: "var(--muted)",
+	                              fontSize: "16px",
+	                              lineHeight: 1.45,
+	                            }}
+	                          >
+	                            {tomorrowMoments.map((i) => (
+	                              <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
+	                                <RaisedGoldBullet />
+	                                <div style={{ minWidth: 0 }}>
+	                                  {formatMomentText(
+	                                    displayNameForForecastItem(i.key, i.firstName),
+	                                    i.type,
+	                                    i.label,
+	                                    i.daysUntil
+	                                  )}
+	                                </div>
+	                              </div>
+	                            ))}
+	                          </div>
+	                        </div>
+	                      ) : null}
+
+	                      {comingSoonMoments.length > 0 ? (
+	                        <div
+	                          style={{
+	                            border: "1px solid var(--border)",
+	                            borderRadius: "16px",
+	                            padding: "18px",
+	                            background: "rgba(255,255,255,0.7)",
+	                            boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+	                            marginTop: todayMoments.length > 0 || tomorrowMoments.length > 0 ? "14px" : 0,
+	                            marginBottom: "18px",
+	                          }}
+	                        >
+	                          <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)" }}>Coming Soon</div>
+	                          <GoldenSunDivider />
                           <div
                             style={{
                               marginTop: "10px",
@@ -1265,72 +1402,82 @@ export default function Home({
                               gap: "8px",
                               color: "var(--muted)",
                               fontSize: "16px",
+	                              lineHeight: 1.45,
+	                            }}
+	                          >
+	                            {comingSoonMoments.map((i) => (
+	                              <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
+	                                <RaisedGoldBullet />
+	                                <div style={{ minWidth: 0 }}>
+	                                  {formatMomentText(
+	                                    displayNameForForecastItem(i.key, i.firstName),
+	                                    i.type,
+	                                    i.label,
+	                                    i.daysUntil
+	                                  )}
+	                                </div>
+	                              </div>
+	                            ))}
+	                          </div>
+	                        </div>
+	                      ) : null}
+
+	                      {gentleForecast?.month?.length ? (
+	                        <div
+                          style={{
+                            border: "1px solid var(--border)",
+                            borderRadius: "16px",
+                            padding: "18px",
+                            background: "rgba(255,255,255,0.7)",
+                            boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                            marginTop: "14px",
+                            marginBottom: "18px",
+                          }}
+                        >
+                          <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)" }}>Plan Ahead</div>
+                          <div
+                            style={{
+                              marginTop: "12px",
+                              display: "grid",
+                              gap: "8px",
+                              color: "var(--muted)",
+                              fontSize: "16px",
                               lineHeight: 1.45,
                             }}
                           >
-                            {gentleForecast ? (
-                              <>
-                                {gentleForecast.tomorrow.length ? (
-                                  <>
-                                    <div style={{ fontWeight: 600 }}>Tomorrow</div>
-                                    {gentleForecast.tomorrow.map((i) => (
-                                      <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
-                                        <RaisedGoldBullet />
-                                        <div style={{ minWidth: 0 }}>
-                                          {i.firstName} · {i.label} tomorrow
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </>
-                                ) : null}
-
-                                {gentleForecast.week.length ? (
-                                  <>
-                                    <div style={{ fontWeight: 600, marginTop: gentleForecast.tomorrow.length ? "6px" : 0 }}>
-                                      This week
-                                    </div>
-                                    {gentleForecast.week.map((i) => (
-                                      <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
-                                        <RaisedGoldBullet />
-                                        <div style={{ minWidth: 0 }}>
-                                          {i.firstName} · {i.label} in {i.daysUntil} days
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </>
-                                ) : null}
-
-                                {gentleForecast.month.length ? (
-                                  <>
-                                    <div
-                                      style={{
-                                        fontWeight: 600,
-                                        marginTop: gentleForecast.tomorrow.length || gentleForecast.week.length ? "6px" : 0,
-                                      }}
-                                    >
-                                      Later this month
-                                    </div>
-                                    {gentleForecast.month.map((i) => (
-                                      <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
-                                        <RaisedGoldBullet />
-                                        <div style={{ minWidth: 0 }}>
-                                          {i.firstName} · {i.label} in {i.daysUntil} days
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </>
-                                ) : null}
-                              </>
-                            ) : (
-                              <div>Nothing big this week — enjoy the quiet ✨</div>
-                            )}
+                            {gentleForecast.month.map((i) => (
+                              <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
+                                <RaisedGoldBullet />
+                                <div style={{ minWidth: 0 }}>
+                                  {formatMomentText(
+                                    displayNameForForecastItem(i.key, i.firstName),
+                                    i.type,
+                                    i.label,
+                                    i.daysUntil
+                                  )}
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        </div>
-                      ) : null}
-                    </>
-                  );
-                })()}
-              </section>
+	                        </div>
+	                      ) : null}
+
+	                      {handledToday.length ? (
+	                        <div style={{ marginTop: "22px" }}>
+	                          <div style={headerStyle}>Taken Care Of Today</div>
+	                          <div style={{ marginTop: "10px", display: "grid", gap: "8px", color: "var(--muted)", fontSize: "16px", lineHeight: 1.45 }}>
+	                            {handledToday.map((item) => (
+	                              <div key={`handled_${item.key}`} style={{ display: "flex", alignItems: "center" }}>
+	                                <div style={{ minWidth: 0 }}>{handledLine(item)}</div>
+	                              </div>
+	                            ))}
+	                          </div>
+	                        </div>
+	                      ) : null}
+	                    </>
+	                  );
+	                })()}
+	              </section>
 
               <div
                 style={{
@@ -1474,6 +1621,22 @@ export default function Home({
             onClear={() => {
               setChildBirthdayDraftMonthDay("");
               setChildBirthdayDraftYear("");
+            }}
+          />
+        ) : null}
+
+        {smsSuggestions ? (
+          <SmartMessageSuggestionsModal
+            isOpen
+            personName={smsSuggestions.personName}
+            suggestions={smsSuggestions.suggestions}
+            onClose={() => setSmsSuggestions(null)}
+            onPick={(message) => {
+              const phone = smsSuggestions.phone;
+              const after = smsSuggestions.onAfterSend;
+              setSmsSuggestions(null);
+              openSmsComposer(phone, message);
+              after?.();
             }}
           />
         ) : null}
