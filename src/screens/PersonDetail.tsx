@@ -8,6 +8,9 @@ import { daysUntilDate, getNextBirthdayFromIso } from "../utils/birthdayUtils";
 import { getNextAnniversary } from "../utils/anniversaryUtils";
 import { getFathersDay, getMothersDay } from "../utils/holidayUtils";
 import { RaisedGoldBullet, SoftGoldDot } from "../components/common/GoldBullets";
+import SmartSuggestionCard from "../components/SmartSuggestionCard";
+import { openSmsComposer } from "../components/SoonReminderCard";
+import { generateCareSuggestions, type CareSuggestion } from "../utils/careSuggestions";
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -51,10 +54,11 @@ function formatMonthDay(isoMonthDay: string, formatter: Intl.DateTimeFormat) {
 export default function PersonDetail({}: {}) {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { people, relationships, updatePerson } = useAppState();
+  const { people, relationships, updatePerson, deletePerson } = useAppState();
   const person = people.find((p) => p.id === id) ?? null;
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isCircleOpen, setIsCircleOpen] = useState(false);
+  const [suggestionsTick, setSuggestionsTick] = useState(0);
   const today = useMemo(() => startOfDay(new Date()), []);
 
   useEffect(() => {
@@ -63,7 +67,63 @@ export default function PersonDetail({}: {}) {
 
   if (!person) return null;
 
+  const resolvedPerson = person;
   const partner = person.partnerId ? people.find((p) => p.id === person.partnerId) ?? null : null;
+
+  function startOfTodayTimestamp() {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  }
+
+  function snoozeSuggestion(idToSnooze: string, days: number) {
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const nextAllowed = startOfTodayTimestamp() + days * msPerDay;
+    try {
+      window.localStorage.setItem(`doknotforget_snooze_${idToSnooze}`, String(nextAllowed));
+    } catch {
+      // ignore
+    }
+    setSuggestionsTick((v) => v + 1);
+  }
+
+  const personSuggestions = useMemo(() => {
+    const now = Date.now();
+    function isSnoozed(cardId: string) {
+      try {
+        const raw = window.localStorage.getItem(`doknotforget_snooze_${cardId}`);
+        if (!raw) return false;
+        const ts = Number(raw);
+        if (Number.isNaN(ts)) return false;
+        return ts > now;
+      } catch {
+        return false;
+      }
+    }
+
+    const suggestions = generateCareSuggestions([resolvedPerson], today);
+    return suggestions
+      .filter((s) => s.type !== "question")
+      .filter((s) => !isSnoozed(s.id))
+      .sort((a, b) => (a.sortDaysUntil - b.sortDaysUntil) || a.title.localeCompare(b.title));
+  }, [resolvedPerson, today, suggestionsTick]);
+
+  function handlePersonSuggestionAction(suggestion: CareSuggestion) {
+    if (suggestion.action.kind === "text") {
+      if (resolvedPerson.phone) openSmsComposer(resolvedPerson.phone, suggestion.action.body);
+      else setIsEditOpen(true);
+      return;
+    }
+
+    if (suggestion.action.kind === "giftIdeas") {
+      setIsEditOpen(true);
+      return;
+    }
+
+    if (suggestion.action.kind === "view") {
+      setIsEditOpen(true);
+    }
+  }
 
   const monthDayFormatter = useMemo(
     () => new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" }),
@@ -600,6 +660,57 @@ export default function PersonDetail({}: {}) {
                 </div>
               </section>
             ) : null}
+
+            {personSuggestions.length ? (
+              <section aria-label="Helpful additions" style={{ marginTop: "28px" }}>
+                <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>
+                  Helpful additions
+                </div>
+
+                <div style={{ marginTop: "12px", display: "grid", gap: "12px" }}>
+                  {personSuggestions.map((suggestion) => (
+                    <SmartSuggestionCard
+                      key={suggestion.id}
+                      variant="nudge"
+                      message={`${suggestion.title}\n${suggestion.message}`}
+                      actions={[
+                        { label: suggestion.actionLabel, onClick: () => handlePersonSuggestionAction(suggestion) },
+                        { label: "Hide for now", onClick: () => snoozeSuggestion(suggestion.id, 90) },
+                      ]}
+                      onMaybe={undefined}
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            <div style={{ marginTop: "34px", paddingTop: "18px", borderTop: "1px solid var(--border)" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const ok = window.confirm(
+                    "Are you sure you want to delete this contact?\nThis cannot be undone."
+                  );
+                  if (!ok) return;
+                  deletePerson(resolvedPerson.id);
+                  navigate("/home", { state: { defaultTab: "contacts" } });
+                }}
+                style={{
+                  padding: 0,
+                  border: "none",
+                  background: "none",
+                  cursor: "pointer",
+                  color: "#b42318",
+                  fontSize: "14px",
+                  fontFamily: "var(--font-sans)",
+                  fontWeight: 500,
+                  textDecoration: "underline",
+                  textUnderlineOffset: "3px",
+                }}
+              >
+                Delete contact
+              </button>
+            </div>
           </div>
         </div>
       </div>

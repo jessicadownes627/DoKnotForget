@@ -4,31 +4,23 @@ import { openSmsComposer } from "../components/SoonReminderCard";
 import Brand from "../components/Brand";
 import BowIcon from "../components/BowIcon";
 import PeopleIndex from "./PeopleIndex";
-import CareSuggestionCard from "../components/CareSuggestionCard";
 import { generateCareSuggestions } from "../utils/careSuggestions";
-import MicroQuestionCard from "../components/MicroQuestionCard";
 import { useLocation, useNavigate } from "../router";
 import { useAppState } from "../appState";
 import SmartSuggestionCard from "../components/SmartSuggestionCard";
 import {
   getAnniversaryPrompts,
   getBirthdayPrompts,
-  getFatherPrompts,
   getKidsBirthdayPrompts,
-  getMotherPrompts,
   type AnniversaryPromptItem,
   type BirthdayPromptItem,
-  type FatherPromptItem,
   type KidsBirthdayPromptItem,
-  type MotherPromptItem,
   type PromptItem,
 } from "../engine/promptEngine";
-import { getFathersDay, getMothersDay } from "../utils/holidayUtils";
 import { daysUntilDate, getNextBirthdayFromIso } from "../utils/birthdayUtils";
 import MomentDatePicker from "../components/MomentDatePicker";
 import { RaisedGoldBullet } from "../components/common/GoldBullets";
 import GoldenSunDivider from "../components/GoldenSunDivider";
-import GoldenStarDivider from "../components/GoldenStarDivider";
 import ContactsSearchResults from "../components/ContactsSearchResults";
 import { filterContacts } from "../utils/contactSearch";
 
@@ -49,6 +41,10 @@ export default function Home({
   const navigate = useNavigate();
   const location = useLocation();
   const { people, updatePerson, updatePersonFields } = useAppState();
+  // eslint-disable-next-line no-console
+  console.log("HOME PEOPLE:", people);
+  // eslint-disable-next-line no-console
+  console.log("HOME RAW MOMENTS FROM PEOPLE:", people.map((p) => p.moments));
   const initialTab = location.state?.defaultTab === "contacts" ? "contacts" : "home";
   const [activeTab, setActiveTab] = useState<"home" | "contacts">(initialTab);
   const [searchTerm, setSearchTerm] = useState("");
@@ -97,16 +93,6 @@ export default function Home({
     if (activeTab !== "home") return [];
     return generateCareSuggestions(filteredPeople, today);
   }, [activeTab, filteredPeople, today, questionTick]);
-
-  const motherPrompts = useMemo(() => {
-    if (activeTab !== "home") return [];
-    return getMotherPrompts(people);
-  }, [activeTab, people]);
-
-  const fatherPrompts = useMemo(() => {
-    if (activeTab !== "home") return [];
-    return getFatherPrompts(people);
-  }, [activeTab, people]);
 
   const anniversaryPrompts = useMemo(() => {
     if (activeTab !== "home") return [];
@@ -158,30 +144,6 @@ export default function Home({
     }
     return out;
   }
-
-  const visibleMotherPrompts = useMemo(() => {
-    const filtered = motherPrompts.filter((p) => {
-      try {
-        return window.localStorage.getItem(promptDismissKey(p)) !== "1";
-      } catch {
-        return true;
-      }
-    });
-    return dedupePrompts(filtered, (p) => `${p.type}_${p.personId}`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [motherPrompts, arrivalTick]);
-
-  const visibleFatherPrompts = useMemo(() => {
-    const filtered = fatherPrompts.filter((p) => {
-      try {
-        return window.localStorage.getItem(promptDismissKey(p)) !== "1";
-      } catch {
-        return true;
-      }
-    });
-    return dedupePrompts(filtered, (p) => `${p.type}_${p.personId}`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fatherPrompts, arrivalTick]);
 
   const visibleAnniversaryPrompts = useMemo(() => {
     const filtered = anniversaryPrompts.filter((p) => {
@@ -287,6 +249,7 @@ export default function Home({
       firstName: string;
       type: string;
       label: string;
+      date: string;
       daysUntil: number;
     };
 
@@ -312,6 +275,11 @@ export default function Home({
     const base = today;
     const horizonDays = 30;
     const all: ForecastItem[] = [];
+    const moments: ForecastItem[] = [];
+    let scannedMoments = 0;
+    let keptMoments = 0;
+    let scannedKidsBirthdays = 0;
+    let keptKidsBirthdays = 0;
 
     // Flat array of all moments for all people.
     for (const person of people) {
@@ -320,6 +288,7 @@ export default function Home({
 
       for (const moment of person.moments ?? []) {
         if (!moment?.id || !moment?.date) continue;
+        scannedMoments += 1;
 
         let until: number | null = null;
         if (moment.recurring) {
@@ -330,6 +299,14 @@ export default function Home({
           if (d) until = daysUntilDate(d, base);
         }
         if (until === null) continue;
+        moments.push({
+          key: `${person.id}:${moment.id}`,
+          firstName,
+          type: moment.type,
+          label: moment.label || moment.type,
+          date: moment.date,
+          daysUntil: until,
+        });
         if (until < 0 || until > horizonDays) continue;
 
         if (debugHydration && moment.type === "birthday") {
@@ -346,8 +323,10 @@ export default function Home({
           firstName,
           type: moment.type,
           label: moment.label || moment.type,
+          date: moment.date,
           daysUntil: until,
         });
+        keptMoments += 1;
       }
 
       // Kids birthdays (as synthetic moments)
@@ -355,18 +334,48 @@ export default function Home({
         const childName = (child.name ?? "").trim();
         const raw = (child.birthday ?? child.birthdate ?? "").trim();
         if (!child.id || !childName || !raw) continue;
+        scannedKidsBirthdays += 1;
         const next = getNextBirthdayFromIso(raw, base);
         if (!next) continue;
         const until = next.daysUntilBirthday;
+        moments.push({
+          key: `${person.id}:child:${child.id}`,
+          firstName: childName,
+          type: "kidBirthday",
+          label: "Birthday",
+          date: raw,
+          daysUntil: until,
+        });
         if (until < 0 || until > horizonDays) continue;
         all.push({
           key: `${person.id}:child:${child.id}`,
           firstName: childName,
           type: "kidBirthday",
           label: "Birthday",
+          date: raw,
           daysUntil: until,
         });
+        keptKidsBirthdays += 1;
       }
+    }
+
+    // eslint-disable-next-line no-console
+    console.log("FLATTENED MOMENTS:", moments);
+    for (const moment of moments) {
+      // eslint-disable-next-line no-console
+      console.log("MOMENT CHECK:", moment.firstName, moment.type, moment.date, moment.daysUntil);
+    }
+
+    if (debugHydration) {
+      // eslint-disable-next-line no-console
+      console.log("ALL MOMENTS BEFORE FILTER:", moments);
+      // eslint-disable-next-line no-console
+      console.log("[DKF DEBUG] moments scan summary:", {
+        scannedMoments,
+        keptMoments,
+        scannedKidsBirthdays,
+        keptKidsBirthdays,
+      });
     }
 
     all.sort((a, b) => (a.daysUntil - b.daysUntil) || a.firstName.localeCompare(b.firstName) || a.label.localeCompare(b.label));
@@ -380,12 +389,16 @@ export default function Home({
     }
 
     const groups: ForecastGroups = { today: [], tomorrow: [], week: [], month: [] };
-    const todayItems = all.filter((m) => m.daysUntil === 0);
-    const horizonItems = all.filter((m) => m.daysUntil > 0);
+    const todayMoments = all.filter((m) => m.daysUntil === 0);
+    const horizonMoments = all.filter((m) => m.daysUntil > 0);
+    // eslint-disable-next-line no-console
+    console.log("TODAY MOMENTS:", todayMoments);
+    // eslint-disable-next-line no-console
+    console.log("HORIZON MOMENTS:", horizonMoments);
 
-    groups.today = todayItems;
+    groups.today = todayMoments;
 
-    for (const item of horizonItems) {
+    for (const item of horizonMoments) {
       if (item.daysUntil === 1) groups.tomorrow.push(item);
       else if (item.daysUntil <= 7) groups.week.push(item);
       else groups.month.push(item);
@@ -570,108 +583,6 @@ export default function Home({
     dismissPrompt(prompt);
   }
 
-  function handleMotherPromptYes(prompt: MotherPromptItem) {
-    if (prompt.type === "DISCOVER_MOTHER") {
-      updatePersonFields(prompt.personId, { isMother: true });
-      dismissPrompt(prompt);
-      return;
-    }
-
-    const person = people.find((p) => p.id === prompt.personId) ?? null;
-    if (person?.phone) openSmsComposer(person.phone, `Happy Mother’s Day, ${person.name}!`);
-    dismissPrompt(prompt);
-  }
-
-  function handleMotherPromptNo(prompt: MotherPromptItem) {
-    if (prompt.type === "DISCOVER_MOTHER") {
-      updatePersonFields(prompt.personId, { isMother: false });
-      dismissPrompt(prompt);
-      return;
-    }
-
-    dismissPrompt(prompt);
-  }
-
-  function handleMotherPromptMaybe(prompt: MotherPromptItem) {
-    if (prompt.type === "DISCOVER_MOTHER") {
-      dismissPrompt(prompt);
-      return;
-    }
-
-    const person = people.find((p) => p.id === prompt.personId) ?? null;
-    if (!person) {
-      dismissPrompt(prompt);
-      return;
-    }
-
-    const year = new Date().getFullYear();
-    const mothersDay = getMothersDay(year);
-    const date = formatYmd(mothersDay);
-    const already = (person.moments ?? []).some((m) => m.type === "custom" && m.label === "Mother’s Day" && m.date === date);
-    if (!already) {
-      updatePerson({
-        ...person,
-        moments: [
-          ...(person.moments ?? []),
-          { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, type: "custom", label: "Mother’s Day", date, recurring: false },
-        ],
-      });
-    }
-
-    dismissPrompt(prompt);
-  }
-
-  function handleFatherPromptYes(prompt: FatherPromptItem) {
-    if (prompt.type === "DISCOVER_FATHER") {
-      updatePersonFields(prompt.personId, { isFather: true });
-      dismissPrompt(prompt);
-      return;
-    }
-
-    const person = people.find((p) => p.id === prompt.personId) ?? null;
-    if (person?.phone) openSmsComposer(person.phone, `Happy Father’s Day, ${person.name}!`);
-    dismissPrompt(prompt);
-  }
-
-  function handleFatherPromptNo(prompt: FatherPromptItem) {
-    if (prompt.type === "DISCOVER_FATHER") {
-      updatePersonFields(prompt.personId, { isFather: false });
-      dismissPrompt(prompt);
-      return;
-    }
-
-    dismissPrompt(prompt);
-  }
-
-  function handleFatherPromptMaybe(prompt: FatherPromptItem) {
-    if (prompt.type === "DISCOVER_FATHER") {
-      dismissPrompt(prompt);
-      return;
-    }
-
-    const person = people.find((p) => p.id === prompt.personId) ?? null;
-    if (!person) {
-      dismissPrompt(prompt);
-      return;
-    }
-
-    const year = new Date().getFullYear();
-    const fathersDay = getFathersDay(year);
-    const date = formatYmd(fathersDay);
-    const already = (person.moments ?? []).some((m) => m.type === "custom" && m.label === "Father’s Day" && m.date === date);
-    if (!already) {
-      updatePerson({
-        ...person,
-        moments: [
-          ...(person.moments ?? []),
-          { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, type: "custom", label: "Father’s Day", date, recurring: false },
-        ],
-      });
-    }
-
-    dismissPrompt(prompt);
-  }
-
   const unsnoozedCareSuggestions = useMemo(() => {
     const now = Date.now();
     function isSnoozed(cardId: string) {
@@ -765,6 +676,10 @@ export default function Home({
     const person = people.find((p) => p.id === suggestion.personId);
     if (!person) return;
 
+    function openIdeasForPerson(personId: string) {
+      navigate(`/person/${personId}`);
+    }
+
     if (suggestion.action.kind === "view") {
       navigate(`/person/${person.id}`);
       return;
@@ -776,10 +691,7 @@ export default function Home({
     }
 
     if (suggestion.action.kind === "giftIdeas") {
-      const query = encodeURIComponent(`gift ideas for ${person.name}`);
-      const url = `https://www.google.com/search?q=${query}`;
-      const opened = window.open(url, "_blank", "noopener,noreferrer");
-      if (!opened) window.location.href = url;
+      openIdeasForPerson(person.id);
     }
   }
 
@@ -1125,87 +1037,6 @@ export default function Home({
           ) : (
             <>
               <section aria-label="Home" style={{ marginTop: "18px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
-                <div
-                  style={{
-                    border: "1px solid var(--border)",
-                    borderRadius: "16px",
-                    padding: "18px",
-                    background: "rgba(255,255,255,0.7)",
-                    boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-                    marginBottom: "18px",
-                  }}
-                >
-                  <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)" }}>On the horizon</div>
-                  <GoldenSunDivider />
-                  <div
-                    style={{
-                      marginTop: "10px",
-                      display: "grid",
-                      gap: "8px",
-                      color: "var(--muted)",
-                      fontSize: "16px",
-                      lineHeight: 1.45,
-                    }}
-                  >
-                    {gentleForecast ? (
-                      <>
-                        {gentleForecast.tomorrow.length ? (
-                          <>
-                            <div style={{ fontWeight: 600 }}>Tomorrow</div>
-                            {gentleForecast.tomorrow.map((i) => (
-                              <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
-                                <RaisedGoldBullet />
-                                <div style={{ minWidth: 0 }}>
-                                  {i.firstName} · {i.label} tomorrow
-                                </div>
-                              </div>
-                            ))}
-                          </>
-                        ) : null}
-
-                        {gentleForecast.week.length ? (
-                          <>
-                            <div style={{ fontWeight: 600, marginTop: gentleForecast.tomorrow.length ? "6px" : 0 }}>
-                              This week
-                            </div>
-                            {gentleForecast.week.map((i) => (
-                              <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
-                                <RaisedGoldBullet />
-                                <div style={{ minWidth: 0 }}>
-                                  {i.firstName} · {i.label} in {i.daysUntil} days
-                                </div>
-                              </div>
-                            ))}
-                          </>
-                        ) : null}
-
-                        {gentleForecast.month.length ? (
-                          <>
-                            <div
-                              style={{
-                                fontWeight: 600,
-                                marginTop: gentleForecast.tomorrow.length || gentleForecast.week.length ? "6px" : 0,
-                              }}
-                            >
-                              Later this month
-                            </div>
-                            {gentleForecast.month.map((i) => (
-                              <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
-                                <RaisedGoldBullet />
-                                <div style={{ minWidth: 0 }}>
-                                  {i.firstName} · {i.label} in {i.daysUntil} days
-                                </div>
-                              </div>
-                            ))}
-                          </>
-                        ) : null}
-                      </>
-                    ) : (
-                      <div>Nothing big this week — enjoy the quiet ✨</div>
-                    )}
-                  </div>
-                </div>
-
                 {(() => {
                   const headerStyle: React.CSSProperties = {
                     fontSize: "18px",
@@ -1218,126 +1049,30 @@ export default function Home({
 
                   const firstOf = (fullName: string) => (fullName ?? "").trim().split(" ")[0] || fullName || "Text";
 
-                  function openIdeasSearch(query: string) {
-                    const q = encodeURIComponent(query);
-                    const url = `https://www.google.com/search?q=${q}`;
-                    const opened = window.open(url, "_blank", "noopener,noreferrer");
-                    if (!opened) window.location.href = url;
-                  }
-
-                  function openExternalUrl(url: string) {
-                    const opened = window.open(url, "_blank", "noopener,noreferrer");
-                    if (!opened) window.location.href = url;
-                  }
-
-                  function remindInDays(personId: string, label: string, days: number) {
-                    const person = people.find((x) => x.id === personId) ?? null;
-                    if (!person) return;
-                    const d = new Date(today);
-                    d.setDate(d.getDate() + days);
-                    updatePerson(addCustomMomentIfMissing(person, label, formatYmd(d)));
-                  }
-
                   const todayBirthdayPrompts = visibleBirthdayPrompts.filter((p) => p.type === "TODAY_BIRTHDAY");
-                  const comingBirthdayPrompts = visibleBirthdayPrompts.filter(
-                    (p) => p.type === "TOMORROW_BIRTHDAY" || p.type === "PREP_BIRTHDAY"
-                  );
-                  const suggestionBirthdayPrompts = visibleBirthdayPrompts.filter((p) => p.type === "DISCOVER_BIRTHDAY");
 
                   const todayKidsBirthdayPrompts = visibleKidsBirthdayPrompts.filter((p) => p.type === "TODAY_CHILD_BIRTHDAY");
-                  const comingKidsBirthdayPrompts = visibleKidsBirthdayPrompts.filter(
-                    (p) => p.type === "TOMORROW_CHILD_BIRTHDAY" || p.type === "PREP_CHILD_BIRTHDAY"
-                  );
-                  const suggestionKidsBirthdayPrompts = visibleKidsBirthdayPrompts.filter((p) => p.type === "DISCOVER_CHILD_BIRTHDAY");
 
                   const todayAnniversaryPrompts = visibleAnniversaryPrompts.filter((p) => p.type === "ANNIVERSARY_TODAY");
-                  const comingAnniversaryPrompts = visibleAnniversaryPrompts.filter((p) => {
-                    if (p.type === "ANNIVERSARY_TOMORROW") return true;
-                    if (p.type === "PREP_ANNIVERSARY") return (p as any).daysUntilAnniversary <= 7;
-                    return false;
-                  });
-                  const suggestionAnniversaryPrompts = visibleAnniversaryPrompts.filter((p) => {
-                    if (p.type === "DISCOVER_ANNIVERSARY") return true;
-                    if (p.type === "PREP_ANNIVERSARY") return (p as any).daysUntilAnniversary > 7;
-                    return false;
-                  });
 
-                  const comingMotherPrompts = visibleMotherPrompts.filter((p) => p.type === "NUDGE_MOTHERS_DAY");
-                  const suggestionMotherPrompts = visibleMotherPrompts.filter((p) => p.type === "DISCOVER_MOTHER");
+                  const todayMoments = gentleForecast?.today ?? [];
+                  const horizonMoments = gentleForecast
+                    ? [...gentleForecast.tomorrow, ...gentleForecast.week, ...gentleForecast.month]
+                    : [];
+                  void visibleCareSuggestions;
+                  void handleSuggestionAction;
+                  void handleQuestionChoose;
+                  void handleQuestionDismiss;
+                  void handleBirthdayPromptNo;
+                  void handleAnniversaryPromptNo;
+                  void handleKidsBirthdayPromptNo;
+                  void partnerLinkPrompt;
 
-                  const comingFatherPrompts = visibleFatherPrompts.filter((p) => p.type === "NUDGE_FATHERS_DAY");
-                  const suggestionFatherPrompts = visibleFatherPrompts.filter((p) => p.type === "DISCOVER_FATHER");
-
-                  const careQuestions = visibleCareSuggestions.filter((s) => s.type === "question" && s.question);
-                  const careNonQuestions = visibleCareSuggestions.filter((s) => s.type !== "question");
-                  const careComing = careNonQuestions.filter((s) => s.sortDaysUntil >= 1 && s.sortDaysUntil <= 7);
-                  const careLater = careNonQuestions.filter((s) => s.sortDaysUntil > 7);
-
-                  const hasToday =
-                    todayBirthdayPrompts.length ||
-                    todayKidsBirthdayPrompts.length ||
-                    todayAnniversaryPrompts.length;
-
-                  const hasComing =
-                    comingBirthdayPrompts.length ||
-                    comingKidsBirthdayPrompts.length ||
-                    comingAnniversaryPrompts.length ||
-                    comingMotherPrompts.length ||
-                    comingFatherPrompts.length ||
-                    careComing.length;
-
-                  const hasSuggestions =
-                    suggestionBirthdayPrompts.length ||
-                    suggestionKidsBirthdayPrompts.length ||
-                    suggestionAnniversaryPrompts.length ||
-                    suggestionMotherPrompts.length ||
-                    suggestionFatherPrompts.length ||
-                    Boolean(partnerLinkPrompt) ||
-                    careQuestions.length ||
-                    careLater.length;
-
-                  const renderCareList = (list: typeof visibleCareSuggestions) => {
-                    if (!list.length) return null;
-                    return (
-                      <div
-                        key={`${arrivalTick}_${list.length}`}
-                        className={arrivalTick ? "dkf-arrival" : undefined}
-                        style={{ marginTop: "0.85rem", display: "grid", gap: "1.75rem" }}
-                      >
-                        {list.flatMap((suggestion, idx) => {
-                          const items: React.ReactNode[] = [];
-
-                          if (idx === 6 && list.length > 6) {
-                            items.push(
-                              <div key="more-break" style={{ marginTop: "8px" }}>
-                                <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>More moments ahead</div>
-                              </div>
-                            );
-                          }
-
-                          items.push(
-                            <div key={suggestion.id} className="dkf-enter" style={{ animationDelay: `${idx * 12}ms` }}>
-                              {suggestion.type === "question" && suggestion.question ? (
-                                <MicroQuestionCard
-                                  suggestion={suggestion}
-                                  onChoose={(optionId, data) => handleQuestionChoose(suggestion.id, optionId, data)}
-                                  onDismiss={() => handleQuestionDismiss(suggestion.id)}
-                                />
-                              ) : (
-                                <CareSuggestionCard
-                                  suggestion={suggestion}
-                                  onAction={() => handleSuggestionAction(suggestion.id)}
-                                  onSnooze={() => setQuestionTick((v) => v + 1)}
-                                />
-                              )}
-                            </div>
-                          );
-
-                          return items;
-                        })}
-                      </div>
-                    );
-                  };
+                  const todayBirthdayByPersonId = new Map(todayBirthdayPrompts.map((p) => [p.personId, p] as const));
+                  const todayAnniversaryByPersonId = new Map(todayAnniversaryPrompts.map((p) => [p.personId, p] as const));
+                  const todayKidBirthdayByKey = new Map(
+                    todayKidsBirthdayPrompts.map((p) => [`${p.parentId}:${p.childId}`, p] as const)
+                  );
 
                   const renderPromptGrid = (children: React.ReactNode) => (
                     <div style={{ display: "grid", gap: "12px", marginBottom: "6px" }}>{children}</div>
@@ -1355,105 +1090,96 @@ export default function Home({
                     </div>
                   );
 
-                  if (!hasToday && !hasComing && !hasSuggestions) return renderEmpty();
+                  if (todayMoments.length === 0 && horizonMoments.length === 0) {
+                    return renderEmpty();
+                  }
 
                   return (
                     <>
-                      {hasToday ? (
+                      {/* eslint-disable-next-line no-console */}
+                      {console.log("RENDER TODAY SECTION:", gentleForecast?.today)}
+                      {/* eslint-disable-next-line no-console */}
+                      {console.log("RENDER HORIZON SECTION:", (gentleForecast as any)?.horizon)}
+                      {todayMoments.length > 0 ? (
                         <>
-                          <div style={headerStyle}>Happening today</div>
-                          <GoldenStarDivider />
+                          <div style={{ ...headerStyle, display: "flex", alignItems: "center" }}>
+                            <RaisedGoldBullet />
+                            <span>Happening today</span>
+                          </div>
+                          <div className="dkf-golden-sun-divider" aria-hidden="true" style={{ marginTop: "8px" }}>
+                            <div className="dkf-golden-sun-divider-line" />
+                          </div>
                           {renderPromptGrid(
                             <>
-                              {todayAnniversaryPrompts.map((p) => {
-                                const personName = people.find((x) => x.id === p.personId)?.name ?? "";
-                                const first = firstOf(personName);
-                                const yesLabel = `Text ${first}`;
-                                return (
-                                  <SmartSuggestionCard
-                                    key={`${p.personId}_${p.type}`}
-                                    variant="nudge"
-                                    message={p.message}
-                                    actions={[
-                                      { label: yesLabel, onClick: () => handleAnniversaryPromptYes(p) },
-                                      {
-                                        label: "Send e-card",
-                                        onClick: () => {
-                                          openExternalUrl("https://www.americangreetings.com/ecards");
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      {
-                                        label: "Buy coffee",
-                                        onClick: () => {
-                                          openExternalUrl("https://www.starbucks.com/gift");
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      { label: "Mute reminder", onClick: () => dismissPrompt(p) },
-                                    ]}
-                                    onMaybe={undefined}
-                                  />
-                                );
-                              })}
+                              {todayMoments.map((moment) => {
+                                const personId = moment.key.split(":")[0] ?? "";
+                                const childId = moment.key.includes(":child:") ? moment.key.split(":child:")[1] ?? "" : "";
+                                const person = people.find((p) => p.id === personId) ?? null;
+                                const first = firstOf(person?.name ?? moment.firstName);
+                                const fallbackMessage =
+                                  moment.type === "birthday" || moment.type === "kidBirthday"
+                                    ? `It’s ${moment.firstName}’s birthday today.\nA kind message could make today feel special.`
+                                    : moment.type === "anniversary"
+                                      ? `It’s ${moment.firstName}’s anniversary today.\nA kind message could make today feel special.`
+                                      : `Today: ${moment.firstName} · ${moment.label}`;
 
-                              {todayKidsBirthdayPrompts.map((p) => {
-                                const parentName = people.find((x) => x.id === p.parentId)?.name ?? "";
-                                const first = firstOf(parentName);
-                                return (
-                                  <SmartSuggestionCard
-                                    key={`${p.parentId}_${p.childId}_${p.type}`}
-                                    variant="nudge"
-                                    message={p.message}
-                                    actions={[
-                                      { label: `Text ${first}`, onClick: () => handleKidsBirthdayPromptYes(p) },
-                                      {
-                                        label: "Send e-card",
-                                        onClick: () => {
-                                          openExternalUrl("https://www.americangreetings.com/ecards/birthday");
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      {
-                                        label: "Buy coffee",
-                                        onClick: () => {
-                                          openExternalUrl("https://www.starbucks.com/gift");
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      { label: "Mute reminder", onClick: () => dismissPrompt(p) },
-                                    ]}
-                                    onMaybe={undefined}
-                                  />
-                                );
-                              })}
+                                const birthdayPrompt = moment.type === "birthday" ? todayBirthdayByPersonId.get(personId) ?? null : null;
+                                const anniversaryPrompt =
+                                  moment.type === "anniversary" ? todayAnniversaryByPersonId.get(personId) ?? null : null;
+                                const kidPrompt =
+                                  moment.type === "kidBirthday" && childId
+                                    ? todayKidBirthdayByKey.get(`${personId}:${childId}`) ?? null
+                                    : null;
 
-                              {todayBirthdayPrompts.map((p) => {
-                                const personName = people.find((x) => x.id === p.personId)?.name ?? "";
-                                const first = firstOf(personName);
+                                const prompt = (birthdayPrompt ?? anniversaryPrompt ?? kidPrompt) as
+                                  | BirthdayPromptItem
+                                  | AnniversaryPromptItem
+                                  | KidsBirthdayPromptItem
+                                  | null;
+
+                                const message = prompt?.message ?? fallbackMessage;
+
+                                const actions = [
+                                  {
+                                    label: `Text ${first}`,
+                                    onClick: () => {
+                                      if (prompt) {
+                                        if ((prompt as any).parentId && (prompt as any).childId) handleKidsBirthdayPromptYes(prompt as any);
+                                        else if ((prompt as any).partnerId) handleAnniversaryPromptYes(prompt as any);
+                                        else handleBirthdayPromptYes(prompt as any);
+                                      } else if (person?.phone) {
+                                        openSmsComposer(person.phone, `Thinking of you, ${person.name}.`);
+                                      }
+                                    },
+                                  },
+                                  {
+                                    label: "Send e-card",
+                                    href: "https://www.americangreetings.com/ecards",
+                                    onClick: () => {
+                                      if (prompt) dismissPrompt(prompt as any);
+                                    },
+                                  },
+                                  {
+                                    label: "Buy coffee",
+                                    href: "https://www.starbucks.com/gift",
+                                    onClick: () => {
+                                      if (prompt) dismissPrompt(prompt as any);
+                                    },
+                                  },
+                                  {
+                                    label: "Mute reminder",
+                                    onClick: () => {
+                                      if (prompt) dismissPrompt(prompt as any);
+                                    },
+                                  },
+                                ];
+
                                 return (
                                   <SmartSuggestionCard
-                                    key={`${p.personId}_${p.type}`}
+                                    key={`today_${moment.key}`}
                                     variant="nudge"
-                                    message={p.message}
-                                    actions={[
-                                      { label: `Text ${first}`, onClick: () => handleBirthdayPromptYes(p) },
-                                      {
-                                        label: "Send e-card",
-                                        onClick: () => {
-                                          openExternalUrl("https://www.americangreetings.com/ecards/birthday");
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      {
-                                        label: "Buy coffee",
-                                        onClick: () => {
-                                          openExternalUrl("https://www.starbucks.com/gift");
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      { label: "Mute reminder", onClick: () => dismissPrompt(p) },
-                                    ]}
+                                    message={message}
+                                    actions={actions}
                                     onMaybe={undefined}
                                   />
                                 );
@@ -1463,332 +1189,88 @@ export default function Home({
                         </>
                       ) : null}
 
-                      {hasComing ? (
-                        <>
-                          <div style={headerStyle}>Coming up</div>
-                          {renderPromptGrid(
-                            <>
-                              {comingMotherPrompts.map((p) => {
-                                const personName = people.find((x) => x.id === p.personId)?.name ?? "";
-                                const first = firstOf(personName);
-                                return (
-                                  <SmartSuggestionCard
-                                    key={`${p.personId}_${p.type}`}
-                                    variant="nudge"
-                                    message={p.message}
-                                    actions={[
-                                      {
-                                        label: "Browse gift ideas",
-                                        onClick: () => {
-                                          openIdeasSearch("Mother’s Day gift ideas");
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      {
-                                        label: "Remind tomorrow",
-                                        onClick: () => {
-                                          remindInDays(p.personId, `Mother’s Day · ${first}`, 1);
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      {
-                                        label: "Remind next week",
-                                        onClick: () => {
-                                          remindInDays(p.personId, `Mother’s Day · ${first}`, 7);
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      { label: "Hide for now", onClick: () => dismissPrompt(p) },
-                                    ]}
-                                    onMaybe={undefined}
-                                  />
-                                );
-                              })}
+                      {horizonMoments.length > 0 ? (
+                        <div
+                          style={{
+                            border: "1px solid var(--border)",
+                            borderRadius: "16px",
+                            padding: "18px",
+                            background: "rgba(255,255,255,0.7)",
+                            boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                            marginTop: todayMoments.length > 0 ? "22px" : 0,
+                            marginBottom: "18px",
+                          }}
+                        >
+                          <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)" }}>On the horizon</div>
+                          <GoldenSunDivider />
+                          <div
+                            style={{
+                              marginTop: "10px",
+                              display: "grid",
+                              gap: "8px",
+                              color: "var(--muted)",
+                              fontSize: "16px",
+                              lineHeight: 1.45,
+                            }}
+                          >
+                            {gentleForecast ? (
+                              <>
+                                {gentleForecast.tomorrow.length ? (
+                                  <>
+                                    <div style={{ fontWeight: 600 }}>Tomorrow</div>
+                                    {gentleForecast.tomorrow.map((i) => (
+                                      <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
+                                        <RaisedGoldBullet />
+                                        <div style={{ minWidth: 0 }}>
+                                          {i.firstName} · {i.label} tomorrow
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </>
+                                ) : null}
 
-                              {comingFatherPrompts.map((p) => {
-                                const personName = people.find((x) => x.id === p.personId)?.name ?? "";
-                                const first = firstOf(personName);
-                                return (
-                                  <SmartSuggestionCard
-                                    key={`${p.personId}_${p.type}`}
-                                    variant="nudge"
-                                    message={p.message}
-                                    actions={[
-                                      {
-                                        label: "Browse gift ideas",
-                                        onClick: () => {
-                                          openIdeasSearch("Father’s Day gift ideas");
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      {
-                                        label: "Remind tomorrow",
-                                        onClick: () => {
-                                          remindInDays(p.personId, `Father’s Day · ${first}`, 1);
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      {
-                                        label: "Remind next week",
-                                        onClick: () => {
-                                          remindInDays(p.personId, `Father’s Day · ${first}`, 7);
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      { label: "Hide for now", onClick: () => dismissPrompt(p) },
-                                    ]}
-                                    onMaybe={undefined}
-                                  />
-                                );
-                              })}
+                                {gentleForecast.week.length ? (
+                                  <>
+                                    <div style={{ fontWeight: 600, marginTop: gentleForecast.tomorrow.length ? "6px" : 0 }}>
+                                      This week
+                                    </div>
+                                    {gentleForecast.week.map((i) => (
+                                      <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
+                                        <RaisedGoldBullet />
+                                        <div style={{ minWidth: 0 }}>
+                                          {i.firstName} · {i.label} in {i.daysUntil} days
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </>
+                                ) : null}
 
-                              {comingAnniversaryPrompts.map((p) => {
-                                const personName = people.find((x) => x.id === p.personId)?.name ?? "";
-                                const first = firstOf(personName);
-                                const browseQuery =
-                                  p.type === "PREP_ANNIVERSARY" ? "anniversary ideas" : "anniversary message ideas";
-                                return (
-                                  <SmartSuggestionCard
-                                    key={`${p.personId}_${p.type}`}
-                                    variant="nudge"
-                                    message={p.message}
-                                    actions={[
-                                      {
-                                        label: "Browse gift ideas",
-                                        onClick: () => {
-                                          openIdeasSearch(browseQuery);
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      {
-                                        label: "Remind tomorrow",
-                                        onClick: () => {
-                                          remindInDays(p.personId, `Anniversary · ${first}`, 1);
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      {
-                                        label: "Remind next week",
-                                        onClick: () => {
-                                          remindInDays(p.personId, `Anniversary · ${first}`, 7);
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      { label: "Hide for now", onClick: () => dismissPrompt(p) },
-                                    ]}
-                                    onMaybe={undefined}
-                                  />
-                                );
-                              })}
-
-                              {comingKidsBirthdayPrompts.map((p) => {
-                                const browseQuery = "kids birthday gift ideas";
-                                return (
-                                  <SmartSuggestionCard
-                                    key={`${p.parentId}_${p.childId}_${p.type}`}
-                                    variant="nudge"
-                                    message={p.message}
-                                    actions={[
-                                      {
-                                        label: "Browse gift ideas",
-                                        onClick: () => {
-                                          openIdeasSearch(browseQuery);
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      {
-                                        label: "Remind tomorrow",
-                                        onClick: () => {
-                                          remindInDays(p.parentId, `Birthday · ${p.childName}`, 1);
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      {
-                                        label: "Remind next week",
-                                        onClick: () => {
-                                          remindInDays(p.parentId, `Birthday · ${p.childName}`, 7);
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      { label: "Hide for now", onClick: () => dismissPrompt(p) },
-                                    ]}
-                                    onMaybe={undefined}
-                                  />
-                                );
-                              })}
-
-                              {comingBirthdayPrompts.map((p) => {
-                                const personName = people.find((x) => x.id === p.personId)?.name ?? "";
-                                const first = firstOf(personName);
-                                return (
-                                  <SmartSuggestionCard
-                                    key={`${p.personId}_${p.type}`}
-                                    variant="nudge"
-                                    message={p.message}
-                                    actions={[
-                                      {
-                                        label: "Browse gift ideas",
-                                        onClick: () => {
-                                          openIdeasSearch(`gift ideas for ${first}`);
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      {
-                                        label: "Remind tomorrow",
-                                        onClick: () => {
-                                          remindInDays(p.personId, `Birthday · ${first}`, 1);
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      {
-                                        label: "Remind next week",
-                                        onClick: () => {
-                                          remindInDays(p.personId, `Birthday · ${first}`, 7);
-                                          dismissPrompt(p);
-                                        },
-                                      },
-                                      { label: "Hide for now", onClick: () => dismissPrompt(p) },
-                                    ]}
-                                    onMaybe={undefined}
-                                  />
-                                );
-                              })}
-                            </>
-                          )}
-                          {renderCareList(careComing)}
-                        </>
-                      ) : null}
-
-                      {hasSuggestions ? (
-                        <>
-                          <div style={headerStyle}>Suggestions</div>
-                          {renderPromptGrid(
-                            <>
-                              {suggestionMotherPrompts.map((p) => (
-                                <SmartSuggestionCard
-                                  key={`${p.personId}_${p.type}`}
-                                  variant="discover"
-                                  message={p.message}
-                                  yesLabel="Yes"
-                                  noLabel="No"
-                                  maybeLabel="Not sure"
-                                  onYes={() => handleMotherPromptYes(p)}
-                                  onNo={() => handleMotherPromptNo(p)}
-                                  onMaybe={() => handleMotherPromptMaybe(p)}
-                                />
-                              ))}
-
-                              {suggestionFatherPrompts.map((p) => (
-                                <SmartSuggestionCard
-                                  key={`${p.personId}_${p.type}`}
-                                  variant="discover"
-                                  message={p.message}
-                                  yesLabel="Yes"
-                                  noLabel="No"
-                                  maybeLabel="Not sure"
-                                  onYes={() => handleFatherPromptYes(p)}
-                                  onNo={() => handleFatherPromptNo(p)}
-                                  onMaybe={() => handleFatherPromptMaybe(p)}
-                                />
-                              ))}
-
-                              {suggestionAnniversaryPrompts.map((p) => (
-                                <SmartSuggestionCard
-                                  key={`${p.personId}_${p.type}`}
-                                  variant="discover"
-                                  message={p.message}
-                                  yesLabel="Add anniversary"
-                                  noLabel="Not now"
-                                  onYes={() => handleAnniversaryPromptYes(p)}
-                                  onNo={() => handleAnniversaryPromptNo(p)}
-                                  onMaybe={undefined}
-                                />
-                              ))}
-
-                              {partnerLinkPrompt ? (
-                                <SmartSuggestionCard
-                                  key={`${partnerLinkPrompt.personId}_${partnerLinkPrompt.partnerId}_PARTNER_LINK`}
-                                  variant="nudge"
-                                  message={`Would you like to connect ${partnerLinkPrompt.personName} with ${partnerLinkPrompt.partnerName} so dates stay together?`}
-                                  yesLabel="Link them"
-                                  maybeLabel="Not now"
-                                  noLabel="Never show again"
-                                  onYes={() => {
-                                    const personId = partnerLinkPrompt.personId;
-                                    const partnerId = partnerLinkPrompt.partnerId;
-                                    const pairKey = `${personId}_${partnerId}`;
-                                    updatePersonFields(partnerId, { partnerId: personId });
-                                    try {
-                                      window.localStorage.setItem(
-                                        `doknotforget_dismissed_PARTNER_LINK_never_${pairKey}`,
-                                        "1"
-                                      );
-                                    } catch {
-                                      // ignore
-                                    }
-                                    setPartnerLinkPrompt(null);
-                                  }}
-                                  onMaybe={() => {
-                                    const year = new Date().getFullYear();
-                                    const personId = partnerLinkPrompt.personId;
-                                    const partnerId = partnerLinkPrompt.partnerId;
-                                    const pairKey = `${personId}_${partnerId}`;
-                                    try {
-                                      window.localStorage.setItem(
-                                        `doknotforget_dismissed_PARTNER_LINK_${year}_${pairKey}`,
-                                        "1"
-                                      );
-                                    } catch {
-                                      // ignore
-                                    }
-                                    setPartnerLinkPrompt(null);
-                                  }}
-                                  onNo={() => {
-                                    const personId = partnerLinkPrompt.personId;
-                                    const partnerId = partnerLinkPrompt.partnerId;
-                                    const pairKey = `${personId}_${partnerId}`;
-                                    try {
-                                      window.localStorage.setItem(
-                                        `doknotforget_dismissed_PARTNER_LINK_never_${pairKey}`,
-                                        "1"
-                                      );
-                                    } catch {
-                                      // ignore
-                                    }
-                                    setPartnerLinkPrompt(null);
-                                  }}
-                                />
-                              ) : null}
-
-                              {suggestionKidsBirthdayPrompts.map((p) => (
-                                <SmartSuggestionCard
-                                  key={`${p.parentId}_${p.childId}_${p.type}`}
-                                  variant="discover"
-                                  message={p.message}
-                                  yesLabel="Add birthday"
-                                  noLabel="Not now"
-                                  onYes={() => handleKidsBirthdayPromptYes(p)}
-                                  onNo={() => handleKidsBirthdayPromptNo(p)}
-                                  onMaybe={undefined}
-                                />
-                              ))}
-
-                              {suggestionBirthdayPrompts.map((p) => (
-                                <SmartSuggestionCard
-                                  key={`${p.personId}_${p.type}`}
-                                  variant="discover"
-                                  message={p.message}
-                                  yesLabel="Add birthday"
-                                  noLabel="Not now"
-                                  onYes={() => handleBirthdayPromptYes(p)}
-                                  onNo={() => handleBirthdayPromptNo(p)}
-                                  onMaybe={undefined}
-                                />
-                              ))}
-                            </>
-                          )}
-                          {renderCareList([...careQuestions, ...careLater])}
-                        </>
+                                {gentleForecast.month.length ? (
+                                  <>
+                                    <div
+                                      style={{
+                                        fontWeight: 600,
+                                        marginTop: gentleForecast.tomorrow.length || gentleForecast.week.length ? "6px" : 0,
+                                      }}
+                                    >
+                                      Later this month
+                                    </div>
+                                    {gentleForecast.month.map((i) => (
+                                      <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
+                                        <RaisedGoldBullet />
+                                        <div style={{ minWidth: 0 }}>
+                                          {i.firstName} · {i.label} in {i.daysUntil} days
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </>
+                                ) : null}
+                              </>
+                            ) : (
+                              <div>Nothing big this week — enjoy the quiet ✨</div>
+                            )}
+                          </div>
+                        </div>
                       ) : null}
                     </>
                   );

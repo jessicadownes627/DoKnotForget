@@ -286,22 +286,24 @@ select {
 .dkf-golden-sun-divider-rays {
   position: absolute;
   left: 50%;
-  top: 2px;
+  top: 1px;
   transform: translateX(-50%);
   width: 46px;
   height: 14px;
   pointer-events: none;
-  opacity: 0.55;
+  opacity: 0.8;
 }
 
 .dkf-golden-sun-divider-ray {
   position: absolute;
   left: 50%;
-  top: 4px;
+  top: 3px;
   width: 1px;
-  height: 6px;
-  background: rgba(180, 138, 60, 0.45);
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(180, 138, 60, 0.55);
   transform-origin: bottom center;
+  box-shadow: 0 0 2px rgba(247, 213, 138, 0.18);
 }
 
 @keyframes dkfEnter {

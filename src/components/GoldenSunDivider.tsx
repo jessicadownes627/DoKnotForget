@@ -4,7 +4,7 @@ export default function GoldenSunDivider() {
       <div className="dkf-golden-sun-divider-line" />
 
       <div className="dkf-golden-sun-divider-rays">
-        {[-18, -9, 0, 9, 18].map((deg) => (
+        {[-24, -16, -8, 0, 8, 16, 24].map((deg) => (
           <span
             key={deg}
             className="dkf-golden-sun-divider-ray"

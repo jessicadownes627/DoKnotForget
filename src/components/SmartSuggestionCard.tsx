@@ -9,7 +9,8 @@ type Props = {
   maybeLabel?: string;
   actions?: Array<{
     label: string;
-    onClick: () => void;
+    href?: string;
+    onClick?: () => void;
   }>;
 };
 
@@ -24,6 +25,24 @@ export default function SmartSuggestionCard({
   maybeLabel,
   actions,
 }: Props) {
+  // eslint-disable-next-line no-console
+  console.log("SMART CARD PROPS:", {
+    variant,
+    message,
+    onYes,
+    onNo,
+    onMaybe,
+    yesLabel,
+    noLabel,
+    maybeLabel,
+    actions,
+  });
+
+  if (false) {
+    // eslint-disable-next-line no-console
+    console.log("SMART CARD EXITING EARLY");
+    return null;
+  }
   const noop = () => {};
   const resolvedYesLabel = yesLabel ?? (variant === "discover" ? "Yes" : "Text");
   const resolvedNoLabel = noLabel ?? (variant === "discover" ? "No" : "Skip");
@@ -55,18 +74,46 @@ export default function SmartSuggestionCard({
 
       <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
         {resolvedActions.map((a) => (
-          <button
-            key={a.label}
-            type="button"
-            onClick={a.onClick}
-            style={{
-              borderRadius: "12px",
-              padding: "0.75rem 1rem",
-              fontSize: "1rem",
-            }}
-          >
-            {a.label}
-          </button>
+          a.href ? (
+            <a
+              key={a.label}
+              href={a.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={a.onClick}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "var(--radius-button)",
+                border: "1px solid var(--border-strong)",
+                padding: "0.85rem 1.15rem",
+                fontSize: "1rem",
+                fontWeight: 500,
+                fontFamily: "inherit",
+                backgroundColor: "transparent",
+                color: "var(--ink)",
+                cursor: "pointer",
+                boxShadow: "none",
+                textDecoration: "none",
+              }}
+            >
+              {a.label}
+            </a>
+          ) : (
+            <button
+              key={a.label}
+              type="button"
+              onClick={a.onClick ?? noop}
+              style={{
+                borderRadius: "12px",
+                padding: "0.75rem 1rem",
+                fontSize: "1rem",
+              }}
+            >
+              {a.label}
+            </button>
+          )
         ))}
       </div>
     </div>

@@ -18,6 +18,7 @@ type AppState = {
   savePerson: (payload: SavePersonPayload) => void;
   updatePerson: (person: Person) => void;
   updatePersonFields: (id: string, patch: Partial<Person>) => void;
+  deletePerson: (id: string) => void;
 };
 
 const PEOPLE_STORAGE_KEY = "doknotforget_people";
@@ -171,6 +172,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       },
       updatePersonFields: (id: string, patch: Partial<Person>) => {
         setPeople((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+      },
+      deletePerson: (id: string) => {
+        setPeople((prev) =>
+          prev
+            .filter((p) => p.id !== id)
+            .map((p) => (p.partnerId === id ? { ...p, partnerId: null } : p))
+        );
+        setRelationships((prev) => prev.filter((r) => r.fromId !== id && r.toId !== id));
       },
     };
   }, [hasHydrated, onboardingComplete, people, relationships]);
