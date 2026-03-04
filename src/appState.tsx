@@ -150,7 +150,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           const byId = new Map<string, Person>();
           for (const p of prev) byId.set(p.id, p);
           byId.set(person.id, person);
-          return Array.from(byId.values());
+          const next = Array.from(byId.values());
+          if (prev.length === 0 && next.length > 0) {
+            try {
+              window.localStorage.setItem("doknotforget_just_added_first_contact", String(Date.now()));
+            } catch {
+              // ignore
+            }
+          }
+          return next;
         });
       },
       savePerson: (payload: SavePersonPayload) => {
@@ -161,7 +169,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           for (const p of payload.createdPeople) {
             if (!byId.has(p.id)) byId.set(p.id, p);
           }
-          return Array.from(byId.values());
+          const next = Array.from(byId.values());
+          if (prev.length === 0 && next.length > 0) {
+            try {
+              window.localStorage.setItem("doknotforget_just_added_first_contact", String(Date.now()));
+            } catch {
+              // ignore
+            }
+          }
+          return next;
         });
         setRelationships((prev) => [...prev, ...payload.createdRelationships]);
       },

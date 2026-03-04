@@ -51,6 +51,7 @@ export default function Home({
   const [questionTick, setQuestionTick] = useState(0);
   const [shouldPulseBow, setShouldPulseBow] = useState(false);
   const [arrivalTick, setArrivalTick] = useState(0);
+  const [showNiceStart, setShowNiceStart] = useState(false);
   const previousPeopleCountRef = useRef<number>(people.length);
 
   const today = useMemo(() => startOfToday(), []);
@@ -475,7 +476,9 @@ export default function Home({
     }
 
     if (prompt.type === "TOMORROW_BIRTHDAY" || prompt.type === "TODAY_BIRTHDAY") {
-      if (person.phone) openSmsComposer(person.phone, `Happy birthday, ${person.name}!`);
+      const first = (person.name ?? "").trim().split(" ")[0] || person.name;
+      const message = `Happy birthday ${first}! Hope you have a great day 🎉`;
+      if (person.phone) openSmsComposer(person.phone, message);
       dismissPrompt(prompt);
     }
   }
@@ -832,6 +835,18 @@ export default function Home({
   }, [people.length]);
 
   useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("doknotforget_just_added_first_contact");
+      if (!raw) return;
+      window.localStorage.removeItem("doknotforget_just_added_first_contact");
+      setShowNiceStart(true);
+      window.setTimeout(() => setShowNiceStart(false), 4200);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
     if (location.state?.defaultTab || location.state?.showPartnerLinkCheck) {
       window.history.replaceState({}, document.title);
     }
@@ -980,7 +995,25 @@ export default function Home({
               <div style={{ marginTop: "0.6rem", color: "var(--muted)", lineHeight: 1.6 }}>
                 When you add people, important dates will appear here.
               </div>
-              <div style={{ marginTop: "1.5rem" }}>
+              <div style={{ marginTop: "1.5rem", display: "grid", gap: "12px" }}>
+                <button
+                  onClick={() => navigate("/import")}
+                  style={{
+                    border: "1px solid var(--border-strong)",
+                    background: "transparent",
+                    color: "var(--ink)",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    fontWeight: 500,
+                    letterSpacing: "0.01em",
+                    borderRadius: "12px",
+                    padding: "0.75rem 1.15rem",
+                    fontSize: "1rem",
+                    fontFamily: "var(--font-sans)",
+                  }}
+                >
+                  Import from Contacts
+                </button>
                 <button
                   onClick={() => navigate("/add")}
                   style={{
@@ -997,7 +1030,7 @@ export default function Home({
                     fontFamily: "var(--font-sans)",
                   }}
                 >
-                  + Add someone important
+                  Add Manually
                 </button>
               </div>
             </div>
@@ -1037,6 +1070,21 @@ export default function Home({
           ) : (
             <>
               <section aria-label="Home" style={{ marginTop: "18px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
+                {showNiceStart && people.length === 1 ? (
+                  <div
+                    style={{
+                      border: "1px solid var(--border)",
+                      borderRadius: "14px",
+                      background: "rgba(255,255,255,0.65)",
+                      padding: "14px 16px",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                      marginBottom: "14px",
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, color: "var(--ink)" }}>Nice start ⭐</div>
+                    <div style={{ marginTop: "4px", color: "var(--muted)" }}>We’ll remind you when it matters.</div>
+                  </div>
+                ) : null}
                 {(() => {
                   const headerStyle: React.CSSProperties = {
                     fontSize: "18px",
@@ -1142,13 +1190,20 @@ export default function Home({
                                 const actions = [
                                   {
                                     label: `Text ${first}`,
+                                    disabled: !person?.phone,
+                                    title: !person?.phone ? "Add a phone number to text them." : undefined,
                                     onClick: () => {
                                       if (prompt) {
                                         if ((prompt as any).parentId && (prompt as any).childId) handleKidsBirthdayPromptYes(prompt as any);
                                         else if ((prompt as any).partnerId) handleAnniversaryPromptYes(prompt as any);
                                         else handleBirthdayPromptYes(prompt as any);
                                       } else if (person?.phone) {
-                                        openSmsComposer(person.phone, `Thinking of you, ${person.name}.`);
+                                        const firstName = (person.name ?? "").trim().split(" ")[0] || person.name;
+                                        const msg =
+                                          moment.type === "birthday"
+                                            ? `Happy birthday ${firstName}! Hope you have a great day 🎉`
+                                            : `Thinking of you, ${firstName}.`;
+                                        openSmsComposer(person.phone, msg);
                                       }
                                     },
                                   },

@@ -9,10 +9,15 @@ export type SoonReminderCardProps = {
 export function buildSmsUrl(phone?: string, body?: string): string {
   const cleanedPhone = (phone ?? "").trim();
   const encodedBody = encodeURIComponent(body ?? "");
-  return `sms:${cleanedPhone}?body=${encodedBody}`;
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const isIOS = /iPad|iPhone|iPod/i.test(ua);
+  const sep = isIOS ? "&" : "?";
+  return `sms:${cleanedPhone}${sep}body=${encodedBody}`;
 }
 
 export function openSmsComposer(phone?: string, message?: string): void {
+  const cleanedPhone = (phone ?? "").trim();
+  if (!cleanedPhone) return;
   const smsUrl = buildSmsUrl(phone, message);
   window.location.href = smsUrl;
 }
@@ -36,6 +41,8 @@ export default function SoonReminderCard({
       <h3 className="soon-name">{title}</h3>
       <button
         className="soon-button"
+        disabled={!phone}
+        title={!phone ? "Add a phone number to text them." : undefined}
         onClick={() => openSmsComposer(phone, prefilledMessage)}
       >
         Text {contactLabel}

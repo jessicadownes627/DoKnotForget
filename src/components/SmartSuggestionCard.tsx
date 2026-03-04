@@ -11,6 +11,8 @@ type Props = {
     label: string;
     href?: string;
     onClick?: () => void;
+    disabled?: boolean;
+    title?: string;
   }>;
 };
 
@@ -81,6 +83,8 @@ export default function SmartSuggestionCard({
               target="_blank"
               rel="noopener noreferrer"
               onClick={a.onClick}
+              aria-disabled={a.disabled ? "true" : undefined}
+              title={a.title}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -96,6 +100,8 @@ export default function SmartSuggestionCard({
                 cursor: "pointer",
                 boxShadow: "none",
                 textDecoration: "none",
+                opacity: a.disabled ? 0.5 : 1,
+                pointerEvents: a.disabled ? "none" : undefined,
               }}
             >
               {a.label}
@@ -105,6 +111,8 @@ export default function SmartSuggestionCard({
               key={a.label}
               type="button"
               onClick={a.onClick ?? noop}
+              disabled={a.disabled}
+              title={a.title}
               style={{
                 borderRadius: "12px",
                 padding: "0.75rem 1rem",
