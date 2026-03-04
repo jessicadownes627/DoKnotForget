@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Child, ChildSchoolEventType, Moment, Person } from "../models/Person";
 import MomentDatePicker from "./MomentDatePicker";
+import { normalizePhone } from "../utils/phone";
 
 type Props = {
   isOpen: boolean;
@@ -135,6 +136,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
 
   const [name, setName] = useState(person.name ?? "");
   const [phone, setPhone] = useState(person.phone ?? "");
+  const [phoneError, setPhoneError] = useState(false);
   const [hasKids, setHasKids] = useState(Boolean(person.hasKids || (person.children?.length ?? 0) > 0));
   function normalizeReligionCulture(value: unknown): NonNullable<Person["religionCulture"]> {
     if (Array.isArray(value)) return value as NonNullable<Person["religionCulture"]>;
@@ -184,6 +186,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
     if (!isOpen) return;
     setName(person.name ?? "");
     setPhone(person.phone ?? "");
+    setPhoneError(false);
     setHasKids(Boolean(person.hasKids || (person.children?.length ?? 0) > 0));
     setReligionCulture(normalizeReligionCulture((person as any).religionCulture));
     setMothersDayPref(
@@ -229,6 +232,12 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
   function save() {
     if (!name.trim()) return;
 
+    const normalizedPhone = phone.trim() ? normalizePhone(phone) : null;
+    if (phone.trim() && !normalizedPhone) {
+      setPhoneError(true);
+      return;
+    }
+
     const nextMoments: Moment[] = [];
 
     // Keep/replace birthday + anniversary in a stable way.
@@ -247,7 +256,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
     const updated: Person = {
       ...person,
       name: name.trim(),
-      phone: phone.trim() ? phone.trim() : undefined,
+      phone: normalizedPhone || undefined,
       hasKids: hasKids ? true : false,
       religionCulture: religionCulture.length ? religionCulture : undefined,
       holidayPrefs: hasKids
@@ -350,7 +359,12 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
               <input
                 type="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setPhone(next);
+                  if (!next.trim()) setPhoneError(false);
+                  else if (normalizePhone(next)) setPhoneError(false);
+                }}
                 placeholder="Phone"
                 style={{
                   width: "100%",
@@ -362,6 +376,11 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                   fontSize: "1rem",
                 }}
               />
+              {phoneError ? (
+                <div style={{ marginTop: "6px", color: "#b42318", fontSize: "0.85rem" }}>
+                  Enter a valid phone number.
+                </div>
+              ) : null}
             </div>
 
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px" }}>

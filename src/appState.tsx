@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
 import type { Person } from "./models/Person";
 import type { Relationship } from "./models/Relationship";
+import { normalizePhone } from "./utils/phone";
 
 type SavePersonPayload = {
   person: Person;
@@ -51,6 +52,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       }
     } catch {
       // ignore
+    }
+    if (hydratedPeople.length) {
+      hydratedPeople = hydratedPeople.map((p) => {
+        const rawPhone = (p.phone ?? "").trim();
+        if (!rawPhone) return p;
+        const normalized = normalizePhone(rawPhone);
+        return normalized ? { ...p, phone: normalized } : p;
+      });
     }
 
     try {

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "../router";
 import { useAppState } from "../appState";
 import type { Person } from "../models/Person";
+import { normalizePhone as normalizePhoneE164 } from "../utils/phone";
 
 type PickedContact = {
   name: string;
@@ -108,10 +109,11 @@ export default function ImportContacts() {
     const key = contactKey(c);
     if (addedKeys.has(key)) return;
 
+    const normalizedPhone = normalizePhoneE164(c.phone) ?? null;
     const person: Person = {
       id: makeId(),
       name: c.name,
-      phone: c.phone || undefined,
+      phone: normalizedPhone || undefined,
       moments: [],
     };
     createPerson(person);

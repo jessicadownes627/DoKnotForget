@@ -4,6 +4,7 @@ import type { Relationship, RelationshipType } from "../models/Relationship";
 import MomentDatePicker from "../components/MomentDatePicker";
 import { useAppState } from "../appState";
 import { useLocation, useNavigate } from "../router";
+import { normalizePhone } from "../utils/phone";
 
 export default function AddPerson() {
   const navigate = useNavigate();
@@ -27,6 +28,7 @@ export default function AddPerson() {
   const [anniversaryDraftMonthDay, setAnniversaryDraftMonthDay] = useState("");
   const [anniversaryDraftYear, setAnniversaryDraftYear] = useState("");
   const [phone, setPhone] = useState(editingPerson?.phone || "");
+  const [phoneError, setPhoneError] = useState(false);
   const [hasKids, setHasKids] = useState(false);
   const [parentRole, setParentRole] = useState<Person["parentRole"]>("parent");
   const [religionCulture, setReligionCulture] = useState<NonNullable<Person["religionCulture"]>>([]);
@@ -179,6 +181,13 @@ export default function AddPerson() {
   function handleSave() {
     if (!name.trim()) return;
 
+    const normalizedPhone = phone.trim() ? normalizePhone(phone) : null;
+    if (phone.trim() && !normalizedPhone) {
+      setPhoneError(true);
+      setOpenRow("phone");
+      return;
+    }
+
     const birthdayIso = buildBirthdayIso(birthdayMonthDay, birthdayYear);
     const moments: Moment[] = [];
     if (birthdayIso) {
@@ -213,7 +222,7 @@ export default function AddPerson() {
     const person: Person = {
       id: makeId(),
       name: name.trim(),
-      phone: phone || undefined,
+      phone: normalizedPhone || undefined,
       moments,
       partnerId: partnerId || undefined,
       anniversary: anniversary || undefined,
@@ -428,7 +437,12 @@ export default function AddPerson() {
             <input
               type="tel"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                setPhone(next);
+                if (!next.trim()) setPhoneError(false);
+                else if (normalizePhone(next)) setPhoneError(false);
+              }}
               autoFocus
               style={{
                 padding: "0.75rem 0",
@@ -438,6 +452,11 @@ export default function AddPerson() {
               }}
               onBlur={() => setOpenRow(null)}
             />
+            {phoneError ? (
+              <div style={{ marginTop: "0.35rem", color: "#b42318", fontSize: "0.85rem" }}>
+                Enter a valid phone number.
+              </div>
+            ) : null}
             <div style={{ marginTop: "0.35rem", color: "var(--muted)", fontSize: "0.85rem" }}>
               Used for reminder texts
             </div>
