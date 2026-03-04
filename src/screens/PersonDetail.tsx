@@ -11,14 +11,14 @@ import { RaisedGoldBullet, SoftGoldDot } from "../components/common/GoldBullets"
 import SmartSuggestionCard from "../components/SmartSuggestionCard";
 import { openSmsComposer } from "../components/SoonReminderCard";
 import { generateCareSuggestions, type CareSuggestion } from "../utils/careSuggestions";
+import { parseLocalDate } from "../utils/date";
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
 function parseIsoDate(value: string) {
-  const parsed = new Date(`${value}T00:00:00`);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  return parseLocalDate(value);
 }
 
 function timePhrase(daysUntil: number) {
@@ -519,10 +519,11 @@ export default function PersonDetail({}: {}) {
                       {person.name.trim()}
                     </div>
 
-                    <div style={{ marginTop: "10px", display: "grid", gap: "5px", color: "var(--muted)", lineHeight: 1.5, fontSize: "16px" }}>
-                      {partner ? <div>Partner — {partner.name}</div> : null}
-                      {kidsNamesOnly ? <div>Kids: {kidsNamesOnly}</div> : null}
-                      {kidsBirthdayLines.length ? (
+	                    <div style={{ marginTop: "10px", display: "grid", gap: "5px", color: "var(--muted)", lineHeight: 1.5, fontSize: "16px" }}>
+	                      {partner ? <div>Partner — {partner.name}</div> : null}
+	                      {person.phone ? <div>Phone — {person.phone}</div> : null}
+	                      {kidsNamesOnly ? <div>Kids: {kidsNamesOnly}</div> : null}
+	                      {kidsBirthdayLines.length ? (
                         <div style={{ display: "grid", gap: "6px" }}>
                           {kidsBirthdayLines.map((line) => (
                             <div key={line.key} style={{ display: "flex", alignItems: "center" }}>

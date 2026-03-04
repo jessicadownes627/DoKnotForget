@@ -5,6 +5,7 @@ import MomentDatePicker from "../components/MomentDatePicker";
 import { useAppState } from "../appState";
 import { useLocation, useNavigate } from "../router";
 import { normalizePhone } from "../utils/phone";
+import { parseLocalDate } from "../utils/date";
 
 export default function AddPerson() {
   const navigate = useNavigate();
@@ -80,8 +81,8 @@ export default function AddPerson() {
 
   function formatDate(value: string) {
     if (!value) return "";
-    const parsed = new Date(`${value}T00:00:00`);
-    if (Number.isNaN(parsed.getTime())) return value;
+    const parsed = parseLocalDate(value);
+    if (!parsed) return value;
     return dateFormatter.format(parsed);
   }
 

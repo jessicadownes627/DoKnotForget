@@ -24,6 +24,7 @@ import GoldenSunDivider from "../components/GoldenSunDivider";
 import ContactsSearchResults from "../components/ContactsSearchResults";
 import { filterContacts } from "../utils/contactSearch";
 import SmartMessageSuggestionsModal from "../components/SmartMessageSuggestionsModal";
+import { parseLocalDate } from "../utils/date";
 
 const headerDateFormatter = new Intl.DateTimeFormat("en-US", {
   weekday: "long",
@@ -41,7 +42,7 @@ export default function Home({
 }: {}) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { people, updatePerson, updatePersonFields } = useAppState();
+  const { people, updatePerson, updatePersonFields, createPerson } = useAppState();
   const initialTab = location.state?.defaultTab === "contacts" ? "contacts" : "home";
   const [activeTab, setActiveTab] = useState<"home" | "contacts">(initialTab);
   const [searchTerm, setSearchTerm] = useState("");
@@ -63,7 +64,7 @@ export default function Home({
   const [smsSuggestions, setSmsSuggestions] = useState<null | {
     personName: string;
     phone: string;
-    suggestions: Array<{ id: "quick" | "funny" | "thoughtful" | "custom"; label: string; message: string }>;
+    suggestions: Array<{ id: "quick" | "friendly" | "thoughtful" | "simple" | "custom"; label: string; message: string }>;
     onAfterSend?: () => void;
   }>(null);
   const previousPeopleCountRef = useRef<number>(people.length);
@@ -83,6 +84,36 @@ export default function Home({
       if (prev[actionKey]) return prev;
       return { ...prev, [actionKey]: true };
     });
+  }
+
+  function seedDevData() {
+    if (!import.meta.env.DEV) return;
+
+    const base = startOfToday();
+    const pad2 = (n: number) => String(n).padStart(2, "0");
+    const monthDayIso = (d: Date) => `0000-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+    const mkPerson = (id: string, name: string, phone: string, offsetDays: number): Person => {
+      const target = new Date(base.getFullYear(), base.getMonth(), base.getDate() + offsetDays);
+      return {
+        id,
+        name,
+        phone,
+        moments: [
+          {
+            id: `${id}-birthday`,
+            type: "birthday",
+            label: "Birthday",
+            date: monthDayIso(target),
+            recurring: true,
+          },
+        ],
+      };
+    };
+
+    createPerson(mkPerson("seed-emma", "Emma", "+14155550101", 0));
+    createPerson(mkPerson("seed-chris", "Chris", "+14155550102", 1));
+    createPerson(mkPerson("seed-dad", "Dad", "+14155550103", 5));
   }
 
   const [birthdayPickerPersonId, setBirthdayPickerPersonId] = useState<string | null>(null);
@@ -166,7 +197,7 @@ export default function Home({
   function openSmartMessageSuggestions(args: {
     personName: string;
     phone: string;
-    suggestions: Array<{ id: "quick" | "funny" | "thoughtful" | "custom"; label: string; message: string }>;
+    suggestions: Array<{ id: "quick" | "friendly" | "thoughtful" | "simple" | "custom"; label: string; message: string }>;
     onAfterSend?: () => void;
   }) {
     setSmsSuggestions(args);
@@ -268,8 +299,7 @@ export default function Home({
   }
 
   function isoToDate(iso: string) {
-    const parsed = new Date(`${iso}T00:00:00`);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
+    return parseLocalDate(iso);
   }
 
   const gentleForecast = useMemo(() => {
@@ -1008,6 +1038,26 @@ export default function Home({
                 >
                   Add Manually
                 </button>
+                {import.meta.env.DEV ? (
+                  <button
+                    onClick={seedDevData}
+                    style={{
+                      border: "1px solid var(--border-strong)",
+                      background: "transparent",
+                      color: "var(--muted)",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontWeight: 500,
+                      letterSpacing: "0.01em",
+                      borderRadius: "12px",
+                      padding: "0.75rem 1.15rem",
+                      fontSize: "1rem",
+                      fontFamily: "var(--font-sans)",
+                    }}
+                  >
+                    Seed demo data
+                  </button>
+                ) : null}
               </div>
             </div>
           ) : activeTab === "contacts" ? (
@@ -1202,9 +1252,9 @@ export default function Home({
 	                                const childId = moment.key.includes(":child:") ? moment.key.split(":child:")[1] ?? "" : "";
 	                                const person = people.find((p) => p.id === personId) ?? null;
 	                                const first = firstOf(person?.name ?? moment.firstName);
-	                                const actionKey = `text|${moment.key}|${moment.occurrenceIso}`;
-	                                const isUnhandled = !handledReminderActions[actionKey];
-	                                const isLateDay = new Date().getHours() >= 15;
+		                                const actionKey = `text|${moment.key}|${moment.occurrenceIso}`;
+		                                const isUnhandled = !handledReminderActions[actionKey];
+		                                const isLateDay = new Date().getHours() >= 21;
 	                                const fallbackMessage =
 	                                  moment.type === "birthday" || moment.type === "kidBirthday"
 	                                    ? `It’s ${moment.firstName}’s birthday today.\nA kind message could make today feel special.`
@@ -1226,11 +1276,12 @@ export default function Home({
                                   | KidsBirthdayPromptItem
                                   | null;
 
-	                                const baseMessage = prompt?.message ?? fallbackMessage;
-	                                const message =
-	                                  isLateDay && isUnhandled
-	                                    ? `${baseMessage}\nStill a great time to reach out.`
-	                                    : baseMessage;
+		                                const baseMessage = prompt?.message ?? fallbackMessage;
+		                                const messageCore = `${baseMessage}\nYou remembered. That already counts.`;
+		                                const message =
+		                                  isLateDay && isUnhandled
+		                                    ? `${messageCore}\nStill a great time to reach out.`
+		                                    : messageCore;
 
 	                                const actions = [
 	                                  {
@@ -1256,74 +1307,85 @@ export default function Home({
 
                                       const birthdayName = kidName || toName;
 
-                                      const customTitle = moment.type === "custom" ? (moment.label ?? "").trim().toLowerCase() : "";
-                                      const sensitiveKeywords = ["thinking", "loss", "anniversary", "remembering", "tough", "support", "miss"] as const;
-                                      const isSensitiveCustom =
-                                        moment.type === "custom" && sensitiveKeywords.some((k) => customTitle.includes(k));
+	                                      const customTitle = moment.type === "custom" ? (moment.label ?? "").trim().toLowerCase() : "";
+	                                      const sensitiveKeywords = ["thinking", "loss", "anniversary", "remembering", "tough", "support", "miss"] as const;
+	                                      const isSensitiveCustom =
+	                                        moment.type === "custom" && sensitiveKeywords.some((k) => customTitle.includes(k));
 
-                                      const quick = isSensitiveCustom
-                                        ? "Thinking of you today ❤️"
-                                        : isKidBirthday
-                                          ? `Happy birthday to ${birthdayName}! Hope ${birthdayName} has the best day 🎉`
-                                          : isBirthday
-                                            ? `Happy birthday ${birthdayName}! Hope you have an amazing day 🎉`
-                                            : isAnniversary
-                                              ? `Happy anniversary ${toName}! Hope today feels special 💛`
-                                              : "Thinking of you today and hoping everything goes well.";
+	                                      const quick = isSensitiveCustom
+	                                        ? "Thinking of you today."
+	                                        : isKidBirthday
+	                                          ? `Happy birthday to ${birthdayName}! Hope it's a great day.`
+	                                          : isBirthday
+	                                            ? `Happy birthday ${birthdayName}! Hope it's a great day.`
+	                                            : isAnniversary
+	                                              ? `Happy anniversary, ${toName}! Hope it's a great day.`
+	                                              : "Thinking of you today. Hope things go well.";
 
-                                      const thoughtful = isSensitiveCustom
-                                        ? "Just wanted you to know you're on my mind today."
-                                        : isKidBirthday
-                                          ? `Happy birthday to ${birthdayName}! I hope ${birthdayName} has such a fun day celebrating.`
-                                          : isBirthday
-                                            ? `Happy birthday ${birthdayName}. Wishing you a wonderful year ahead.`
-                                            : isAnniversary
-                                              ? `Happy anniversary, ${toName}. Thinking of you and wishing you a beautiful day.`
-                                              : "Good luck today! You've got this.";
+	                                      const friendly = isSensitiveCustom
+	                                        ? "Just wanted to let you know I'm thinking of you today."
+	                                        : isKidBirthday
+	                                          ? `Hope ${birthdayName} is having a great birthday today!`
+	                                          : isBirthday
+	                                            ? "Hope you’re having a great birthday today!"
+	                                            : isAnniversary
+	                                              ? "Hope you’re having a great anniversary today!"
+	                                              : "Hope today goes well — thinking of you.";
 
-                                      const funny = isSensitiveCustom
-                                        ? "Sending a little extra love your way today."
-                                        : isKidBirthday
-                                          ? `Can't believe ${birthdayName} is another year older! Hope ${birthdayName} has an amazing birthday.`
-                                          : isBirthday
-                                            ? `Happy birthday ${birthdayName}! I was going to send cake but apparently texting is faster.`
-                                            : isAnniversary
-                                              ? `Happy anniversary ${toName}! I remembered without Facebook — please be impressed.`
-                                              : "Just wanted to say I'm thinking of you today.";
+	                                      const thoughtful = isSensitiveCustom
+	                                        ? "Just wanted you to know you're on my mind today."
+	                                        : isKidBirthday
+	                                          ? `Thinking of ${birthdayName} today and hoping it’s a really special birthday.`
+	                                          : isBirthday
+	                                            ? "Thinking of you today and hoping it’s a really special birthday."
+	                                            : isAnniversary
+	                                              ? "Thinking of you today and hoping your anniversary feels special."
+	                                              : "Just wanted to check in — thinking of you today and hoping everything goes smoothly.";
 
-                                      openSmartMessageSuggestions({
-                                        personName: toName,
-                                        phone: person.phone,
-                                        suggestions: [
-                                          { id: "quick", label: "Quick message", message: quick },
-                                          { id: "funny", label: "Funny message", message: funny },
-                                          { id: "thoughtful", label: "Thoughtful message", message: thoughtful },
-                                          { id: "custom", label: "Write my own message", message: "" },
-                                        ],
-                                        onAfterSend: prompt ? () => dismissPrompt(prompt as any) : undefined,
-                                      });
+	                                      const simple = isSensitiveCustom
+	                                        ? "I'm thinking of you."
+	                                        : isKidBirthday
+	                                          ? `Happy birthday to ${birthdayName}. Hope it's a good one.`
+	                                          : isBirthday
+	                                            ? "Happy birthday. Hope it's a good one."
+	                                            : isAnniversary
+	                                              ? "Happy anniversary. Hope it's a good one."
+	                                              : "Thinking of you today.";
+
+	                                      openSmartMessageSuggestions({
+	                                        personName: toName,
+	                                        phone: person.phone,
+	                                        suggestions: [
+	                                          { id: "quick", label: "Quick", message: quick },
+	                                          { id: "friendly", label: "Friendly", message: friendly },
+	                                          { id: "thoughtful", label: "Thoughtful", message: thoughtful },
+	                                          { id: "simple", label: "Simple", message: simple },
+	                                          { id: "custom", label: "Write my own", message: "" },
+	                                        ],
+	                                        onAfterSend: prompt ? () => dismissPrompt(prompt as any) : undefined,
+	                                      });
                                     },
                                   },
-                                  {
-                                    label: `Send ${first} a card`,
-                                    href: "https://www.americangreetings.com/ecards",
-                                    onClick: () => {
-                                      if (prompt) dismissPrompt(prompt as any);
-                                    },
-                                  },
-                                  {
-                                    label: `Buy ${first} a gift`,
-                                    href: "https://www.starbucks.com/gift",
-                                    onClick: () => {
-                                      if (prompt) dismissPrompt(prompt as any);
-                                    },
-                                  },
-                                  {
-                                    label: "Mute reminder",
-                                    onClick: () => {
-                                      if (prompt) dismissPrompt(prompt as any);
-                                    },
-                                  },
+	                                  {
+	                                    label: `Send ${first} an eCard`,
+	                                    href: "https://www.americangreetings.com/ecards",
+	                                    onClick: () => {
+	                                      if (prompt) dismissPrompt(prompt as any);
+	                                    },
+	                                  },
+	                                  {
+	                                    label: `Send ${first} coffee`,
+	                                    href: "https://www.starbucks.com/gift",
+	                                    onClick: () => {
+	                                      if (prompt) dismissPrompt(prompt as any);
+	                                    },
+	                                  },
+	                                  {
+	                                    label: "Dismiss",
+	                                    onClick: () => {
+	                                      if (prompt) dismissPrompt(prompt as any);
+	                                    },
+	                                  },
                                 ];
 
                                 return (

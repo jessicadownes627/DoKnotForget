@@ -1,6 +1,7 @@
 import type { Moment, Person } from "../models/Person";
 import type { Child } from "../models/Person";
 import { getUpcomingHolidays } from "./holidays";
+import { parseLocalDate } from "./date";
 
 export type CareSuggestionType =
   | "birthday"
@@ -75,8 +76,7 @@ function startOfToday(base = new Date()) {
 }
 
 function parseIsoDate(value: string) {
-  const parsed = new Date(`${value}T00:00:00`);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  return parseLocalDate(value);
 }
 
 function parseYmd(value: string) {

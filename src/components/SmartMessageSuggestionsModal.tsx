@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 
 type Suggestion = {
-  id: "quick" | "funny" | "thoughtful" | "custom";
+  id: "quick" | "friendly" | "thoughtful" | "simple" | "custom";
   label: string;
   message: string;
 };
@@ -115,4 +115,3 @@ export default function SmartMessageSuggestionsModal({
     </div>
   );
 }
-
