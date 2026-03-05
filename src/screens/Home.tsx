@@ -1055,51 +1055,51 @@ export default function Home({
         ) : null}
 
         <main style={{ marginTop: "24px" }}>
-          {isSearching ? null : people.length === 0 ? (
-            <div style={{ marginTop: "3.25rem", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
-              <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)", letterSpacing: "-0.01em" }}>
-                Start by adding someone important.
-              </div>
-              <div style={{ marginTop: "0.6rem", color: "var(--muted)", lineHeight: 1.6 }}>
-                When you add people, important dates will appear here.
-              </div>
-              <div style={{ marginTop: "1.5rem", display: "grid", gap: "12px" }}>
-                <button
-                  onClick={() => navigate("/import")}
-                  style={{
-                    border: "1px solid var(--border-strong)",
-                    background: "transparent",
-                    color: "var(--ink)",
+	          {isSearching ? null : people.length === 0 ? (
+	            <div style={{ marginTop: "3.25rem", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
+	              <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)", letterSpacing: "-0.01em" }}>
+	                Remember the moments that matter.
+	              </div>
+	              <div style={{ marginTop: "0.6rem", color: "var(--muted)", lineHeight: 1.6, whiteSpace: "pre-line" }}>
+	                Start with a few people you care about —{"\n"}DoKnotForget will remind you when it counts.
+	              </div>
+	              <div style={{ marginTop: "1.5rem", display: "grid", gap: "12px" }}>
+	                <button
+	                  onClick={() => navigate("/add")}
+	                  style={{
+	                    border: "1px solid var(--border-strong)",
+	                    background: "transparent",
+	                    color: "var(--ink)",
                     cursor: "pointer",
                     textAlign: "left",
                     fontWeight: 500,
                     letterSpacing: "0.01em",
                     borderRadius: "12px",
                     padding: "0.75rem 1.15rem",
-                    fontSize: "1rem",
-                    fontFamily: "var(--font-sans)",
-                  }}
-                >
-                  Import from Contacts
-                </button>
-                <button
-                  onClick={() => navigate("/add")}
-                  style={{
-                    border: "1px solid var(--border-strong)",
-                    background: "transparent",
-                    color: "var(--ink)",
+	                    fontSize: "1rem",
+	                    fontFamily: "var(--font-sans)",
+	                  }}
+	                >
+	                  Add Person
+	                </button>
+	                <button
+	                  onClick={() => navigate("/import")}
+	                  style={{
+	                    border: "1px solid var(--border-strong)",
+	                    background: "transparent",
+	                    color: "var(--ink)",
                     cursor: "pointer",
                     textAlign: "left",
                     fontWeight: 500,
                     letterSpacing: "0.01em",
                     borderRadius: "12px",
                     padding: "0.75rem 1.15rem",
-                    fontSize: "1rem",
-                    fontFamily: "var(--font-sans)",
-                  }}
-                >
-                  Add Manually
-                </button>
+	                    fontSize: "1rem",
+	                    fontFamily: "var(--font-sans)",
+	                  }}
+	                >
+	                  Import Contacts
+	                </button>
                 {import.meta.env.DEV ? (
                   <button
                     onClick={seedDevData}
