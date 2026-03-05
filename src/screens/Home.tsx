@@ -1255,12 +1255,12 @@ export default function Home({
 		                                const actionKey = `text|${moment.key}|${moment.occurrenceIso}`;
 		                                const isUnhandled = !handledReminderActions[actionKey];
 		                                const isLateDay = new Date().getHours() >= 21;
-	                                const fallbackMessage =
-	                                  moment.type === "birthday" || moment.type === "kidBirthday"
-	                                    ? `It’s ${moment.firstName}’s birthday today.\nA kind message could make today feel special.`
-	                                    : moment.type === "anniversary"
-	                                      ? `It’s ${moment.firstName}’s anniversary today.\nA kind message could make today feel special.`
-	                                      : `Today: ${moment.firstName} · ${moment.label}`;
+		                                const eventLine =
+		                                  moment.type === "birthday" || moment.type === "kidBirthday"
+		                                    ? `It’s ${moment.firstName}’s birthday today.`
+		                                    : moment.type === "anniversary"
+		                                      ? `It’s ${moment.firstName}’s anniversary today.`
+		                                      : `Today: ${moment.firstName} · ${moment.label}`;
 
                                 const birthdayPrompt = moment.type === "birthday" ? todayBirthdayByPersonId.get(personId) ?? null : null;
                                 const anniversaryPrompt =
@@ -1276,7 +1276,7 @@ export default function Home({
                                   | KidsBirthdayPromptItem
                                   | null;
 
-		                                const baseMessage = prompt?.message ?? fallbackMessage;
+		                                const baseMessage = eventLine;
 		                                const messageCore = `${baseMessage}\nYou remembered. That already counts.`;
 		                                const message =
 		                                  isLateDay && isUnhandled
@@ -1374,7 +1374,7 @@ export default function Home({
 	                                    },
 	                                  },
 	                                  {
-	                                    label: `Send ${first} coffee`,
+	                                    label: `Send ${first} a coffee`,
 	                                    href: "https://www.starbucks.com/gift",
 	                                    onClick: () => {
 	                                      if (prompt) dismissPrompt(prompt as any);
@@ -1455,7 +1455,7 @@ export default function Home({
 	                            marginBottom: "18px",
 	                          }}
 	                        >
-	                          <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)" }}>Coming Soon</div>
+	                          <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)" }}>On the Horizon</div>
 	                          <GoldenSunDivider />
                           <div
                             style={{

@@ -334,15 +334,14 @@ export default function PersonDetail({}: {}) {
     const phr = timePhrase(nextUp.daysUntil);
 
     if (nextUp.label === `${person.name}’s birthday`) {
-      const first = (person.name ?? "").trim().split(" ")[0] || person.name;
-      return `${first}’s birthday is ${phr}.`;
+      return `• Birthday ${phr}`;
     }
 
     if (nextUp.label.startsWith("Anniversary with ")) {
-      return `${nextUp.label} is ${phr}.`;
+      return `• ${nextUp.label} ${phr}`;
     }
 
-    return `${nextUp.label} is ${phr}.`;
+    return `• ${nextUp.label} ${phr}`;
   }, [nextUp, person]);
 
   const thingsToRemember = useMemo(() => {
@@ -545,15 +544,15 @@ export default function PersonDetail({}: {}) {
                           <div style={{ minWidth: 0 }}>Anniversary on {anniversaryDisplay}</div>
                         </div>
                       ) : null}
-                      {nextUp && nextUpDescription ? (
-                        <div style={{ marginTop: "10px", display: "flex", alignItems: "center" }}>
-                          <RaisedGoldBullet />
-                          <div style={{ minWidth: 0 }}>
-                            <div>Coming up for {person.name.trim()}…</div>
-                            <div>{nextUpDescription}</div>
-                          </div>
-                        </div>
-                      ) : null}
+	                      {nextUp && nextUpDescription ? (
+	                        <div style={{ marginTop: "10px", display: "flex", alignItems: "center" }}>
+	                          <RaisedGoldBullet />
+	                          <div style={{ minWidth: 0 }}>
+	                            <div>Next up for {person.name.trim()}</div>
+	                            <div>{nextUpDescription}</div>
+	                          </div>
+	                        </div>
+	                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -669,21 +668,31 @@ export default function PersonDetail({}: {}) {
                 </div>
 
                 <div style={{ marginTop: "12px", display: "grid", gap: "12px" }}>
-                  {personSuggestions.map((suggestion) => (
-                    <SmartSuggestionCard
-                      key={suggestion.id}
-                      variant="nudge"
-                      message={`${suggestion.title}\n${suggestion.message}`}
-                      actions={[
-                        { label: suggestion.actionLabel, onClick: () => handlePersonSuggestionAction(suggestion) },
-                        { label: "Hide for now", onClick: () => snoozeSuggestion(suggestion.id, 90) },
-                      ]}
-                      onMaybe={undefined}
-                    />
-                  ))}
-                </div>
-              </section>
-            ) : null}
+	                  {personSuggestions.map((suggestion) => (
+	                    (() => {
+	                      const text =
+	                        suggestion.type === "birthday" &&
+	                        suggestion.title.toLowerCase().includes("turns") &&
+	                        suggestion.title.toLowerCase().includes("tomorrow")
+	                          ? `${suggestion.title.trim().replace(/\.*$/, "")}.`
+	                          : `${suggestion.title}\n${suggestion.message}`;
+	                      return (
+	                    <SmartSuggestionCard
+	                      key={suggestion.id}
+	                      variant="nudge"
+	                      message={text}
+	                      actions={[
+	                        { label: suggestion.actionLabel, onClick: () => handlePersonSuggestionAction(suggestion) },
+	                        { label: "Hide for now", onClick: () => snoozeSuggestion(suggestion.id, 90) },
+	                      ]}
+	                      onMaybe={undefined}
+	                    />
+	                      );
+	                    })()
+	                  ))}
+	                </div>
+	              </section>
+	            ) : null}
 
             <div style={{ marginTop: "34px", paddingTop: "18px", borderTop: "1px solid var(--border)" }}>
               <button
