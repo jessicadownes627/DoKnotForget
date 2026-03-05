@@ -427,11 +427,11 @@ export default function AddPerson() {
             gap: "1rem",
           }}
         >
-          <div style={{ color: "var(--ink)" }}>Phone</div>
-          <div style={{ color: "var(--muted)", textAlign: "right" }}>
-            Optional
-          </div>
-        </div>
+	          <div style={{ color: "var(--ink)" }}>Phone</div>
+	          <div style={{ color: "var(--muted)", textAlign: "right" }}>
+	            {phone.trim() ? phone.trim() : "Optional"}
+	          </div>
+	        </div>
 
         {openRow === "phone" ? (
           <div style={{ marginTop: "0.75rem" }}>
