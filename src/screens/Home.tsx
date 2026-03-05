@@ -1298,18 +1298,21 @@ export default function Home({
 
                   return (
                     <>
-                      {todayMoments.length > 0 ? (
-                        <>
-                          <div style={{ ...headerStyle, display: "flex", alignItems: "center" }}>
-                            <RaisedGoldBullet />
-                            <span>Today</span>
-                          </div>
-                          <div className="dkf-golden-sun-divider" aria-hidden="true" style={{ marginTop: "8px" }}>
-                            <div className="dkf-golden-sun-divider-line" />
-                          </div>
-                          {renderPromptGrid(
-                            <>
-	                              {todayMoments.map((moment) => {
+	                      {todayMoments.length > 0 ? (
+	                        <>
+	                          <div style={{ ...headerStyle, display: "flex", alignItems: "center" }}>
+	                            <RaisedGoldBullet />
+	                            <span>Today</span>
+	                          </div>
+	                          <div className="dkf-golden-sun-divider" aria-hidden="true" style={{ marginTop: "8px" }}>
+	                            <div className="dkf-golden-sun-divider-line" />
+	                          </div>
+	                          <div style={{ marginTop: "10px", color: "var(--muted)", fontSize: "16px", lineHeight: 1.5 }}>
+	                            You remembered. That already counts.
+	                          </div>
+	                          {renderPromptGrid(
+	                            <>
+		                              {todayMoments.map((moment) => {
 	                                const personId = moment.key.split(":")[0] ?? "";
 	                                const childId = moment.key.includes(":child:") ? moment.key.split(":child:")[1] ?? "" : "";
 	                                const person = people.find((p) => p.id === personId) ?? null;
@@ -1339,24 +1342,30 @@ export default function Home({
                                   | null;
 
 		                                const baseMessage = eventLine;
-		                                const messageCore = `${baseMessage}\nYou remembered. That already counts.`;
 		                                const message =
 		                                  isLateDay && isUnhandled
-		                                    ? `${messageCore}\nStill a great time to reach out.`
-		                                    : messageCore;
+		                                    ? `${baseMessage}\nStill a great time to reach out.`
+		                                    : baseMessage;
 
-	                                const actions = [
-	                                  {
-	                                    label: (() => {
-	                                      const isChildBirthday = moment.key.includes(":child:") || moment.type === "kidBirthday";
-	                                      const baseLabel = isChildBirthday
-	                                        ? `Text ${first} about ${moment.firstName}’s birthday`
-	                                        : `Text ${first}`;
-	                                      return handledReminderActions[actionKey] ? `${baseLabel} ✓` : baseLabel;
-	                                    })(),
-	                                    disabled: !person?.phone,
-	                                    title: !person?.phone ? "Add a phone number to text them." : undefined,
-	                                    onClick: () => {
+		                                const actions = [
+		                                  {
+		                                    label: (() => {
+		                                      const isChildBirthday = moment.key.includes(":child:") || moment.type === "kidBirthday";
+		                                      const parentRoleLabel =
+		                                        person?.parentRole === "mother"
+		                                          ? "mom"
+		                                          : person?.parentRole === "father"
+		                                            ? "dad"
+		                                            : "parent";
+		                                      const childLabel = (moment.firstName ?? "").trim();
+		                                      const baseLabel = isChildBirthday && childLabel
+		                                        ? `Text ${first} (${childLabel}’s ${parentRoleLabel})`
+		                                        : `Text ${first}`;
+		                                      return handledReminderActions[actionKey] ? `${baseLabel} ✓` : baseLabel;
+		                                    })(),
+		                                    disabled: !person?.phone,
+		                                    title: !person?.phone ? "Add a phone number to text them." : undefined,
+		                                    onClick: () => {
 	                                      if (!person?.phone) return;
                                       markReminderActionHandled(`text|${moment.key}|${moment.occurrenceIso}`);
 
