@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { Person } from "../models/Person";
 import Brand from "../components/Brand";
 import ContactsSearchResults from "../components/ContactsSearchResults";
@@ -18,6 +18,52 @@ export default function Contacts() {
   const navigate = useNavigate();
   const { people } = useAppState();
   const [query, setQuery] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  function exportMyData() {
+    try {
+      const rawPeople = window.localStorage.getItem("doknotforget_people");
+      const rawRelationships = window.localStorage.getItem("doknotforget_relationships");
+      const parsedPeople = rawPeople ? JSON.parse(rawPeople) : [];
+      const parsedRelationships = rawRelationships ? JSON.parse(rawRelationships) : [];
+
+      const payload = {
+        people: Array.isArray(parsedPeople) ? parsedPeople : [],
+        relationships: Array.isArray(parsedRelationships) ? parsedRelationships : [],
+      };
+
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "doknotforget-backup.json";
+      a.click();
+
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch {
+      window.alert("Couldn’t export your data. Please try again.");
+    }
+  }
+
+  async function importBackup(file: File) {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as any;
+
+      const ok = window.confirm("Importing will replace your current contacts and relationships. Continue?");
+      if (!ok) return;
+
+      const nextPeople = Array.isArray(parsed?.people) ? parsed.people : [];
+      const nextRelationships = Array.isArray(parsed?.relationships) ? parsed.relationships : [];
+
+      window.localStorage.setItem("doknotforget_people", JSON.stringify(nextPeople));
+      window.localStorage.setItem("doknotforget_relationships", JSON.stringify(nextRelationships));
+      window.location.reload();
+    } catch {
+      window.alert("That backup file couldn’t be imported. Please select a valid JSON backup.");
+    }
+  }
 
   const filtered = useMemo(() => {
     const matched = filterContacts(people, query);
@@ -168,6 +214,61 @@ export default function Contacts() {
               ))}
             </div>
           )}
+
+          <div style={{ marginTop: "34px", paddingTop: "18px", borderTop: "1px solid var(--border)" }}>
+            <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={exportMyData}
+                style={{
+                  padding: 0,
+                  border: "none",
+                  background: "none",
+                  cursor: "pointer",
+                  color: "var(--muted)",
+                  fontSize: "14px",
+                  fontFamily: "var(--font-sans)",
+                  fontWeight: 500,
+                  textDecoration: "underline",
+                  textUnderlineOffset: "3px",
+                }}
+              >
+                Backup My Contacts
+              </button>
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  padding: 0,
+                  border: "none",
+                  background: "none",
+                  cursor: "pointer",
+                  color: "var(--muted)",
+                  fontSize: "14px",
+                  fontFamily: "var(--font-sans)",
+                  fontWeight: 500,
+                  textDecoration: "underline",
+                  textUnderlineOffset: "3px",
+                }}
+              >
+                Restore From Backup
+              </button>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/json,.json"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const file = e.currentTarget.files?.[0] ?? null;
+                  e.currentTarget.value = "";
+                  if (!file) return;
+                  void importBackup(file);
+                }}
+              />
+            </div>
+          </div>
         </main>
       </div>
     </div>

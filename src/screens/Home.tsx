@@ -71,6 +71,98 @@ export default function Home({
 
   const today = useMemo(() => startOfToday(), []);
 
+  function seedDemoData() {
+    const base = startOfToday();
+    const pad2 = (n: number) => String(n).padStart(2, "0");
+    const monthDayIso = (d: Date) => `0000-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+    const mkBirthdayMoment = (personId: string, target: Date) => ({
+      id: `${personId}-birthday`,
+      type: "birthday" as const,
+      label: "Birthday",
+      date: monthDayIso(target),
+      recurring: true,
+    });
+
+    const mkAnniversaryMoment = (personId: string, target: Date) => ({
+      id: `${personId}-anniversary`,
+      type: "anniversary" as const,
+      label: "Anniversary",
+      date: monthDayIso(target),
+      recurring: true,
+    });
+
+    const todayDate = base;
+    const tomorrowDate = new Date(base.getFullYear(), base.getMonth(), base.getDate() + 1);
+    const plus5Date = new Date(base.getFullYear(), base.getMonth(), base.getDate() + 5);
+
+    createPerson({
+      id: "demo-emma",
+      name: "Emma Parker",
+      phone: "+14155550101",
+      moments: [mkBirthdayMoment("demo-emma", todayDate)],
+    });
+
+    createPerson({
+      id: "demo-chris",
+      name: "Chris Rivera",
+      phone: "+14155550102",
+      moments: [],
+      hasKids: true,
+      parentRole: "parent",
+      children: [
+        {
+          id: "demo-liam",
+          name: "Liam",
+          birthday: monthDayIso(todayDate),
+        },
+      ],
+    });
+
+    createPerson({
+      id: "demo-dad",
+      name: "Dad",
+      phone: "+14155550103",
+      moments: [mkBirthdayMoment("demo-dad", plus5Date)],
+    });
+
+    createPerson({
+      id: "demo-sarah",
+      name: "Sarah Chen",
+      phone: "+14155550104",
+      moments: [mkAnniversaryMoment("demo-sarah", tomorrowDate)],
+    });
+
+    // Don’t show the “Nice start ⭐” banner for demo seeding.
+    try {
+      window.localStorage.removeItem("doknotforget_just_added_first_contact");
+    } catch {
+      // ignore
+    }
+  }
+
+  function seedDevData() {
+    if (!import.meta.env.DEV) return;
+    seedDemoData();
+  }
+
+  useEffect(() => {
+    if (!window.location.search.includes("demo=true")) return;
+    if (people.length > 0) return;
+    // Extra safety: never seed if storage already has people (guards against any hydration timing weirdness).
+    try {
+      const raw = window.localStorage.getItem("doknotforget_people");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return;
+      }
+    } catch {
+      // ignore
+    }
+    seedDemoData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [people.length]);
+
   useEffect(() => {
     try {
       window.localStorage.setItem("doknotforget_handled_reminder_actions_v1", JSON.stringify(handledReminderActions));
@@ -84,36 +176,6 @@ export default function Home({
       if (prev[actionKey]) return prev;
       return { ...prev, [actionKey]: true };
     });
-  }
-
-  function seedDevData() {
-    if (!import.meta.env.DEV) return;
-
-    const base = startOfToday();
-    const pad2 = (n: number) => String(n).padStart(2, "0");
-    const monthDayIso = (d: Date) => `0000-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-
-    const mkPerson = (id: string, name: string, phone: string, offsetDays: number): Person => {
-      const target = new Date(base.getFullYear(), base.getMonth(), base.getDate() + offsetDays);
-      return {
-        id,
-        name,
-        phone,
-        moments: [
-          {
-            id: `${id}-birthday`,
-            type: "birthday",
-            label: "Birthday",
-            date: monthDayIso(target),
-            recurring: true,
-          },
-        ],
-      };
-    };
-
-    createPerson(mkPerson("seed-emma", "Emma", "+14155550101", 0));
-    createPerson(mkPerson("seed-chris", "Chris", "+14155550102", 1));
-    createPerson(mkPerson("seed-dad", "Dad", "+14155550103", 5));
   }
 
   const [birthdayPickerPersonId, setBirthdayPickerPersonId] = useState<string | null>(null);
@@ -782,7 +844,7 @@ export default function Home({
     setQuestionTick((v) => v + 1);
   }
 
-  const greetingText = activeTab === "home" ? "Your upcoming moments." : "Your contacts.";
+  const greetingText = activeTab === "home" ? "Moments that matter today" : "Your contacts.";
 
   useEffect(() => {
     const personId = location.state?.showPartnerLinkCheck as string | undefined;

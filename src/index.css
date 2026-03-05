@@ -54,6 +54,16 @@ body {
   min-height: 100vh;
 }
 
+html,
+body {
+  background-color: #f3eee7;
+}
+
+#root {
+  background-color: #f3eee7;
+  min-height: 100vh;
+}
+
 h1 {
   font-size: 32px;
   line-height: 1.1;

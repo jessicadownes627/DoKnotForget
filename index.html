@@ -7,13 +7,16 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180.png" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="theme-color" content="#F3EEE7" />
     <title>DoKnotForget — For the Moments That Matter.</title>
     <style>
       html.dkf-launch-active,
       body.dkf-launch-active {
         height: 100%;
         overflow: hidden;
-        background: #0a1a3a; /* match splash navy */
+        background: #f3eee7; /* match splash background */
       }
 
       #dkf-launch {
@@ -21,10 +24,11 @@
         inset: 0;
         width: 100%;
         height: 100%;
-        background: #0a1a3a;
+        background: #f3eee7;
         display: flex;
         align-items: center;
         justify-content: center;
+        transform: translateY(-6vh);
         padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
           env(safe-area-inset-left);
         overscroll-behavior: none;
@@ -32,13 +36,13 @@
 
       #dkf-launch img {
         display: block;
-        width: min(84vw, 420px);
+        width: min(84vw, 380px);
         height: auto;
       }
 
       html.dkf-launch-active #root,
       body.dkf-launch-active #root {
-        background: #0a1a3a; /* match splash navy */
+        background: #f3eee7; /* match splash background */
         min-height: 100vh;
       }
     </style>
@@ -55,7 +59,7 @@
   <body>
     <div id="dkf-launch">
       <img
-        src="./assets/splash2.png"
+        src="./assets/splash3.png"
         alt="DoKnotForget splash screen."
       />
     </div>
