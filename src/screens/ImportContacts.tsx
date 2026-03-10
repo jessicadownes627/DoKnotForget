@@ -246,12 +246,15 @@ function calculateContactScore(contact: {
 export default function ImportContacts() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { people, createPerson } = useAppState();
+  const { people, createPerson, updatePerson } = useAppState();
   const [picked, setPicked] = useState<PickedContact[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set());
   const [mode, setMode] = useState<"idle" | "select">("idle");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [childFormPersonId, setChildFormPersonId] = useState<string | null>(null);
+  const [childName, setChildName] = useState("");
+  const [childBirthday, setChildBirthday] = useState("");
 
   const reviewImportedIds = useMemo<string[]>(() => {
     const raw = location.state?.reviewImportedIds;
@@ -342,6 +345,16 @@ export default function ImportContacts() {
     return new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" }).format(parsed);
   }
 
+  function formatChildBirthdayLabel(value: string) {
+    const parts = value.split("-");
+    if (parts.length !== 3) return value;
+    const month = Number(parts[1]);
+    const day = Number(parts[2]);
+    if (!month || !day || Number.isNaN(month) || Number.isNaN(day)) return value;
+    const parsed = new Date(2000, month - 1, day);
+    return new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" }).format(parsed);
+  }
+
   function importContacts(contacts: PickedContact[]) {
     const createdIds: string[] = [];
     for (const c of contacts) {
@@ -406,6 +419,40 @@ export default function ImportContacts() {
     if (!selectedContacts.length) return;
     const createdIds = importContacts(selectedContacts);
     navigate("/import", { replace: true, state: { reviewImportedIds: createdIds } });
+  }
+
+  function openChildForm(personId: string) {
+    setChildFormPersonId(personId);
+    setChildName("");
+    setChildBirthday("");
+  }
+
+  function closeChildForm() {
+    setChildFormPersonId(null);
+    setChildName("");
+    setChildBirthday("");
+  }
+
+  function handleSaveChild(person: Person) {
+    const trimmedName = childName.trim();
+    const normalizedBirthday = toBirthdayIso(childBirthday);
+    if (!trimmedName || !normalizedBirthday) return;
+
+    const nextChildren = [
+      ...(person.children ?? []),
+      {
+        id: makeId(),
+        name: trimmedName,
+        birthday: normalizedBirthday,
+      },
+    ];
+
+    updatePerson({
+      ...person,
+      hasKids: true,
+      children: nextChildren,
+    });
+    closeChildForm();
   }
 
   return (
@@ -474,9 +521,9 @@ export default function ImportContacts() {
                       background: "rgba(255,255,255,0.65)",
                       overflow: "hidden",
                     }}
-                  >
-                    {reviewImportedPeople.map((person, index) => (
-                      <div
+                    >
+                      {reviewImportedPeople.map((person, index) => (
+                        <div
                         key={person.id}
                         style={{
                           display: "flex",
@@ -487,27 +534,97 @@ export default function ImportContacts() {
                           borderTop: index === 0 ? "none" : "1px solid var(--border)",
                         }}
                       >
-                        <div style={{ minWidth: 0 }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ fontWeight: 500, color: "var(--ink)", lineHeight: 1.25 }}>{person.name}</div>
                           <div style={{ color: "var(--muted)", fontSize: "0.95rem", marginTop: "2px" }}>
-                            {formatBirthdayLabel(person)}
+                            {personBirthday(person)?.date ? `🎂 Birthday detected: ${formatBirthdayLabel(person)}` : "No birthday detected"}
                           </div>
+                          {person.children?.length ? (
+                            <div style={{ marginTop: "8px", color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
+                              <div style={{ color: "var(--ink)", fontWeight: 500, fontSize: "0.92rem" }}>Children</div>
+                              {person.children.map((child) => (
+                                <div key={child.id}>
+                                  {(child.name ?? "").trim() || "Child"}{" "}
+                                  {child.birthday || child.birthdate
+                                    ? `— Birthday ${formatChildBirthdayLabel((child.birthday ?? child.birthdate ?? "").trim())}`
+                                    : ""}
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                          {childFormPersonId === person.id ? (
+                            <div
+                              style={{
+                                marginTop: "10px",
+                                display: "grid",
+                                gap: "8px",
+                                padding: "12px",
+                                border: "1px solid var(--border)",
+                                borderRadius: "12px",
+                                background: "rgba(255,255,255,0.55)",
+                              }}
+                            >
+                              <input
+                                type="text"
+                                value={childName}
+                                onChange={(e) => setChildName(e.target.value)}
+                                placeholder="Child Name"
+                                style={{ width: "100%" }}
+                              />
+                              <input
+                                type="date"
+                                value={childBirthday}
+                                onChange={(e) => setChildBirthday(e.target.value)}
+                                style={{ width: "100%" }}
+                              />
+                              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                <button type="button" onClick={() => handleSaveChild(person)}>
+                                  Save Child
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={closeChildForm}
+                                  style={{
+                                    border: "1px solid var(--border-strong)",
+                                    background: "transparent",
+                                    color: "var(--ink)",
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            navigate(`/person/${person.id}`, {
-                              state: {
-                                returnToImportReview: true,
-                                reviewImportedIds,
-                              },
-                            })
-                          }
-                          style={{ padding: "0.6rem 0.9rem" }}
-                        >
-                          Edit
-                        </button>
+                        <div style={{ display: "grid", gap: "8px", flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              navigate(`/person/${person.id}`, {
+                                state: {
+                                  returnToImportReview: true,
+                                  reviewImportedIds,
+                                },
+                              })
+                            }
+                            style={{ padding: "0.6rem 0.9rem" }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openChildForm(person.id)}
+                            style={{
+                              padding: "0.6rem 0.9rem",
+                              border: "1px solid var(--border-strong)",
+                              background: "transparent",
+                              color: "var(--ink)",
+                            }}
+                          >
+                            Add Child
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
