@@ -8,6 +8,9 @@ import { generateCareSuggestions } from "../utils/careSuggestions";
 import { useLocation, useNavigate } from "../router";
 import { useAppState } from "../appState";
 import SmartSuggestionCard from "../components/SmartSuggestionCard";
+import { getUpcomingReminders } from "../engine/reminderEngine";
+import { getRemindersToFire } from "../engine/reminderScheduler";
+import { getReminderId, hasReminderFired, markReminderFired } from "../engine/reminderRegistry";
 import {
   getAnniversaryPrompts,
   getBirthdayPrompts,
@@ -231,6 +234,92 @@ export default function Home({
     if (activeTab !== "home") return [];
     return getKidsBirthdayPrompts(people);
   }, [activeTab, people]);
+
+  const reminders = useMemo(() => {
+    if (activeTab !== "home") return [];
+    return getUpcomingReminders(people, today);
+  }, [activeTab, people, today]);
+
+  const activeReminders = useMemo(() => {
+    return reminders.filter((reminder) => !hasReminderFired(getReminderId(reminder)));
+  }, [reminders]);
+
+  useEffect(() => {
+    if (activeTab !== "home") return;
+    let cancelled = false;
+
+    async function deliverReminders() {
+      const remindersToFire = getRemindersToFire(people, today);
+      if (remindersToFire.length === 0 || cancelled) return;
+
+      let permission: NotificationPermission | "unsupported" = "unsupported";
+
+      if (typeof window !== "undefined" && "Notification" in window) {
+        permission = Notification.permission;
+        if (permission === "default") {
+          permission = await Notification.requestPermission();
+        }
+      }
+
+      if (cancelled) return;
+
+      if (permission === "granted") {
+        if (remindersToFire.length === 1) {
+          const reminder = remindersToFire[0];
+          if (!reminder) return;
+
+          const notification = new Notification("DoKnotForget Reminder", {
+            body: reminder.label,
+            data: { personId: reminder.personId },
+          });
+          notification.onclick = () => {
+            window.focus();
+          };
+        } else {
+          const lines = remindersToFire.slice(0, 3).map((reminder) => `• ${reminder.label}`);
+          const notification = new Notification("DoKnotForget", {
+            body: `${remindersToFire.length} reminders today:\n${lines.join("\n")}`,
+            data: { personId: remindersToFire[0]?.personId ?? null },
+          });
+          notification.onclick = () => {
+            window.focus();
+          };
+        }
+      } else {
+        const message =
+          remindersToFire.length === 1
+            ? `Reminder: ${remindersToFire[0]?.label ?? ""}`
+            : `${remindersToFire.length} reminders today:\n${remindersToFire
+                .slice(0, 3)
+                .map((reminder) => `• ${reminder.label}`)
+                .join("\n")}`;
+        window.alert(message);
+      }
+
+      for (const reminder of remindersToFire) {
+        markReminderFired(getReminderId(reminder));
+      }
+    }
+
+    void deliverReminders();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, people, today]);
+
+  function formatReminderDate(value: string) {
+    const parsed = parseLocalDate(value);
+    if (!parsed) return value;
+    return headerDateFormatter.format(parsed);
+  }
+
+  function formatReminderMomentType(value: string) {
+    if (value === "childBirthday") return "Child birthday";
+    if (value === "custom") return "Custom moment";
+    if (value === "anniversary") return "Anniversary";
+    return "Birthday";
+  }
 
   function promptYear(prompt: PromptItem) {
     return "year" in prompt ? prompt.year : new Date().getFullYear();
@@ -1171,6 +1260,54 @@ export default function Home({
                   >
                     <div style={{ fontWeight: 600, color: "var(--ink)" }}>Nice start ⭐</div>
                     <div style={{ marginTop: "4px", color: "var(--muted)" }}>We’ll remind you when it matters.</div>
+                  </div>
+                ) : null}
+                {activeReminders.length > 0 ? (
+                  <div
+                    style={{
+                      border: "1px solid var(--border)",
+                      borderRadius: "16px",
+                      padding: "18px",
+                      background: "rgba(255,255,255,0.72)",
+                      boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                      marginBottom: "18px",
+                    }}
+                  >
+                    <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)" }}>Reminder Engine Preview</div>
+                    <div style={{ marginTop: "6px", color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
+                      Upcoming reminder triggers from the new engine.
+                    </div>
+                    <div style={{ display: "grid", gap: "10px", marginTop: "14px" }}>
+                      {activeReminders.map((reminder) => (
+                        <div
+                          key={`${reminder.date}_${reminder.personId}_${reminder.momentType}_${reminder.reminderType}_${reminder.label}`}
+                          style={{
+                            border: "1px solid var(--border)",
+                            borderRadius: "14px",
+                            background: "rgba(255,255,255,0.66)",
+                            padding: "12px 14px",
+                          }}
+                        >
+                          <div style={{ fontWeight: 600, color: "var(--ink)", lineHeight: 1.25 }}>{reminder.personName}</div>
+                          <div style={{ marginTop: "4px", color: "var(--ink)", lineHeight: 1.4 }}>{reminder.label}</div>
+                          <div
+                            style={{
+                              marginTop: "8px",
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: "8px 12px",
+                              color: "var(--muted)",
+                              fontSize: "0.9rem",
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            <span>{formatReminderDate(reminder.date)}</span>
+                            <span>{formatReminderMomentType(reminder.momentType)}</span>
+                            <span>{reminder.reminderType}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
                 {(() => {
