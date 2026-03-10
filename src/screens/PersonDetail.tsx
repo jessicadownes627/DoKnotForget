@@ -3,7 +3,7 @@ import type { Person } from "../models/Person";
 import type { Relationship } from "../models/Relationship";
 import PersonEditDrawer from "../components/PersonEditDrawer";
 import { useAppState } from "../appState";
-import { useNavigate, useParams } from "../router";
+import { useLocation, useNavigate, useParams } from "../router";
 import { daysUntilDate, getNextBirthdayFromIso } from "../utils/birthdayUtils";
 import { getNextAnniversary } from "../utils/anniversaryUtils";
 import { getFathersDay, getMothersDay } from "../utils/holidayUtils";
@@ -53,6 +53,7 @@ function formatMonthDay(isoMonthDay: string, formatter: Intl.DateTimeFormat) {
 
 export default function PersonDetail({}: {}) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams<{ id: string }>();
   const { people, relationships, updatePerson, deletePerson } = useAppState();
   const person = people.find((p) => p.id === id) ?? null;
@@ -69,6 +70,20 @@ export default function PersonDetail({}: {}) {
 
   const resolvedPerson = person;
   const partner = person.partnerId ? people.find((p) => p.id === person.partnerId) ?? null : null;
+  const reviewImportedIds = Array.isArray(location.state?.reviewImportedIds)
+    ? (location.state.reviewImportedIds as unknown[]).filter(
+        (value): value is string => typeof value === "string" && value.trim().length > 0
+      )
+    : [];
+  const returnToImportReview = location.state?.returnToImportReview === true && reviewImportedIds.length > 0;
+
+  function navigateBack() {
+    if (returnToImportReview) {
+      navigate("/import", { state: { reviewImportedIds } });
+      return;
+    }
+    navigate("/home", { state: { defaultTab: "contacts" } });
+  }
 
   function startOfTodayTimestamp() {
     const d = new Date();
@@ -443,7 +458,7 @@ export default function PersonDetail({}: {}) {
         <div style={{ maxWidth: "700px", margin: "0 auto", paddingTop: "32px" }}>
           <div style={{ marginBottom: "1.75rem", display: "flex", justifyContent: "space-between" }}>
             <button
-              onClick={() => navigate("/home", { state: { defaultTab: "contacts" } })}
+              onClick={navigateBack}
               style={{
                 background: "none",
                 border: "none",
@@ -703,7 +718,7 @@ export default function PersonDetail({}: {}) {
                   );
                   if (!ok) return;
                   deletePerson(resolvedPerson.id);
-                  navigate("/home", { state: { defaultTab: "contacts" } });
+                  navigateBack();
                 }}
                 style={{
                   padding: 0,
