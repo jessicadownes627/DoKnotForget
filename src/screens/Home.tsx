@@ -8,7 +8,7 @@ import { generateCareSuggestions } from "../utils/careSuggestions";
 import { useLocation, useNavigate } from "../router";
 import { useAppState } from "../appState";
 import SmartSuggestionCard from "../components/SmartSuggestionCard";
-import { getUpcomingReminders } from "../engine/reminderEngine";
+import { getUpcomingReminders, type ReminderEvent } from "../engine/reminderEngine";
 import { getRemindersToFire } from "../engine/reminderScheduler";
 import { getReminderId, hasReminderFired, markReminderFired } from "../engine/reminderRegistry";
 import {
@@ -41,6 +41,40 @@ function startOfToday() {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
+function possessive(name: string) {
+  return name.endsWith("s") ? `${name}'` : `${name}'s`;
+}
+
+function reminderRelativeLabel(reminderType: ReminderEvent["reminderType"]) {
+  if (reminderType === "dayOf") return "today";
+  if (reminderType === "oneDay") return "tomorrow";
+  return "in 7 days";
+}
+
+function reminderEventDate(reminder: ReminderEvent) {
+  const parsed = parseLocalDate(reminder.date);
+  if (!parsed) return null;
+  const offset = reminder.reminderType === "dayOf" ? 0 : reminder.reminderType === "oneDay" ? 1 : 7;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate() + offset);
+}
+
+function todayIsoDate() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function formatGiftTypeLabel(value: string) {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (!normalized) return "Gift";
+  if (normalized === "ecard") return "eCard";
+  if (normalized === "coffee") return "Coffee";
+  if (normalized === "gift") return "Gift";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 export default function Home({
 }: {}) {
   const navigate = useNavigate();
@@ -64,6 +98,11 @@ export default function Home({
       return {};
     }
   });
+  const [dismissedReminderKeys, setDismissedReminderKeys] = useState<Record<string, true>>({});
+  const [giftHistoryConfirm, setGiftHistoryConfirm] = useState<null | {
+    personId: string;
+    type: "coffee" | "ecard" | "gift";
+  }>(null);
   const [smsSuggestions, setSmsSuggestions] = useState<null | {
     personName: string;
     phone: string;
@@ -241,8 +280,11 @@ export default function Home({
   }, [activeTab, people, today]);
 
   const activeReminders = useMemo(() => {
-    return reminders.filter((reminder) => !hasReminderFired(getReminderId(reminder)));
-  }, [reminders]);
+    return reminders.filter((reminder) => {
+      const reminderId = getReminderId(reminder);
+      return !hasReminderFired(reminderId) && !dismissedReminderKeys[reminderId];
+    });
+  }, [dismissedReminderKeys, reminders]);
 
   useEffect(() => {
     if (activeTab !== "home") return;
@@ -319,6 +361,255 @@ export default function Home({
     if (value === "custom") return "Custom moment";
     if (value === "anniversary") return "Anniversary";
     return "Birthday";
+  }
+
+  function formatReminderCard(reminder: ReminderEvent) {
+    const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
+    const personName = person?.name ?? reminder.personName;
+    const relative = reminderRelativeLabel(reminder.reminderType);
+
+    if (reminder.momentType === "birthday") {
+      return {
+        title: personName,
+        label: `${possessive(personName)} birthday ${relative}`,
+      };
+    }
+
+    if (reminder.momentType === "anniversary") {
+      const partner = person?.partnerId ? people.find((candidate) => candidate.id === person.partnerId) ?? null : null;
+      const combinedNames = partner ? `${personName} & ${partner.name}` : null;
+      return {
+        title: combinedNames ?? personName,
+        label: combinedNames ? `${combinedNames} anniversary ${relative}` : `${possessive(personName)} anniversary ${relative}`,
+      };
+    }
+
+    if (reminder.momentType === "childBirthday") {
+      const eventDate = reminderEventDate(reminder);
+      const matchingChild =
+        person?.children?.find((child) => {
+          const birthdayValue = (child.birthday ?? child.birthdate ?? "").trim();
+          if (!birthdayValue) return false;
+          const nextBirthday = getNextBirthdayFromIso(birthdayValue, today);
+          if (!nextBirthday || !eventDate) return false;
+          return nextBirthday.target.getTime() === eventDate.getTime();
+        }) ?? null;
+
+      if (!matchingChild) {
+        return {
+          title: `${possessive(personName)} child`,
+          label: reminder.label,
+        };
+      }
+
+      const childName = (matchingChild.name ?? "").trim() || "Your child";
+      const sourceYear = Number((matchingChild.birthday ?? matchingChild.birthdate ?? "").split("-")[0] ?? 0);
+      const age = eventDate && sourceYear > 0 ? eventDate.getFullYear() - sourceYear : null;
+      return {
+        title: `${possessive(personName)} child`,
+        label: age && age > 0 ? `${childName} turns ${age} ${relative}` : `${childName}'s birthday ${relative}`,
+      };
+    }
+
+    return {
+      title: personName,
+      label: reminder.label,
+    };
+  }
+
+  function buildReminderMessage(reminder: ReminderEvent) {
+    const display = formatReminderCard(reminder);
+    const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
+    const latestGift = person?.giftHistory?.length ? person.giftHistory[person.giftHistory.length - 1] : null;
+    const giftLine = latestGift ? `Last time you sent: ${formatGiftTypeLabel(latestGift.type)}` : null;
+    return [
+      display.label,
+      `${formatReminderDate(reminder.date)} · ${formatReminderMomentType(reminder.momentType)}`,
+      giftLine,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  function dismissReminderCard(reminder: ReminderEvent) {
+    const reminderId = getReminderId(reminder);
+    markReminderFired(reminderId);
+    setDismissedReminderKeys((prev) => ({ ...prev, [reminderId]: true }));
+  }
+
+  function promptGiftHistory(personId: string, type: "coffee" | "ecard" | "gift") {
+    setGiftHistoryConfirm({ personId, type });
+  }
+
+  function confirmGiftHistory() {
+    if (!giftHistoryConfirm) return;
+    const person = people.find((candidate) => candidate.id === giftHistoryConfirm.personId) ?? null;
+    if (!person) {
+      setGiftHistoryConfirm(null);
+      return;
+    }
+
+    updatePerson({
+      ...person,
+      giftHistory: [
+        ...(person.giftHistory ?? []),
+        {
+          type: giftHistoryConfirm.type,
+          date: todayIsoDate(),
+        },
+      ],
+    });
+    setGiftHistoryConfirm(null);
+  }
+
+  function reminderTextActionLabel(reminder: ReminderEvent, person: Person | null) {
+    const actionKey = `text|${getReminderId(reminder)}`;
+    const first = ((person?.name ?? reminder.personName).trim().split(" ")[0] || reminder.personName || "them").trim();
+
+    if (reminder.momentType === "childBirthday") {
+      const childLine = formatReminderCard(reminder).label;
+      const childName = childLine.split(" turns ")[0]?.split("'s birthday")[0]?.trim() || "child";
+      const baseLabel = `Text ${first} (${childName}'s parent)`;
+      return handledReminderActions[actionKey] ? `${baseLabel} ✓` : baseLabel;
+    }
+
+    const baseLabel = `Text ${first}`;
+    return handledReminderActions[actionKey] ? `${baseLabel} ✓` : baseLabel;
+  }
+
+  function buildReminderActions(reminder: ReminderEvent) {
+    const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
+    const first = ((person?.name ?? reminder.personName).trim().split(" ")[0] || reminder.personName || "them").trim();
+    const actionKey = `text|${getReminderId(reminder)}`;
+
+    if (reminder.reminderType === "sevenDay") {
+      return [
+        {
+          label: "Add Note",
+          disabled: !person,
+          title: !person ? "This contact is no longer available." : undefined,
+          onClick: () => {
+            if (!person) return;
+            navigate(`/person/${person.id}`);
+          },
+        },
+        {
+          label: "Plan Gift",
+          href: "https://www.starbucks.com/gift",
+          onClick: () => {
+            if (!person) return;
+            promptGiftHistory(person.id, "gift");
+          },
+        },
+        {
+          label: "All set",
+          onClick: () => dismissReminderCard(reminder),
+        },
+      ];
+    }
+
+    if (reminder.reminderType === "oneDay") {
+      return [
+        {
+          label: "Plan Message",
+          disabled: !person,
+          title: !person ? "This contact is no longer available." : undefined,
+          onClick: () => {
+            if (!person) return;
+            navigate(`/person/${person.id}`);
+          },
+        },
+        {
+          label: "All set",
+          onClick: () => dismissReminderCard(reminder),
+        },
+      ];
+    }
+
+    return [
+      {
+        label: reminderTextActionLabel(reminder, person),
+        disabled: !person?.phone,
+        title: !person?.phone ? "Add a phone number to text them." : undefined,
+        onClick: () => {
+          if (!person?.phone) return;
+          markReminderActionHandled(actionKey);
+
+          const toName = (person.name ?? "").trim().split(" ")[0] || person.name || first;
+          const display = formatReminderCard(reminder);
+          const childLine = display.label;
+          const childName = childLine.split(" turns ")[0]?.split("'s birthday")[0]?.trim() || "";
+
+          const isBirthday = reminder.momentType === "birthday";
+          const isKidBirthday = reminder.momentType === "childBirthday";
+          const isAnniversary = reminder.momentType === "anniversary";
+
+          const quick = isKidBirthday
+            ? `Happy birthday to ${childName || "your child"}! Hope it's a great day.`
+            : isBirthday
+              ? `Happy birthday ${toName}! Hope it's a great day.`
+              : isAnniversary
+                ? `Happy anniversary, ${toName}! Hope it's a great day.`
+                : "Thinking of you today. Hope things go well.";
+
+          const friendly = isKidBirthday
+            ? `Hope ${childName || "your child"} is having a great birthday today!`
+            : isBirthday
+              ? "Hope you’re having a great birthday today!"
+              : isAnniversary
+                ? "Hope you’re having a great anniversary today!"
+                : "Hope today goes well — thinking of you.";
+
+          const thoughtful = isKidBirthday
+            ? `Thinking of ${childName || "your child"} today and hoping it’s a really special birthday.`
+            : isBirthday
+              ? "Thinking of you today and hoping it’s a really special birthday."
+              : isAnniversary
+                ? "Thinking of you today and hoping your anniversary feels special."
+                : "Just wanted to check in — thinking of you today and hoping everything goes smoothly.";
+
+          const simple = isKidBirthday
+            ? `Happy birthday to ${childName || "your child"}. Hope it's a good one.`
+            : isBirthday
+              ? "Happy birthday. Hope it's a good one."
+              : isAnniversary
+                ? "Happy anniversary. Hope it's a good one."
+                : "Thinking of you today.";
+
+          openSmartMessageSuggestions({
+            personName: toName,
+            phone: person.phone,
+            suggestions: [
+              { id: "quick", label: "Quick", message: quick },
+              { id: "friendly", label: "Friendly", message: friendly },
+              { id: "thoughtful", label: "Thoughtful", message: thoughtful },
+              { id: "simple", label: "Simple", message: simple },
+              { id: "custom", label: "Write my own", message: "" },
+            ],
+          });
+        },
+      },
+      {
+        label: `Send ${first} an eCard`,
+        href: "https://www.americangreetings.com/ecards",
+        onClick: () => {
+          if (!person) return;
+          promptGiftHistory(person.id, "ecard");
+        },
+      },
+      {
+        label: `Send ${first} a coffee`,
+        href: "https://www.starbucks.com/gift",
+        onClick: () => {
+          if (!person) return;
+          promptGiftHistory(person.id, "coffee");
+        },
+      },
+      {
+        label: "All set",
+        onClick: () => dismissReminderCard(reminder),
+      },
+    ];
   }
 
   function promptYear(prompt: PromptItem) {
@@ -1265,49 +1556,20 @@ export default function Home({
                 {activeReminders.length > 0 ? (
                   <div
                     style={{
-                      border: "1px solid var(--border)",
-                      borderRadius: "16px",
-                      padding: "18px",
-                      background: "rgba(255,255,255,0.72)",
-                      boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                      display: "grid",
+                      gap: "12px",
                       marginBottom: "18px",
                     }}
                   >
-                    <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)" }}>Reminder Engine Preview</div>
-                    <div style={{ marginTop: "6px", color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
-                      Upcoming reminder triggers from the new engine.
-                    </div>
-                    <div style={{ display: "grid", gap: "10px", marginTop: "14px" }}>
-                      {activeReminders.map((reminder) => (
-                        <div
-                          key={`${reminder.date}_${reminder.personId}_${reminder.momentType}_${reminder.reminderType}_${reminder.label}`}
-                          style={{
-                            border: "1px solid var(--border)",
-                            borderRadius: "14px",
-                            background: "rgba(255,255,255,0.66)",
-                            padding: "12px 14px",
-                          }}
-                        >
-                          <div style={{ fontWeight: 600, color: "var(--ink)", lineHeight: 1.25 }}>{reminder.personName}</div>
-                          <div style={{ marginTop: "4px", color: "var(--ink)", lineHeight: 1.4 }}>{reminder.label}</div>
-                          <div
-                            style={{
-                              marginTop: "8px",
-                              display: "flex",
-                              flexWrap: "wrap",
-                              gap: "8px 12px",
-                              color: "var(--muted)",
-                              fontSize: "0.9rem",
-                              lineHeight: 1.35,
-                            }}
-                          >
-                            <span>{formatReminderDate(reminder.date)}</span>
-                            <span>{formatReminderMomentType(reminder.momentType)}</span>
-                            <span>{reminder.reminderType}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    {activeReminders.map((reminder) => (
+                      <SmartSuggestionCard
+                        key={`${reminder.date}_${reminder.personId}_${reminder.momentType}_${reminder.reminderType}_${reminder.label}`}
+                        variant="nudge"
+                        message={buildReminderMessage(reminder)}
+                        actions={buildReminderActions(reminder)}
+                        onMaybe={undefined}
+                      />
+                    ))}
                   </div>
                 ) : null}
                 {(() => {
@@ -1893,6 +2155,54 @@ export default function Home({
               setChildBirthdayDraftYear("");
             }}
           />
+        ) : null}
+
+        {giftHistoryConfirm ? (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.28)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "16px",
+              zIndex: 50,
+            }}
+          >
+            <div
+              style={{
+                width: "100%",
+                maxWidth: "360px",
+                borderRadius: "16px",
+                border: "1px solid var(--border)",
+                background: "rgba(255,255,255,0.96)",
+                color: "var(--ink)",
+                padding: "18px",
+                boxShadow: "0 10px 30px rgba(0,0,0,0.14)",
+                display: "grid",
+                gap: "14px",
+              }}
+            >
+              <div style={{ fontSize: "1rem", fontWeight: 600 }}>Did you send this?</div>
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <button type="button" onClick={confirmGiftHistory}>
+                  Yes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGiftHistoryConfirm(null)}
+                  style={{
+                    border: "1px solid var(--border-strong)",
+                    background: "transparent",
+                    color: "var(--ink)",
+                  }}
+                >
+                  Not yet
+                </button>
+              </div>
+            </div>
+          </div>
         ) : null}
 
         {smsSuggestions ? (

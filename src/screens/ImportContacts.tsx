@@ -255,6 +255,7 @@ export default function ImportContacts() {
   const [childFormPersonId, setChildFormPersonId] = useState<string | null>(null);
   const [childName, setChildName] = useState("");
   const [childBirthday, setChildBirthday] = useState("");
+  const [partnerPickerPersonId, setPartnerPickerPersonId] = useState<string | null>(null);
 
   const reviewImportedIds = useMemo<string[]>(() => {
     const raw = location.state?.reviewImportedIds;
@@ -455,6 +456,27 @@ export default function ImportContacts() {
     closeChildForm();
   }
 
+  function partnerName(person: Person) {
+    if (!person.partnerId) return null;
+    return people.find((candidate) => candidate.id === person.partnerId)?.name ?? null;
+  }
+
+  function availablePartnerOptions(person: Person) {
+    return reviewImportedPeople.filter((candidate) => candidate.id !== person.id && !candidate.partnerId);
+  }
+
+  function handleLinkPartner(personId: string, partnerId: string) {
+    const person = people.find((candidate) => candidate.id === personId) ?? null;
+    const partner = people.find((candidate) => candidate.id === partnerId) ?? null;
+    if (!person || !partner) return;
+    if (person.id === partner.id) return;
+    if (person.partnerId || partner.partnerId) return;
+
+    updatePerson({ ...person, partnerId: partner.id });
+    updatePerson({ ...partner, partnerId: person.id });
+    setPartnerPickerPersonId(null);
+  }
+
   return (
     <div style={{ background: "var(--paper)", color: "var(--ink)", minHeight: "100vh" }}>
       <div
@@ -522,23 +544,31 @@ export default function ImportContacts() {
                       overflow: "hidden",
                     }}
                     >
-                      {reviewImportedPeople.map((person, index) => (
-                        <div
-                        key={person.id}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: "12px",
-                          padding: "12px 14px",
-                          borderTop: index === 0 ? "none" : "1px solid var(--border)",
-                        }}
-                      >
+                      {reviewImportedPeople.map((person, index) => {
+                        const linkedPartnerName = partnerName(person);
+                        const partnerOptions = availablePartnerOptions(person);
+                        const isPartnerPickerOpen = partnerPickerPersonId === person.id;
+
+                        return (
+                          <div
+                            key={person.id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: "12px",
+                              padding: "12px 14px",
+                              borderTop: index === 0 ? "none" : "1px solid var(--border)",
+                            }}
+                          >
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ fontWeight: 500, color: "var(--ink)", lineHeight: 1.25 }}>{person.name}</div>
                           <div style={{ color: "var(--muted)", fontSize: "0.95rem", marginTop: "2px" }}>
                             {personBirthday(person)?.date ? `🎂 Birthday detected: ${formatBirthdayLabel(person)}` : "No birthday detected"}
                           </div>
+                          {linkedPartnerName ? (
+                            <div style={{ color: "var(--muted)", fontSize: "0.95rem", marginTop: "4px" }}>Partner: {linkedPartnerName}</div>
+                          ) : null}
                           {person.children?.length ? (
                             <div style={{ marginTop: "8px", color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
                               <div style={{ color: "var(--ink)", fontWeight: 500, fontSize: "0.92rem" }}>Children</div>
@@ -550,6 +580,56 @@ export default function ImportContacts() {
                                     : ""}
                                 </div>
                               ))}
+                            </div>
+                          ) : null}
+                          {isPartnerPickerOpen ? (
+                            <div
+                              style={{
+                                marginTop: "10px",
+                                display: "grid",
+                                gap: "8px",
+                                padding: "12px",
+                                border: "1px solid var(--border)",
+                                borderRadius: "12px",
+                                background: "rgba(255,255,255,0.55)",
+                              }}
+                            >
+                              {partnerOptions.length ? (
+                                <>
+                                  <div style={{ color: "var(--ink)", fontWeight: 500, fontSize: "0.92rem" }}>Select partner</div>
+                                  <div style={{ display: "grid", gap: "8px" }}>
+                                    {partnerOptions.map((candidate) => (
+                                      <button
+                                        key={candidate.id}
+                                        type="button"
+                                        onClick={() => handleLinkPartner(person.id, candidate.id)}
+                                        style={{
+                                          padding: "0.6rem 0.9rem",
+                                          border: "1px solid var(--border-strong)",
+                                          background: "transparent",
+                                          color: "var(--ink)",
+                                          textAlign: "left",
+                                        }}
+                                      >
+                                        {candidate.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </>
+                              ) : (
+                                <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>No available imported contacts to link.</div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setPartnerPickerPersonId(null)}
+                                style={{
+                                  border: "1px solid var(--border-strong)",
+                                  background: "transparent",
+                                  color: "var(--ink)",
+                                }}
+                              >
+                                Cancel
+                              </button>
                             </div>
                           ) : null}
                           {childFormPersonId === person.id ? (
@@ -612,6 +692,20 @@ export default function ImportContacts() {
                           >
                             Edit
                           </button>
+                          {linkedPartnerName ? null : (
+                            <button
+                              type="button"
+                              onClick={() => setPartnerPickerPersonId((current) => (current === person.id ? null : person.id))}
+                              style={{
+                                padding: "0.6rem 0.9rem",
+                                border: "1px solid var(--border-strong)",
+                                background: "transparent",
+                                color: "var(--ink)",
+                              }}
+                            >
+                              Link Partner
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => openChildForm(person.id)}
@@ -625,8 +719,9 @@ export default function ImportContacts() {
                             Add Child
                           </button>
                         </div>
-                      </div>
-                    ))}
+                          </div>
+                        );
+                      })}
                   </div>
 
                   <div style={{ marginTop: "16px" }}>
