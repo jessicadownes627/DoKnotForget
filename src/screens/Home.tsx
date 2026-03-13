@@ -252,13 +252,6 @@ export default function Home({
     }
   }, [handledReminderActions]);
 
-  function markReminderActionHandled(actionKey: string) {
-    setHandledReminderActions((prev) => {
-      if (prev[actionKey]) return prev;
-      return { ...prev, [actionKey]: true };
-    });
-  }
-
   const [birthdayPickerPersonId, setBirthdayPickerPersonId] = useState<string | null>(null);
   const [birthdayDraftMonthDay, setBirthdayDraftMonthDay] = useState("");
   const [birthdayDraftYear, setBirthdayDraftYear] = useState("");
@@ -380,13 +373,6 @@ export default function Home({
     return headerDateFormatter.format(parsed);
   }
 
-  function formatReminderMomentType(value: string) {
-    if (value === "childBirthday") return "Child birthday";
-    if (value === "custom") return "Custom moment";
-    if (value === "anniversary") return "Anniversary";
-    return "Birthday";
-  }
-
   function formatReminderCard(reminder: ReminderEvent) {
     const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
     const personName = person?.name ?? reminder.personName;
@@ -450,19 +436,23 @@ export default function Home({
       reminder.reminderType === "dayOf"
         ? [`Quick idea`, ...pickQuickIdeas(getReminderId(reminder)).map((idea) => `• ${idea}`)].join("\n")
         : null;
-    return [
+    const baseLines = [
       display.label,
-      `${formatReminderDate(reminder.date)} · ${formatReminderMomentType(reminder.momentType)}`,
+      formatReminderDate(reminder.date),
       giftLine,
-      quickIdeas,
     ]
       .filter(Boolean)
       .join("\n");
+    return quickIdeas ? `${baseLines}\n\n${quickIdeas}` : baseLines;
   }
 
   function dismissReminderCard(reminder: ReminderEvent) {
     const reminderId = getReminderId(reminder);
     markReminderFired(reminderId);
+    setHandledReminderActions((prev) => {
+      if (prev[reminderId]) return prev;
+      return { ...prev, [reminderId]: true };
+    });
     setDismissedReminderKeys((prev) => ({ ...prev, [reminderId]: true }));
   }
 
@@ -492,24 +482,20 @@ export default function Home({
   }
 
   function reminderTextActionLabel(reminder: ReminderEvent, person: Person | null) {
-    const actionKey = `text|${getReminderId(reminder)}`;
     const first = ((person?.name ?? reminder.personName).trim().split(" ")[0] || reminder.personName || "them").trim();
 
     if (reminder.momentType === "childBirthday") {
       const childLine = formatReminderCard(reminder).label;
       const childName = childLine.split(" turns ")[0]?.split("'s birthday")[0]?.trim() || "child";
-      const baseLabel = `Text ${first} (${childName}'s parent)`;
-      return handledReminderActions[actionKey] ? `${baseLabel} ✓` : baseLabel;
+      return `Text ${first} (${childName}'s parent)`;
     }
 
-    const baseLabel = `Text ${first}`;
-    return handledReminderActions[actionKey] ? `${baseLabel} ✓` : baseLabel;
+    return `Text ${first}`;
   }
 
   function buildReminderActions(reminder: ReminderEvent) {
     const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
     const first = ((person?.name ?? reminder.personName).trim().split(" ")[0] || reminder.personName || "them").trim();
-    const actionKey = `text|${getReminderId(reminder)}`;
 
     if (reminder.reminderType === "sevenDay") {
       return [
@@ -544,7 +530,6 @@ export default function Home({
         title: !person?.phone ? "Add a phone number to text them." : undefined,
         onClick: () => {
           if (!person?.phone) return;
-          markReminderActionHandled(actionKey);
 
           const toName = (person.name ?? "").trim().split(" ")[0] || person.name || first;
           const display = formatReminderCard(reminder);
@@ -1432,8 +1417,7 @@ export default function Home({
                   void handleKidsBirthdayPromptYes;
                   void partnerLinkPrompt;
                   const handledToday = reminders.filter((reminder) => {
-                    const actionKey = `text|${getReminderId(reminder)}`;
-                    return reminder.reminderType === "dayOf" && Boolean(handledReminderActions[actionKey]);
+                    return reminder.reminderType === "dayOf" && Boolean(handledReminderActions[getReminderId(reminder)]);
                   });
 
                   function handledLine(reminder: ReminderEvent) {
@@ -1443,18 +1427,18 @@ export default function Home({
 
                     if (reminder.momentType === "childBirthday") {
                       const childName = display.label.split(" turns ")[0]?.split("'s birthday")[0]?.trim() || "their child";
-                      return `✓ Texted ${first} about ${childName}'s birthday`;
+                      return `✓ All set for ${childName}'s birthday with ${first}`;
                     }
 
                     if (reminder.momentType === "anniversary") {
-                      return `✓ Sent anniversary message to ${first}`;
+                      return `✓ All set for ${first}'s anniversary`;
                     }
 
                     if (reminder.momentType === "birthday") {
-                      return `✓ Texted ${first} for birthday`;
+                      return `✓ All set for ${first}'s birthday`;
                     }
 
-                    return `✓ Reached out to ${first}`;
+                    return `✓ All set for ${first}`;
                   }
 
                   const renderPromptGrid = (children: React.ReactNode) => (
