@@ -7,7 +7,6 @@ import PeopleIndex from "./PeopleIndex";
 import { generateCareSuggestions } from "../utils/careSuggestions";
 import { useLocation, useNavigate } from "../router";
 import { useAppState } from "../appState";
-import SmartSuggestionCard from "../components/SmartSuggestionCard";
 import { getUpcomingReminders, type ReminderEvent } from "../engine/reminderEngine";
 import { getRemindersToFire } from "../engine/reminderScheduler";
 import { getReminderId, markReminderFired } from "../engine/reminderRegistry";
@@ -39,20 +38,53 @@ const homeHeaderDateFormatter = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
 });
 
-const QUICK_IDEA_SUGGESTIONS = [
-  "Buy them a coffee",
-  "Grab a cupcake",
+const CHILD_QUICK_IDEAS = [
+  "Send a silly GIF",
+  "Drop off balloons",
+  "Bring a cupcake",
+  "Drop off a birthday card",
+  "Bring a small toy or gift card",
+  "Draw them a funny picture",
+];
+
+const TEEN_QUICK_IDEAS = [
+  "Send a funny meme",
+  "Send a Spotify song",
+  "Share a throwback photo",
+  "Send a funny TikTok",
+];
+
+const MILESTONE_QUICK_IDEAS = [
+  "Send a throwback memory",
+  "Plan a celebratory toast",
+  "Call them today",
+  "Send a celebratory message",
+  "Bring balloons",
+  "Drop off a small cake",
+];
+
+const MILESTONE_AGES = new Set([13, 16, 18, 21, 30, 40, 50, 60]);
+
+const ADULT_QUICK_IDEAS = [
+  "Drop off a cupcake",
   "Pick up flowers",
   "Buy a scratch-off ticket",
   "Send a funny meme",
+  "Call and sing happy birthday",
+  "Share a favorite memory",
+  "Send a photo from the past",
+  "Leave a voicemail surprise",
+  "Send a song from Apple Music",
+  "Tag them in a memory",
+  "Send a GIF",
+  "Write a quick compliment",
   "Drop off a bottle of wine",
   "Bring donuts",
   "Send a pizza",
   "Take them to lunch",
-  "Send a Venmo coffee",
+  "Send a Venmo treat",
   "Bring balloons",
   "Write a quick card",
-  "Share a photo memory",
   "Send a voice message",
   "Stop by with ice cream",
 ];
@@ -104,15 +136,35 @@ function hashText(value: string) {
   return hash;
 }
 
-function pickQuickIdeas(seed: string) {
-  if (QUICK_IDEA_SUGGESTIONS.length <= 2) return QUICK_IDEA_SUGGESTIONS;
+function pickQuickIdeas(seed: string, suggestions: string[]) {
+  if (suggestions.length <= 2) return suggestions;
 
-  const firstIndex = hashText(seed) % QUICK_IDEA_SUGGESTIONS.length;
-  const secondIndex = (firstIndex + 1 + (hashText(`${seed}:next`) % (QUICK_IDEA_SUGGESTIONS.length - 1))) % QUICK_IDEA_SUGGESTIONS.length;
+  const firstIndex = hashText(seed) % suggestions.length;
+  const secondIndex = (firstIndex + 1 + (hashText(`${seed}:next`) % (suggestions.length - 1))) % suggestions.length;
 
-  return [QUICK_IDEA_SUGGESTIONS[firstIndex], QUICK_IDEA_SUGGESTIONS[secondIndex]].filter(
+  return [suggestions[firstIndex], suggestions[secondIndex]].filter(
     (idea, index, all) => all.indexOf(idea) === index
   );
+}
+
+function calculateAge(birthday: string | undefined, referenceDate = new Date()) {
+  if (!birthday) return undefined;
+
+  const [year, month, day] = birthday.split("-").map(Number);
+  if (!year || !month || !day) return undefined;
+
+  const today = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+
+  let age = today.getFullYear() - year;
+  const hasHadBirthdayThisYear =
+    today.getMonth() + 1 > month ||
+    (today.getMonth() + 1 === month && today.getDate() >= day);
+
+  if (!hasHadBirthdayThisYear) {
+    age -= 1;
+  }
+
+  return age >= 0 ? age : undefined;
 }
 
 export default function Home({
@@ -427,23 +479,56 @@ export default function Home({
     };
   }
 
-  function buildReminderMessage(reminder: ReminderEvent) {
+  function buildReminderDisplay(reminder: ReminderEvent) {
     const display = formatReminderCard(reminder);
     const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
     const latestGift = person?.giftHistory?.length ? person.giftHistory[person.giftHistory.length - 1] : null;
-    const giftLine = latestGift ? `Last time you sent: ${formatGiftTypeLabel(latestGift.type)}` : null;
-    const quickIdeas =
-      reminder.reminderType === "dayOf"
-        ? [`Quick idea`, ...pickQuickIdeas(getReminderId(reminder)).map((idea) => `• ${idea}`)].join("\n")
-        : null;
-    const baseLines = [
-      display.label,
-      formatReminderDate(reminder.date),
-      giftLine,
-    ]
-      .filter(Boolean)
-      .join("\n");
-    return quickIdeas ? `${baseLines}\n\n${quickIdeas}` : baseLines;
+    const personName = (person?.name ?? reminder.personName).trim();
+    const firstName = personName.split(" ")[0] || reminder.personName || "them";
+    const eventDate = reminderEventDate(reminder);
+
+    let reminderAge: number | undefined;
+    let birthdayForAge: string | undefined;
+    if (reminder.momentType === "childBirthday") {
+      const matchingChild =
+        person?.children?.find((child) => {
+          const birthdayValue = (child.birthday ?? child.birthdate ?? "").trim();
+          if (!birthdayValue) return false;
+          const nextBirthday = getNextBirthdayFromIso(birthdayValue, today);
+          if (!nextBirthday || !eventDate) return false;
+          return nextBirthday.target.getTime() === eventDate.getTime();
+        }) ?? null;
+
+      birthdayForAge = (matchingChild?.birthday ?? matchingChild?.birthdate ?? "").trim() || undefined;
+    } else {
+      const birthdayMoment = (person?.moments ?? []).find((moment) => moment.type === "birthday") ?? null;
+      birthdayForAge = (birthdayMoment?.date ?? "").trim() || undefined;
+    }
+
+    reminderAge = birthdayForAge && eventDate ? calculateAge(birthdayForAge, eventDate) : undefined;
+    const isMilestoneBirthday =
+      reminder.reminderType === "dayOf" &&
+      reminder.momentType === "birthday" &&
+      reminderAge !== undefined &&
+      MILESTONE_AGES.has(reminderAge);
+
+    const ideaPool =
+      reminderAge !== undefined && MILESTONE_AGES.has(reminderAge)
+        ? MILESTONE_QUICK_IDEAS
+        : reminderAge !== undefined && reminderAge < 13
+        ? CHILD_QUICK_IDEAS
+        : reminderAge !== undefined && reminderAge < 18
+          ? TEEN_QUICK_IDEAS
+          : ADULT_QUICK_IDEAS;
+
+    return {
+      title: isMilestoneBirthday ? `${personName} turns ${reminderAge} today 🎉` : display.label,
+      date: formatReminderDate(reminder.date),
+      giftLine: latestGift ? `Last time you sent: ${formatGiftTypeLabel(latestGift.type)}` : null,
+      ideaHeading:
+        reminder.reminderType === "dayOf" ? `A small way to brighten ${possessive(firstName)} day` : null,
+      ideas: reminder.reminderType === "dayOf" ? pickQuickIdeas(getReminderId(reminder), ideaPool) : [],
+    };
   }
 
   function dismissReminderCard(reminder: ReminderEvent) {
@@ -508,7 +593,7 @@ export default function Home({
           },
         },
         {
-          label: "All set",
+          label: "✓ Mark as done",
           onClick: () => dismissReminderCard(reminder),
         },
       ];
@@ -517,7 +602,7 @@ export default function Home({
     if (reminder.reminderType === "oneDay") {
       return [
         {
-          label: "All set",
+          label: "✓ Mark as done",
           onClick: () => dismissReminderCard(reminder),
         },
       ];
@@ -594,7 +679,7 @@ export default function Home({
         },
       },
       {
-        label: `Send ${first} a coffee`,
+        label: `Buy ${first} a coffee`,
         href: "https://www.starbucks.com/gift",
         onClick: () => {
           if (!person) return;
@@ -602,7 +687,7 @@ export default function Home({
         },
       },
       {
-        label: "All set",
+        label: "✓ Mark as done",
         onClick: () => dismissReminderCard(reminder),
       },
     ];
@@ -1447,15 +1532,137 @@ export default function Home({
 
                   const renderReminderCards = (items: ReminderEvent[]) => (
                     <div style={{ display: "grid", gap: "12px", marginBottom: "6px" }}>
-                      {items.map((reminder) => (
-                        <SmartSuggestionCard
-                          key={getReminderId(reminder)}
-                          variant="nudge"
-                          message={buildReminderMessage(reminder)}
-                          actions={buildReminderActions(reminder)}
-                          onMaybe={undefined}
-                        />
-                      ))}
+                      {items.map((reminder) => {
+                        const reminderId = getReminderId(reminder);
+                        const display = buildReminderDisplay(reminder);
+                        const actions = buildReminderActions(reminder);
+                        const completionAction = actions.find((action) => action.label === "✓ Mark as done") ?? null;
+                        const primaryActions = actions.filter((action) => action.label !== "✓ Mark as done");
+
+                        return (
+                          <div
+                            key={reminderId}
+                            className="smart-card"
+                            style={{
+                              border: "1px solid var(--border)",
+                              borderRadius: "16px",
+                              background: "rgba(255,255,255,0.7)",
+                              padding: "16px",
+                              display: "grid",
+                              gap: "14px",
+                              backdropFilter: "blur(6px)",
+                            }}
+                          >
+                            <div style={{ display: "grid", gap: "4px" }}>
+                              <div style={{ color: "var(--ink)", fontSize: "16px", lineHeight: 1.5, fontWeight: 700 }}>
+                                {display.title}
+                              </div>
+                              <div style={{ color: "var(--ink)", fontSize: "16px", lineHeight: 1.5 }}>
+                                {display.date}
+                              </div>
+                              {display.giftLine ? (
+                                <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
+                                  {display.giftLine}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            {primaryActions.length ? (
+                              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                                {primaryActions.map((action) =>
+                                  action.href ? (
+                                    <a
+                                      key={action.label}
+                                      href={action.href}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={action.onClick}
+                                      aria-disabled={action.disabled ? "true" : undefined}
+                                      title={action.title}
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        borderRadius: "var(--radius-button)",
+                                        border: "1px solid var(--border-strong)",
+                                        padding: "0.85rem 1.15rem",
+                                        fontSize: "1rem",
+                                        fontWeight: 500,
+                                        fontFamily: "inherit",
+                                        backgroundColor: "transparent",
+                                        color: "var(--ink)",
+                                        cursor: "pointer",
+                                        boxShadow: "none",
+                                        textDecoration: "none",
+                                        opacity: action.disabled ? 0.5 : 1,
+                                        pointerEvents: action.disabled ? "none" : undefined,
+                                      }}
+                                    >
+                                      {action.label}
+                                    </a>
+                                  ) : (
+                                    <button
+                                      key={action.label}
+                                      type="button"
+                                      onClick={action.onClick}
+                                      disabled={action.disabled}
+                                      title={action.title}
+                                      style={{
+                                        borderRadius: "12px",
+                                        padding: "0.75rem 1rem",
+                                        fontSize: "1rem",
+                                      }}
+                                    >
+                                      {action.label}
+                                    </button>
+                                  )
+                                )}
+                              </div>
+                            ) : null}
+
+                            {display.ideaHeading && display.ideas.length ? (
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gap: "8px",
+                                  paddingTop: "12px",
+                                  borderTop: "1px solid var(--border)",
+                                }}
+                              >
+                                <div style={{ color: "var(--muted)", fontSize: "0.95rem", fontWeight: 600 }}>
+                                  {display.ideaHeading}
+                                </div>
+                                <div style={{ display: "grid", gap: "4px", color: "var(--ink)", fontSize: "0.98rem", lineHeight: 1.5 }}>
+                                  {display.ideas.map((idea) => (
+                                    <div key={idea}>• {idea}</div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {completionAction ? (
+                              <div
+                                style={{
+                                  paddingTop: "12px",
+                                  borderTop: "1px solid var(--border)",
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={completionAction.onClick}
+                                  style={{
+                                    borderRadius: "12px",
+                                    padding: "0.75rem 1rem",
+                                    fontSize: "1rem",
+                                  }}
+                                >
+                                  {completionAction.label}
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
                     </div>
                   );
 
