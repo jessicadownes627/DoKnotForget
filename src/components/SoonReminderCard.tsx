@@ -6,20 +6,31 @@ export type SoonReminderCardProps = {
   prefilledMessage: string;
 };
 
+function normalizeSmsRecipient(phone?: string, isIOS = false): string {
+  const raw = (phone ?? "").trim();
+  if (!raw) return "";
+  const normalized = raw.replace(/[^\d+]/g, "");
+  if (!normalized) return "";
+  if (isIOS && normalized.startsWith("+")) {
+    return normalized.slice(1);
+  }
+  return normalized;
+}
+
 export function buildSmsUrl(phone?: string, body?: string): string {
-  const cleanedPhone = (phone ?? "").trim();
-  const encodedBody = encodeURIComponent(body ?? "");
   const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
   const isIOS = /iPad|iPhone|iPod/i.test(ua);
+  const cleanedPhone = normalizeSmsRecipient(phone, isIOS);
+  const encodedBody = encodeURIComponent(body ?? "");
   const sep = isIOS ? "&" : "?";
   return `sms:${cleanedPhone}${sep}body=${encodedBody}`;
 }
 
 export function openSmsComposer(phone?: string, message?: string): void {
-  const cleanedPhone = (phone ?? "").trim();
+  const cleanedPhone = normalizeSmsRecipient(phone);
   if (!cleanedPhone) return;
   const smsUrl = buildSmsUrl(phone, message);
-  window.location.href = smsUrl;
+  window.location.assign(smsUrl);
 }
 
 export default function SoonReminderCard({

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { CareEvent } from "../models/CareEvent";
 import type { Person } from "../models/Person";
 import type { Relationship } from "../models/Relationship";
 import PersonEditDrawer from "../components/PersonEditDrawer";
@@ -85,7 +86,7 @@ export default function PersonDetail({}: {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams<{ id: string }>();
-  const { people, relationships, savePerson, updatePerson, deletePerson } = useAppState();
+  const { people, relationships, careEvents, savePerson, updatePerson, deletePerson } = useAppState();
   const person = people.find((p) => p.id === id) ?? null;
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isAddConnectionOpen, setIsAddConnectionOpen] = useState(false);
@@ -164,14 +165,34 @@ export default function PersonDetail({}: {}) {
     (rel) => rel.fromId === person.id || rel.toId === person.id
   );
 
-  const relatedPeople = relationshipsForPerson
-    .map((rel) => {
-      const otherId = rel.fromId === person.id ? rel.toId : rel.fromId;
-      const otherPerson = (people ?? []).find((p) => p.id === otherId) ?? null;
-      if (!otherPerson) return null;
-      return { person: otherPerson, type: rel.type };
-    })
-    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+  const relatedPeople = (() => {
+    const items = relationshipsForPerson
+      .map((rel) => {
+        const otherId = rel.fromId === person.id ? rel.toId : rel.fromId;
+        const otherPerson = (people ?? []).find((p) => p.id === otherId) ?? null;
+        if (!otherPerson) return null;
+        return { person: otherPerson, type: rel.type };
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+    const hasPartnerRelationship = items.some(
+      (item) => item.type === "partner" && item.person.id === person.partnerId
+    );
+    if (person.partnerId && !hasPartnerRelationship) {
+      const partner = people.find((candidate) => candidate.id === person.partnerId) ?? null;
+      if (partner) {
+        items.push({ person: partner, type: "partner" });
+      }
+    }
+
+    const seen = new Set<string>();
+    return items.filter((item) => {
+      const key = `${item.type}:${item.person.id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  })();
 
   const relationshipOrder: Array<Relationship["type"]> = ["partner", "child", "parent", "sibling", "friend", "other"];
 
@@ -184,13 +205,56 @@ export default function PersonDetail({}: {}) {
     }))
     .filter((group) => group.items.length > 0);
 
-  const isChildContact = relationshipsForPerson.some((rel) => rel.type === "child" && rel.toId === person.id);
+  const familyTimeline = useMemo(() => {
+    return relatedPeople
+      .map((item) => {
+        const birthday = (item.person.moments ?? []).find((moment) => moment.type === "birthday") ?? null;
+        if (!birthday?.date) return null;
+        const nextBirthday = getNextBirthdayFromIso(birthday.date, today);
+        if (!nextBirthday) return null;
+        return {
+          id: `${item.person.id}:${birthday.date}`,
+          personName: item.person.name,
+          label: "birthday",
+          targetDate: nextBirthday.target,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .sort((a, b) => {
+        if (a.targetDate.getTime() !== b.targetDate.getTime()) {
+          return a.targetDate.getTime() - b.targetDate.getTime();
+        }
+        return a.personName.localeCompare(b.personName, undefined, { sensitivity: "base" });
+      });
+  }, [relatedPeople, today]);
+
+  const careHistory = useMemo(() => {
+    return [...careEvents]
+      .filter((event) => event.personId === person.id)
+      .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  }, [careEvents, person.id]);
+
   const religionCulture = Array.isArray(person.religionCulture) ? person.religionCulture : [];
   const celebratesOther = religionCulture.some((value) => !["christian", "jewish", "muslim"].includes(value));
 
   function formatRelationshipType(type: Relationship["type"]) {
     if (type === "other") return "Family member";
     return type.charAt(0).toUpperCase() + type.slice(1);
+  }
+
+  function formatCareEventDate(timestamp: string) {
+    const parsed = parseLocalDate(timestamp.slice(0, 10));
+    if (!parsed) return timestamp;
+    return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(parsed);
+  }
+
+  function describeCareEvent(event: CareEvent) {
+    if (event.note?.trim()) return event.note.trim();
+    if (event.type === "text") return "Sent text";
+    if (event.type === "ecard") return "Sent eCard";
+    if (event.type === "gift") return "Sent gift";
+    if (event.type === "coffee") return "Sent coffee";
+    return "Marked reminder complete";
   }
 
   function resetConnectionDraft() {
@@ -443,17 +507,70 @@ export default function PersonDetail({}: {}) {
               </button>
             </section>
 
+            <section aria-label="Family timeline" style={{ marginTop: "28px" }}>
+              <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>Family Timeline</div>
+
+              {familyTimeline.length ? (
+                <div style={{ marginTop: "14px", display: "grid", gap: "12px" }}>
+                  {familyTimeline.map((event) => (
+                    <div
+                      key={event.id}
+                      style={{
+                        display: "grid",
+                        gap: "2px",
+                        padding: "12px 14px",
+                        border: "1px solid var(--border)",
+                        borderRadius: "14px",
+                        background: "rgba(255,255,255,0.6)",
+                      }}
+                    >
+                      <div style={{ color: "var(--ink)", fontSize: "0.98rem" }}>
+                        {event.personName} — {event.label}{" "}
+                        {monthDayFormatter.format(event.targetDate)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ marginTop: "14px", color: "var(--muted)", lineHeight: 1.6 }}>
+                  No upcoming family moments.
+                </div>
+              )}
+            </section>
+
+            <section aria-label="Care history" style={{ marginTop: "28px" }}>
+              <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>Care History</div>
+
+              {careHistory.length ? (
+                <div style={{ marginTop: "14px", display: "grid", gap: "12px" }}>
+                  {careHistory.map((event) => (
+                    <div
+                      key={event.id}
+                      style={{
+                        display: "grid",
+                        gap: "2px",
+                        padding: "12px 14px",
+                        border: "1px solid var(--border)",
+                        borderRadius: "14px",
+                        background: "rgba(255,255,255,0.6)",
+                      }}
+                    >
+                      <div style={{ color: "var(--ink)", fontSize: "0.98rem" }}>
+                        {formatCareEventDate(event.timestamp)} — {describeCareEvent(event)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ marginTop: "14px", color: "var(--muted)", lineHeight: 1.6 }}>
+                  No interactions recorded yet.
+                </div>
+              )}
+            </section>
+
             <section aria-label="Details" style={{ marginTop: "28px" }}>
               <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>Details</div>
               <div style={{ marginTop: "14px", display: "grid", gap: "18px" }}>
-                <div>
-                  <div style={{ color: "var(--muted)", fontSize: "0.9rem", marginBottom: "8px" }}>Children</div>
-                  <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}>
-                    <input type="checkbox" checked={isChildContact} readOnly />
-                    This person is a child
-                  </label>
-                </div>
-
                 <div>
                   <div style={{ color: "var(--muted)", fontSize: "0.9rem", marginBottom: "8px" }}>Holidays they celebrate</div>
                   <div style={{ display: "grid", gap: "0.6rem" }}>

@@ -1,5 +1,6 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
 import type { Person } from "./models/Person";
+import type { CareEvent, CareEventType } from "./models/CareEvent";
 import type { Relationship } from "./models/Relationship";
 import { normalizePhone } from "./utils/phone";
 
@@ -14,16 +15,19 @@ type AppState = {
   onboardingComplete: boolean;
   people: Person[];
   relationships: Relationship[];
+  careEvents: CareEvent[];
   markOnboardingComplete: () => void;
   createPerson: (person: Person) => void;
   savePerson: (payload: SavePersonPayload) => void;
   updatePerson: (person: Person) => void;
   updatePersonFields: (id: string, patch: Partial<Person>) => void;
+  recordCareEvent: (personId: string, type: CareEventType, note?: string) => void;
   deletePerson: (id: string) => void;
 };
 
 const PEOPLE_STORAGE_KEY = "doknotforget_people";
 const RELATIONSHIPS_STORAGE_KEY = "doknotforget_relationships";
+const CARE_EVENTS_STORAGE_KEY = "doknotforget_care_events";
 const ONBOARDING_STORAGE_KEY = "doknotforget_onboardingComplete";
 
 const AppStateContext = createContext<AppState | null>(null);
@@ -33,6 +37,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [people, setPeople] = useState<Person[]>([]);
   const [relationships, setRelationships] = useState<Relationship[]>([]);
+  const [careEvents, setCareEvents] = useState<CareEvent[]>([]);
 
   useEffect(() => {
     const debugHydration = (() => {
@@ -67,6 +72,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       if (rawRelationships) {
         const parsed = JSON.parse(rawRelationships);
         if (Array.isArray(parsed)) setRelationships(parsed as Relationship[]);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const rawCareEvents = window.localStorage.getItem(CARE_EVENTS_STORAGE_KEY);
+      if (rawCareEvents) {
+        const parsed = JSON.parse(rawCareEvents);
+        if (Array.isArray(parsed)) setCareEvents(parsed as CareEvent[]);
       }
     } catch {
       // ignore
@@ -141,6 +156,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!hasHydrated) return;
     try {
+      window.localStorage.setItem(CARE_EVENTS_STORAGE_KEY, JSON.stringify(careEvents));
+    } catch {
+      // ignore
+    }
+  }, [careEvents, hasHydrated]);
+
+  useEffect(() => {
+    if (!hasHydrated) return;
+    try {
       window.localStorage.setItem(ONBOARDING_STORAGE_KEY, onboardingComplete ? "true" : "false");
     } catch {
       // ignore
@@ -153,6 +177,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       onboardingComplete,
       people,
       relationships,
+      careEvents,
       markOnboardingComplete: () => setOnboardingComplete(true),
       createPerson: (person: Person) => {
         setPeople((prev) => {
@@ -198,6 +223,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       updatePersonFields: (id: string, patch: Partial<Person>) => {
         setPeople((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
       },
+      recordCareEvent: (personId: string, type: CareEventType, note?: string) => {
+        setCareEvents((prev) => [
+          {
+            id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            personId,
+            type,
+            timestamp: new Date().toISOString(),
+            note: note?.trim() || undefined,
+          },
+          ...prev,
+        ]);
+      },
       deletePerson: (id: string) => {
         setPeople((prev) =>
           prev
@@ -205,9 +242,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
             .map((p) => (p.partnerId === id ? { ...p, partnerId: null } : p))
         );
         setRelationships((prev) => prev.filter((r) => r.fromId !== id && r.toId !== id));
+        setCareEvents((prev) => prev.filter((event) => event.personId !== id));
       },
     };
-  }, [hasHydrated, onboardingComplete, people, relationships]);
+  }, [careEvents, hasHydrated, onboardingComplete, people, relationships]);
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }

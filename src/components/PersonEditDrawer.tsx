@@ -287,7 +287,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
   }
 
   function updateAnniversaryFromDraft() {
-    const iso = buildMomentIso(anniversaryDraftMonthDay, anniversaryDraftYear, true);
+    const iso = buildMomentIso(anniversaryDraftMonthDay, anniversaryDraftYear, false);
     if (!iso) return;
 
     const updatedMoment: Moment = anniversaryMoment
@@ -922,8 +922,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
           setMonthDay={setAnniversaryDraftMonthDay}
           year={anniversaryDraftYear}
           setYear={setAnniversaryDraftYear}
-          yearHelperText=""
-          requireYear
+          yearHelperText="Optional."
           onSave={() => {
             updateAnniversaryFromDraft();
             setOpenAnniversary(false);

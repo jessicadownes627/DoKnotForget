@@ -25,6 +25,11 @@ export default function AddPerson() {
   const [birthdayDraftYear, setBirthdayDraftYear] = useState("");
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [partnerSearch, setPartnerSearch] = useState("");
+  const [partnerBirthdayMonthDay, setPartnerBirthdayMonthDay] = useState("");
+  const [partnerBirthdayYear, setPartnerBirthdayYear] = useState("");
+  const [partnerDraftMonthDay, setPartnerDraftMonthDay] = useState("");
+  const [partnerDraftYear, setPartnerDraftYear] = useState("");
+  const [isPartnerDatePickerOpen, setIsPartnerDatePickerOpen] = useState(false);
   const [anniversary, setAnniversary] = useState(""); // MM-DD
   const [anniversaryDraftMonthDay, setAnniversaryDraftMonthDay] = useState("");
   const [anniversaryDraftYear, setAnniversaryDraftYear] = useState("");
@@ -54,6 +59,12 @@ export default function AddPerson() {
     Array<{ id: string; toId: string; name: string; type: RelationshipType }>
   >([]);
   const [relatedName, setRelatedName] = useState("");
+  const [relatedPhone, setRelatedPhone] = useState("");
+  const [relatedBirthdayMonthDay, setRelatedBirthdayMonthDay] = useState("");
+  const [relatedBirthdayYear, setRelatedBirthdayYear] = useState("");
+  const [relatedDraftMonthDay, setRelatedDraftMonthDay] = useState("");
+  const [relatedDraftYear, setRelatedDraftYear] = useState("");
+  const [isRelatedDatePickerOpen, setIsRelatedDatePickerOpen] = useState(false);
   const [relatedType, setRelatedType] = useState<RelationshipType>("child");
   const [openRow, setOpenRow] = useState<
     "name" | "phone" | "partner" | "family" | "birthday" | "anniversary" | "custom" | "related" | null
@@ -69,7 +80,35 @@ export default function AddPerson() {
     }
     if (lastPrefilledPersonIdRef.current === editingPerson.id) return;
     lastPrefilledPersonIdRef.current = editingPerson.id;
+    setName(editingPerson.name || "");
     setPhone(editingPerson.phone || "");
+    const birthdayMoment = (editingPerson.moments ?? []).find((m) => m.type === "birthday") ?? null;
+    const birthdayDraft = birthdayMoment?.date ? toDraftFromIso(birthdayMoment.date) : { monthDay: "", year: "" };
+    setBirthdayMonthDay(birthdayDraft.monthDay);
+    setBirthdayYear(birthdayDraft.year);
+
+    const anniversaryValue = (editingPerson.anniversary ?? "").trim();
+    setAnniversary(anniversaryValue);
+    const anniversaryDraft = anniversaryValue ? toDraftFromIso(`0000-${anniversaryValue}`) : { monthDay: "", year: "" };
+    setAnniversaryDraftMonthDay(anniversaryDraft.monthDay);
+    setAnniversaryDraftYear("");
+
+    setPartnerId(editingPerson.partnerId ?? null);
+    setPartnerSearch(editingPerson.partnerId ? people.find((p) => p.id === editingPerson.partnerId)?.name ?? "" : "");
+    setPartnerBirthdayMonthDay("");
+    setPartnerBirthdayYear("");
+
+    setHasKids(Boolean(editingPerson.hasKids || (editingPerson.children?.length ?? 0) > 0));
+    setParentRole(editingPerson.parentRole ?? "parent");
+    setReligionCulture(Array.isArray(editingPerson.religionCulture) ? editingPerson.religionCulture : []);
+    setChildren(editingPerson.children ?? []);
+    setCustomMoments(
+      (editingPerson.moments ?? [])
+        .filter((moment) => moment.type === "custom")
+        .map((moment) => ({ title: moment.label, date: moment.date }))
+    );
+    setCreatedRelatedPeople([]);
+    setRelatedDrafts([]);
   }, [editingPerson?.id]);
 
   const dateFormatter = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" });
@@ -220,12 +259,58 @@ export default function AddPerson() {
       });
     }
 
-    const person: Person = {
+    const personId = editingPerson?.id ?? makeId();
+    let resolvedPartnerId = partnerId || null;
+    const createdPeople: Person[] = [...createdRelatedPeople];
+    const createdRelationships: Relationship[] = [...relatedDrafts.map((draft) => ({
       id: makeId(),
+      fromId: personId,
+      toId: draft.toId,
+      type: draft.type,
+    }))];
+
+    if (!resolvedPartnerId && partnerSearch.trim()) {
+      const partnerBirthdayIso = buildBirthdayIso(partnerBirthdayMonthDay, partnerBirthdayYear);
+      const createdPartner: Person = {
+        id: makeId(),
+        name: partnerSearch.trim(),
+        moments: partnerBirthdayIso
+          ? [
+              {
+                id: makeId(),
+                type: "birthday",
+                label: "Birthday",
+                date: partnerBirthdayIso,
+                recurring: true,
+              },
+            ]
+          : [],
+        partnerId: personId,
+      };
+      createdPeople.push(createdPartner);
+      createdRelationships.push({
+        id: makeId(),
+        fromId: personId,
+        toId: createdPartner.id,
+        type: "partner",
+      });
+      resolvedPartnerId = createdPartner.id;
+    } else if (resolvedPartnerId) {
+      createdRelationships.push({
+        id: makeId(),
+        fromId: personId,
+        toId: resolvedPartnerId,
+        type: "partner",
+      });
+    }
+
+    const person: Person = {
+      ...(editingPerson ?? {}),
+      id: personId,
       name: name.trim(),
       phone: normalizedPhone || undefined,
       moments,
-      partnerId: partnerId || undefined,
+      partnerId: resolvedPartnerId || undefined,
       anniversary: anniversary || undefined,
       hasKids: hasKids || (children.length ? true : undefined),
       parentRole: hasKids ? parentRole : undefined,
@@ -234,22 +319,15 @@ export default function AddPerson() {
       importantDates: moments.filter((m) => m.type === "custom"),
     };
 
-    const createdRelationships: Relationship[] = relatedDrafts.map((draft) => ({
-      id: makeId(),
-      fromId: person.id,
-      toId: draft.toId,
-      type: draft.type,
-    }));
-
     savePerson({
       person,
-      createdPeople: createdRelatedPeople,
+      createdPeople,
       createdRelationships,
     });
     navigate("/home", {
       state: {
-        defaultTab: partnerId ? "home" : "contacts",
-        ...(partnerId ? { showPartnerLinkCheck: person.id } : null),
+        defaultTab: "home",
+        ...(resolvedPartnerId ? { showPartnerLinkCheck: person.id } : null),
       },
     });
   }
@@ -318,18 +396,33 @@ export default function AddPerson() {
     const typedName = relatedName.trim();
     if (!typedName) return;
 
+    const normalizedRelatedPhone = relatedPhone.trim() ? normalizePhone(relatedPhone) : null;
+    const relatedBirthdayIso = buildBirthdayIso(relatedBirthdayMonthDay, relatedBirthdayYear);
     const normalized = typedName.toLowerCase();
-    const existing =
-      people.find((p) => p.name.trim().toLowerCase() === normalized) ??
-      createdRelatedPeople.find((p) => p.name.trim().toLowerCase() === normalized) ??
-      null;
+    const canReuseExisting = !normalizedRelatedPhone && !relatedBirthdayIso;
+    const existing = canReuseExisting
+      ? people.find((p) => p.name.trim().toLowerCase() === normalized) ??
+        createdRelatedPeople.find((p) => p.name.trim().toLowerCase() === normalized) ??
+        null
+      : null;
 
     let relatedPerson = existing;
     if (!relatedPerson) {
       relatedPerson = {
         id: makeId(),
         name: typedName,
-        moments: [],
+        phone: normalizedRelatedPhone || undefined,
+        moments: relatedBirthdayIso
+          ? [
+              {
+                id: makeId(),
+                type: "birthday",
+                label: "Birthday",
+                date: relatedBirthdayIso,
+                recurring: true,
+              },
+            ]
+          : [],
       };
       setCreatedRelatedPeople((prev) => [...prev, relatedPerson!]);
     }
@@ -339,6 +432,9 @@ export default function AddPerson() {
       { id: makeId(), toId: relatedPerson!.id, name: relatedPerson!.name, type: relatedType },
     ]);
     setRelatedName("");
+    setRelatedPhone("");
+    setRelatedBirthdayMonthDay("");
+    setRelatedBirthdayYear("");
     setRelatedType("child");
     setOpenRow(null);
   }
@@ -946,7 +1042,7 @@ export default function AddPerson() {
             <input
               value={partnerSearch}
               onChange={(e) => setPartnerSearch(e.target.value)}
-              placeholder="Find someone…"
+              placeholder="Find or enter a partner name…"
               autoFocus
               style={{
                 padding: "0.75rem 0",
@@ -966,6 +1062,8 @@ export default function AddPerson() {
                     type="button"
                     onClick={() => {
                       setPartnerId(p.id);
+                      setPartnerBirthdayMonthDay("");
+                      setPartnerBirthdayYear("");
                       setOpenRow(null);
                       setPartnerSearch("");
                     }}
@@ -985,10 +1083,54 @@ export default function AddPerson() {
                 ))}
             </div>
 
+            {!partnerId && partnerSearch.trim() ? (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  const draft = partnerBirthdayMonthDay
+                    ? { monthDay: partnerBirthdayMonthDay, year: partnerBirthdayYear }
+                    : { monthDay: "", year: "" };
+                  setPartnerDraftMonthDay(draft.monthDay);
+                  setPartnerDraftYear(draft.year);
+                  setIsPartnerDatePickerOpen(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    const draft = partnerBirthdayMonthDay
+                      ? { monthDay: partnerBirthdayMonthDay, year: partnerBirthdayYear }
+                      : { monthDay: "", year: "" };
+                    setPartnerDraftMonthDay(draft.monthDay);
+                    setPartnerDraftYear(draft.year);
+                    setIsPartnerDatePickerOpen(true);
+                  }
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  justifyContent: "space-between",
+                  padding: "0.65rem 0",
+                  cursor: "pointer",
+                  borderBottom: "1px solid rgba(27, 42, 65, 0.22)",
+                  gap: "1rem",
+                }}
+              >
+                <div style={{ color: "var(--ink)" }}>Birthday</div>
+                <div style={{ color: "var(--muted)", textAlign: "right" }}>
+                  {partnerBirthdayMonthDay ? formatMomentDate(buildBirthdayIso(partnerBirthdayMonthDay, partnerBirthdayYear)) : "Optional"}
+                </div>
+              </div>
+            ) : null}
+
             {partnerId ? (
               <button
                 type="button"
-                onClick={() => setPartnerId(null)}
+                onClick={() => {
+                  setPartnerId(null);
+                  setPartnerSearch("");
+                  setPartnerBirthdayMonthDay("");
+                  setPartnerBirthdayYear("");
+                }}
                 style={{
                   padding: 0,
                   border: "none",
@@ -1004,6 +1146,29 @@ export default function AddPerson() {
                 Clear partner
               </button>
             ) : null}
+
+            <MomentDatePicker
+              isOpen={isPartnerDatePickerOpen}
+              title="Partner birthday"
+              mode="birthday"
+              monthDay={partnerDraftMonthDay}
+              setMonthDay={setPartnerDraftMonthDay}
+              year={partnerDraftYear}
+              setYear={setPartnerDraftYear}
+              yearHelperText="Optional."
+              onSave={() => {
+                setPartnerBirthdayMonthDay(partnerDraftMonthDay);
+                setPartnerBirthdayYear(partnerDraftYear);
+                setIsPartnerDatePickerOpen(false);
+              }}
+              onCancel={() => setIsPartnerDatePickerOpen(false)}
+              onClear={() => {
+                setPartnerDraftMonthDay("");
+                setPartnerDraftYear("");
+                setPartnerBirthdayMonthDay("");
+                setPartnerBirthdayYear("");
+              }}
+            />
           </div>
         ) : null}
 
@@ -1294,6 +1459,48 @@ export default function AddPerson() {
               <option value="friend">friend</option>
               <option value="other">other</option>
             </select>
+            <input
+              type="tel"
+              value={relatedPhone}
+              onChange={(e) => setRelatedPhone(e.target.value)}
+              placeholder="Phone (optional)"
+              style={{
+                padding: "0.75rem 0",
+                fontSize: "1rem",
+                width: "100%",
+                color: "var(--ink)",
+              }}
+            />
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                setRelatedDraftMonthDay(relatedBirthdayMonthDay);
+                setRelatedDraftYear(relatedBirthdayYear);
+                setIsRelatedDatePickerOpen(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  setRelatedDraftMonthDay(relatedBirthdayMonthDay);
+                  setRelatedDraftYear(relatedBirthdayYear);
+                  setIsRelatedDatePickerOpen(true);
+                }
+              }}
+              style={{
+                display: "flex",
+                alignItems: "baseline",
+                justifyContent: "space-between",
+                padding: "0.75rem 0",
+                cursor: "pointer",
+                borderBottom: "1px solid rgba(27, 42, 65, 0.22)",
+                gap: "1rem",
+              }}
+            >
+              <div style={{ color: "var(--ink)" }}>Birthday</div>
+              <div style={{ color: "var(--muted)", textAlign: "right" }}>
+                {relatedBirthdayMonthDay ? formatMomentDate(buildBirthdayIso(relatedBirthdayMonthDay, relatedBirthdayYear)) : "Optional"}
+              </div>
+            </div>
             <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
               <button
                 onClick={handleAddRelatedPerson}
@@ -1312,6 +1519,9 @@ export default function AddPerson() {
               <button
                 onClick={() => {
                   setRelatedName("");
+                  setRelatedPhone("");
+                  setRelatedBirthdayMonthDay("");
+                  setRelatedBirthdayYear("");
                   setRelatedType("child");
                   setOpenRow(null);
                 }}
@@ -1328,6 +1538,28 @@ export default function AddPerson() {
                 Cancel
               </button>
             </div>
+            <MomentDatePicker
+              isOpen={isRelatedDatePickerOpen}
+              title="Connection birthday"
+              mode="birthday"
+              monthDay={relatedDraftMonthDay}
+              setMonthDay={setRelatedDraftMonthDay}
+              year={relatedDraftYear}
+              setYear={setRelatedDraftYear}
+              yearHelperText="Optional."
+              onSave={() => {
+                setRelatedBirthdayMonthDay(relatedDraftMonthDay);
+                setRelatedBirthdayYear(relatedDraftYear);
+                setIsRelatedDatePickerOpen(false);
+              }}
+              onCancel={() => setIsRelatedDatePickerOpen(false)}
+              onClear={() => {
+                setRelatedDraftMonthDay("");
+                setRelatedDraftYear("");
+                setRelatedBirthdayMonthDay("");
+                setRelatedBirthdayYear("");
+              }}
+            />
           </div>
         ) : null}
 

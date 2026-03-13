@@ -8,6 +8,7 @@ import { generateCareSuggestions } from "../utils/careSuggestions";
 import { useLocation, useNavigate } from "../router";
 import { useAppState } from "../appState";
 import { getUpcomingReminders, type ReminderEvent } from "../engine/reminderEngine";
+import { getUpcomingMoments } from "../engine/momentEngine";
 import { getRemindersToFire } from "../engine/reminderScheduler";
 import { getReminderId, markReminderFired } from "../engine/reminderRegistry";
 import {
@@ -24,6 +25,7 @@ import ContactsSearchResults from "../components/ContactsSearchResults";
 import { filterContacts } from "../utils/contactSearch";
 import SmartMessageSuggestionsModal from "../components/SmartMessageSuggestionsModal";
 import { parseLocalDate } from "../utils/date";
+import { buildHomeSections } from "../utils/homeSections";
 
 const headerDateFormatter = new Intl.DateTimeFormat("en-US", {
   weekday: "long",
@@ -92,6 +94,11 @@ const ADULT_QUICK_IDEAS = [
 function startOfToday() {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function msUntilNextMidnight(from = new Date()) {
+  const next = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1);
+  return Math.max(1000, next.getTime() - from.getTime());
 }
 
 function possessive(name: string) {
@@ -171,7 +178,7 @@ export default function Home({
 }: {}) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { people, updatePerson, updatePersonFields, createPerson } = useAppState();
+  const { people, updatePerson, updatePersonFields, createPerson, recordCareEvent } = useAppState();
   const initialTab = location.state?.defaultTab === "contacts" ? "contacts" : "home";
   const [activeTab, setActiveTab] = useState<"home" | "contacts">(initialTab);
   const [searchTerm, setSearchTerm] = useState("");
@@ -190,6 +197,17 @@ export default function Home({
     }
   });
   const [dismissedReminderKeys, setDismissedReminderKeys] = useState<Record<string, true>>({});
+  const [dismissedHorizonKeys, setDismissedHorizonKeys] = useState<Record<string, true>>(() => {
+    try {
+      const raw = window.localStorage.getItem("doknotforget_dismissed_horizon_v1");
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== "object") return {};
+      return parsed as Record<string, true>;
+    } catch {
+      return {};
+    }
+  });
   const [giftHistoryConfirm, setGiftHistoryConfirm] = useState<null | {
     personId: string;
     type: "coffee" | "ecard" | "gift";
@@ -202,7 +220,39 @@ export default function Home({
   }>(null);
   const previousPeopleCountRef = useRef<number>(people.length);
 
-  const today = useMemo(() => startOfToday(), []);
+  const [today, setToday] = useState(() => startOfToday());
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    function refreshToday() {
+      setToday(startOfToday());
+    }
+
+    const timeoutId = window.setTimeout(function tick() {
+      refreshToday();
+      const intervalId = window.setInterval(refreshToday, 60 * 1000);
+      (window as typeof window & { __dkfTodayInterval?: number }).__dkfTodayInterval = intervalId;
+    }, msUntilNextMidnight());
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") refreshToday();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      const intervalId = (window as typeof window & { __dkfTodayInterval?: number }).__dkfTodayInterval;
+      if (intervalId) {
+        window.clearInterval(intervalId);
+        delete (window as typeof window & { __dkfTodayInterval?: number }).__dkfTodayInterval;
+      }
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
 
   function seedDemoData() {
     const base = startOfToday();
@@ -304,6 +354,14 @@ export default function Home({
     }
   }, [handledReminderActions]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("doknotforget_dismissed_horizon_v1", JSON.stringify(dismissedHorizonKeys));
+    } catch {
+      // ignore
+    }
+  }, [dismissedHorizonKeys]);
+
   const [birthdayPickerPersonId, setBirthdayPickerPersonId] = useState<string | null>(null);
   const [birthdayDraftMonthDay, setBirthdayDraftMonthDay] = useState("");
   const [birthdayDraftYear, setBirthdayDraftYear] = useState("");
@@ -354,6 +412,24 @@ export default function Home({
       return !dismissedReminderKeys[reminderId];
     });
   }, [dismissedReminderKeys, reminders]);
+
+  const upcomingMoments = useMemo(() => {
+    if (activeTab !== "home") return [];
+    return getUpcomingMoments(people, today, 30);
+  }, [activeTab, people, today]);
+
+  const homeSections = useMemo(
+    () =>
+      buildHomeSections({
+        reminders,
+        activeReminders,
+        upcomingMoments,
+        today,
+        handledReminderActions,
+        dismissedHorizonKeys,
+      }),
+    [activeReminders, dismissedHorizonKeys, handledReminderActions, reminders, today, upcomingMoments]
+  );
 
   useEffect(() => {
     if (activeTab !== "home") return;
@@ -479,7 +555,12 @@ export default function Home({
     };
   }
 
-  function buildReminderDisplay(reminder: ReminderEvent) {
+  function stripRelativeSuffix(label: string, relative: "today" | "tomorrow") {
+    const suffix = ` ${relative}`;
+    return label.endsWith(suffix) ? label.slice(0, -suffix.length) : label;
+  }
+
+  function buildReminderDisplay(reminder: ReminderEvent, section: "today" | "tomorrow" | "horizon") {
     const display = formatReminderCard(reminder);
     const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
     const latestGift = person?.giftHistory?.length ? person.giftHistory[person.giftHistory.length - 1] : null;
@@ -506,12 +587,6 @@ export default function Home({
     }
 
     reminderAge = birthdayForAge && eventDate ? calculateAge(birthdayForAge, eventDate) : undefined;
-    const isMilestoneBirthday =
-      reminder.reminderType === "dayOf" &&
-      reminder.momentType === "birthday" &&
-      reminderAge !== undefined &&
-      MILESTONE_AGES.has(reminderAge);
-
     const ideaPool =
       reminderAge !== undefined && MILESTONE_AGES.has(reminderAge)
         ? MILESTONE_QUICK_IDEAS
@@ -521,19 +596,35 @@ export default function Home({
           ? TEEN_QUICK_IDEAS
           : ADULT_QUICK_IDEAS;
 
+    let title = display.label;
+    if (section === "today" && reminder.reminderType === "oneDay") {
+      title = `Tomorrow: ${stripRelativeSuffix(display.label, "tomorrow")}`;
+    } else if (section === "tomorrow" && reminder.reminderType === "dayOf") {
+      title = stripRelativeSuffix(display.label, "today");
+    } else if (
+      section === "today" &&
+      reminder.reminderType === "dayOf" &&
+      reminder.momentType === "birthday" &&
+      reminderAge !== undefined &&
+      MILESTONE_AGES.has(reminderAge)
+    ) {
+      title = `${personName} turns ${reminderAge} today 🎉`;
+    }
+
     return {
-      title: isMilestoneBirthday ? `${personName} turns ${reminderAge} today 🎉` : display.label,
-      date: formatReminderDate(reminder.date),
+      title,
+      date: formatReminderDate(eventDate ? formatYmd(eventDate) : reminder.date),
       giftLine: latestGift ? `Last time you sent: ${formatGiftTypeLabel(latestGift.type)}` : null,
       ideaHeading:
-        reminder.reminderType === "dayOf" ? `A small way to brighten ${possessive(firstName)} day` : null,
-      ideas: reminder.reminderType === "dayOf" ? pickQuickIdeas(getReminderId(reminder), ideaPool) : [],
+        reminder.reminderType === "dayOf" && section === "today" ? `A small way to brighten ${possessive(firstName)} day` : null,
+      ideas: reminder.reminderType === "dayOf" && section === "today" ? pickQuickIdeas(getReminderId(reminder), ideaPool) : [],
     };
   }
 
   function dismissReminderCard(reminder: ReminderEvent) {
     const reminderId = getReminderId(reminder);
     markReminderFired(reminderId);
+    recordCareEvent(reminder.personId, "reminderComplete", "Marked reminder complete");
     setHandledReminderActions((prev) => {
       if (prev[reminderId]) return prev;
       return { ...prev, [reminderId]: true };
@@ -563,7 +654,21 @@ export default function Home({
         },
       ],
     });
+    const note =
+      giftHistoryConfirm.type === "coffee"
+        ? "Sent coffee"
+        : giftHistoryConfirm.type === "ecard"
+          ? "Sent eCard"
+          : "Sent gift";
+    recordCareEvent(person.id, giftHistoryConfirm.type, note);
     setGiftHistoryConfirm(null);
+  }
+
+  function careEventNoteForReminderText(reminder: ReminderEvent) {
+    if (reminder.momentType === "birthday") return "Sent birthday text";
+    if (reminder.momentType === "childBirthday") return "Sent child birthday text";
+    if (reminder.momentType === "anniversary") return "Sent anniversary text";
+    return "Sent text";
   }
 
   function reminderTextActionLabel(reminder: ReminderEvent, person: Person | null) {
@@ -667,6 +772,9 @@ export default function Home({
               { id: "simple", label: "Simple", message: simple },
               { id: "custom", label: "Write my own", message: "" },
             ],
+            onAfterSend: () => {
+              recordCareEvent(person.id, "text", careEventNoteForReminderText(reminder));
+            },
           });
         },
       },
@@ -1486,10 +1594,11 @@ export default function Home({
 
                   const firstOf = (fullName: string) => (fullName ?? "").trim().split(" ")[0] || fullName || "Text";
 
-                  const todayReminders = activeReminders.filter((reminder) => reminder.reminderType === "dayOf");
-                  const tomorrowReminders = activeReminders.filter((reminder) => reminder.reminderType === "oneDay");
-                  const horizonReminders = activeReminders.filter((reminder) => reminder.reminderType === "sevenDay");
-                  const groupedReminders = [...todayReminders, ...tomorrowReminders, ...horizonReminders];
+                  const todayReminders = homeSections.activeTodayReminders;
+                  const tomorrowReminders = homeSections.tomorrowReminders;
+                  const horizonEntries = homeSections.horizonEntries;
+                  const handledToday = homeSections.completedTodayReminders;
+                  const hasPendingReminders = todayReminders.length > 0 || tomorrowReminders.length > 0 || horizonEntries.length > 0;
                   void visibleCareSuggestions;
                   void handleSuggestionAction;
                   void handleQuestionChoose;
@@ -1501,10 +1610,6 @@ export default function Home({
                   void handleKidsBirthdayPromptNo;
                   void handleKidsBirthdayPromptYes;
                   void partnerLinkPrompt;
-                  const handledToday = reminders.filter((reminder) => {
-                    return reminder.reminderType === "dayOf" && Boolean(handledReminderActions[getReminderId(reminder)]);
-                  });
-
                   function handledLine(reminder: ReminderEvent) {
                     const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
                     const first = firstOf(person?.name ?? reminder.personName);
@@ -1530,11 +1635,11 @@ export default function Home({
                     <div style={{ display: "grid", gap: "12px", marginBottom: "6px" }}>{children}</div>
                   );
 
-                  const renderReminderCards = (items: ReminderEvent[]) => (
+                  const renderReminderCards = (items: ReminderEvent[], section: "today" | "tomorrow") => (
                     <div style={{ display: "grid", gap: "12px", marginBottom: "6px" }}>
                       {items.map((reminder) => {
                         const reminderId = getReminderId(reminder);
-                        const display = buildReminderDisplay(reminder);
+                        const display = buildReminderDisplay(reminder, section);
                         const actions = buildReminderActions(reminder);
                         const completionAction = actions.find((action) => action.label === "✓ Mark as done") ?? null;
                         const primaryActions = actions.filter((action) => action.label !== "✓ Mark as done");
@@ -1682,7 +1787,7 @@ export default function Home({
                     </div>
                   );
 
-                  if (groupedReminders.length === 0) {
+                  if (!hasPendingReminders && handledToday.length === 0) {
                     return renderEmpty();
                   }
 
@@ -1697,27 +1802,177 @@ export default function Home({
                           <div className="dkf-golden-sun-divider" aria-hidden="true" style={{ marginTop: "8px" }}>
                             <div className="dkf-golden-sun-divider-line" />
                           </div>
-                          <div style={{ marginTop: "10px", color: "var(--muted)", fontSize: "16px", lineHeight: 1.5 }}>
-                            You remembered. That already counts.
-                          </div>
-                          {renderPromptGrid(renderReminderCards(todayReminders))}
+                          {todayReminders.length > 0 ? (
+                            <>
+                              <div style={{ marginTop: "10px", color: "var(--muted)", fontSize: "16px", lineHeight: 1.5 }}>
+                                You remembered. That already counts.
+                              </div>
+                              {renderPromptGrid(renderReminderCards(todayReminders, "today"))}
+                            </>
+                          ) : null}
                         </>
                       ) : null}
 
                       {tomorrowReminders.length > 0 ? (
                         <>
                           <div style={{ ...headerStyle, marginTop: todayReminders.length > 0 ? "22px" : "6px" }}>Tomorrow</div>
-                          {renderReminderCards(tomorrowReminders)}
+                          {renderReminderCards(tomorrowReminders, "tomorrow")}
                         </>
                       ) : null}
 
-                      {horizonReminders.length > 0 ? (
+                      {horizonEntries.length > 0 ? (
                         <>
                           <div style={{ ...headerStyle, marginTop: todayReminders.length > 0 || tomorrowReminders.length > 0 ? "14px" : "6px" }}>
                             On the Horizon
                           </div>
                           <GoldenSunDivider />
-                          <div style={{ marginTop: "10px" }}>{renderReminderCards(horizonReminders)}</div>
+                          <div style={{ display: "grid", gap: "12px", marginTop: "10px" }}>
+                            {horizonEntries.map(({ moment, reminder }) => {
+                              if (reminder) {
+                                const reminderId = getReminderId(reminder);
+                                const display = buildReminderDisplay(reminder, "horizon");
+                                const actions = buildReminderActions(reminder);
+                                const primaryActions = actions.filter((action) => action.label !== "✓ Mark as done");
+
+                                return (
+                                  <div
+                                    key={reminderId}
+                                    className="smart-card"
+                                    style={{
+                                      border: "1px solid var(--border)",
+                                      borderRadius: "16px",
+                                      background: "rgba(255,255,255,0.7)",
+                                      padding: "16px",
+                                      display: "grid",
+                                      gap: "14px",
+                                      backdropFilter: "blur(6px)",
+                                    }}
+                                  >
+                                    <div style={{ display: "grid", gap: "4px" }}>
+                                      <div style={{ color: "var(--ink)", fontSize: "16px", lineHeight: 1.5, fontWeight: 700 }}>
+                                        {display.title}
+                                      </div>
+                                      <div style={{ color: "var(--ink)", fontSize: "16px", lineHeight: 1.5 }}>
+                                        {formatReminderDate(moment.eventDate)}
+                                      </div>
+                                      {display.giftLine ? (
+                                        <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
+                                          {display.giftLine}
+                                        </div>
+                                      ) : null}
+                                    </div>
+
+                                    {primaryActions.length ? (
+                                      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                                        {primaryActions.map((action) =>
+                                          action.href ? (
+                                            <a
+                                              key={action.label}
+                                              href={action.href}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              onClick={action.onClick}
+                                              aria-disabled={action.disabled ? "true" : undefined}
+                                              title={action.title}
+                                              style={{
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                borderRadius: "var(--radius-button)",
+                                                border: "1px solid var(--border-strong)",
+                                                padding: "0.85rem 1.15rem",
+                                                fontSize: "1rem",
+                                                fontWeight: 500,
+                                                fontFamily: "inherit",
+                                                backgroundColor: "transparent",
+                                                color: "var(--ink)",
+                                                cursor: "pointer",
+                                                boxShadow: "none",
+                                                textDecoration: "none",
+                                                opacity: action.disabled ? 0.5 : 1,
+                                                pointerEvents: action.disabled ? "none" : undefined,
+                                              }}
+                                            >
+                                              {action.label}
+                                            </a>
+                                          ) : (
+                                            <button
+                                              key={action.label}
+                                              type="button"
+                                              onClick={action.onClick}
+                                              disabled={action.disabled}
+                                              title={action.title}
+                                              style={{
+                                                borderRadius: "12px",
+                                                padding: "0.75rem 1rem",
+                                                fontSize: "1rem",
+                                              }}
+                                            >
+                                              {action.label}
+                                            </button>
+                                          )
+                                        )}
+                                      </div>
+                                    ) : null}
+
+                                    <div>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setDismissedHorizonKeys((prev) => ({ ...prev, [moment.id]: true }))
+                                        }
+                                        style={{
+                                          borderRadius: "12px",
+                                          padding: "0.75rem 1rem",
+                                          fontSize: "1rem",
+                                        }}
+                                      >
+                                        Dismiss
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <div
+                                  key={moment.id}
+                                  className="smart-card"
+                                  style={{
+                                    border: "1px solid var(--border)",
+                                    borderRadius: "16px",
+                                    background: "rgba(255,255,255,0.7)",
+                                    padding: "16px",
+                                    display: "grid",
+                                    gap: "10px",
+                                    backdropFilter: "blur(6px)",
+                                  }}
+                                >
+                                  <div style={{ color: "var(--ink)", fontSize: "16px", lineHeight: 1.5, fontWeight: 700 }}>
+                                    {moment.label}
+                                  </div>
+                                  <div style={{ color: "var(--ink)", fontSize: "16px", lineHeight: 1.5 }}>
+                                    {formatReminderDate(moment.eventDate)}
+                                  </div>
+                                  <div>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setDismissedHorizonKeys((prev) => ({ ...prev, [moment.id]: true }))
+                                      }
+                                      style={{
+                                        borderRadius: "12px",
+                                        padding: "0.75rem 1rem",
+                                        fontSize: "1rem",
+                                      }}
+                                    >
+                                      Dismiss
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </>
                       ) : null}
 
@@ -1731,6 +1986,12 @@ export default function Home({
                               </div>
                             ))}
                           </div>
+                        </div>
+                      ) : null}
+
+                      {todayReminders.length === 0 && handledToday.length === 0 ? (
+                        <div style={{ marginTop: "22px", color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>
+                          You're all caught up today.
                         </div>
                       ) : null}
                     </>

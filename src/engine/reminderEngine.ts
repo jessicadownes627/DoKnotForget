@@ -11,6 +11,8 @@ export type ReminderEvent = {
   momentType: ReminderMomentType;
   label: string;
   date: string; // reminder trigger date, YYYY-MM-DD
+  triggerDate: string;
+  eventDate: string;
   reminderType: ReminderType;
 };
 
@@ -84,8 +86,6 @@ function getNextRecurringOccurrence(value: string, baseDate: Date) {
 function getNextAnniversaryOccurrence(person: Person, baseDate: Date) {
   const stored = (person.anniversary ?? "").trim();
   if (stored) {
-    const parsed = parseLocalDate(`0000-${stored}`);
-    if (!parsed) return null;
     return getNextRecurringOccurrence(`0000-${stored}`, baseDate);
   }
 
@@ -220,6 +220,8 @@ export function getUpcomingReminders(people: Person[], today = new Date()): Remi
           momentType: event.momentType,
           label: buildReminderLabel(event, schedule.reminderType),
           date: formatYmd(reminderDate),
+          triggerDate: formatYmd(reminderDate),
+          eventDate: formatYmd(event.eventDate),
           reminderType: schedule.reminderType,
         });
       }
