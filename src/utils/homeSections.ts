@@ -34,30 +34,23 @@ function reminderPriority(reminder: ReminderEvent) {
   return 1;
 }
 
-function selectRepresentativeReminders(reminders: ReminderEvent[]) {
-  const byEvent = new Map<string, ReminderEvent>();
+function buildReminderCardMap(reminders: ReminderEvent[]) {
+  const cardsByEvent = new Map<string, ReminderEvent>();
   for (const reminder of reminders) {
     const key = reminderEventKey(reminder);
-    const existing = byEvent.get(key);
+    const existing = cardsByEvent.get(key);
     if (!existing || reminderPriority(reminder) > reminderPriority(existing)) {
-      byEvent.set(key, reminder);
+      cardsByEvent.set(key, reminder);
     }
   }
-  return Array.from(byEvent.values()).sort((a, b) => {
+  return cardsByEvent;
+}
+
+function sortReminderCards(cardsByEvent: Map<string, ReminderEvent>) {
+  return Array.from(cardsByEvent.values()).sort((a, b) => {
     if (a.eventDate !== b.eventDate) return a.eventDate.localeCompare(b.eventDate);
     return a.personName.localeCompare(b.personName, undefined, { sensitivity: "base" });
   });
-}
-
-function selectRepresentativeReminder(reminders: ReminderEvent[]) {
-  if (reminders.length === 0) return null;
-  let best = reminders[0] ?? null;
-  for (const reminder of reminders) {
-    if (!best || reminderPriority(reminder) > reminderPriority(best)) {
-      best = reminder;
-    }
-  }
-  return best;
 }
 
 function reminderMatchesMoment(reminder: ReminderEvent, moment: UpcomingMomentEvent) {
@@ -103,37 +96,59 @@ export function buildHomeSections({
     return Boolean(eventDate);
   });
 
-  const activeTodayReminders = selectRepresentativeReminders(activeRemindersByEventDate.filter((reminder) => {
-    const eventDate = parseLocalDate(reminder.eventDate);
-    return eventDate ? dayDifference(eventDate, today) === 0 : false;
-  }));
+  const activeTodayCardsByEvent = buildReminderCardMap(
+    activeRemindersByEventDate.filter((reminder) => {
+      const eventDate = parseLocalDate(reminder.eventDate);
+      return eventDate ? dayDifference(eventDate, today) === 0 : false;
+    })
+  );
+  const activeTodayReminders = sortReminderCards(activeTodayCardsByEvent);
 
-  const tomorrowReminders = selectRepresentativeReminders(activeRemindersByEventDate.filter((reminder) => {
-    const eventDate = parseLocalDate(reminder.eventDate);
-    return eventDate ? dayDifference(eventDate, today) === 1 : false;
-  }));
+  const tomorrowCardsByEvent = buildReminderCardMap(
+    activeRemindersByEventDate.filter((reminder) => {
+      const eventDate = parseLocalDate(reminder.eventDate);
+      return eventDate ? dayDifference(eventDate, today) === 1 : false;
+    })
+  );
+  const tomorrowReminders = sortReminderCards(tomorrowCardsByEvent);
 
-  const completedTodayReminders = selectRepresentativeReminders(remindersByEventDate.filter((reminder) => {
-    const eventDate = parseLocalDate(reminder.eventDate);
-    const isToday = eventDate ? dayDifference(eventDate, today) === 0 : false;
-    return isToday && Boolean(handledReminderActions[getReminderId(reminder)]);
-  }));
+  const completedTodayCardsByEvent = buildReminderCardMap(
+    remindersByEventDate.filter((reminder) => {
+      const eventDate = parseLocalDate(reminder.eventDate);
+      const isToday = eventDate ? dayDifference(eventDate, today) === 0 : false;
+      return isToday && Boolean(handledReminderActions[getReminderId(reminder)]);
+    })
+  );
+  const completedTodayReminders = sortReminderCards(completedTodayCardsByEvent);
 
   const horizonMoments = upcomingMoments.filter((moment) => {
     if (dismissedHorizonKeys[moment.id]) return false;
     return true;
   });
 
-  const horizonEntryMap = new Map<string, { moment: UpcomingMomentEvent; reminder: ReminderEvent | null }>();
+  const cardsByEvent = new Map<string, { moment: UpcomingMomentEvent; reminder: ReminderEvent | null }>();
   for (const moment of horizonMoments) {
     const key = momentEventKey(moment);
-    if (horizonEntryMap.has(key)) continue;
-    const matchingReminder = selectRepresentativeReminder(
-      reminders.filter((reminder) => reminderMatchesMoment(reminder, moment))
-    );
-    horizonEntryMap.set(key, { moment, reminder: matchingReminder });
+    if (!cardsByEvent.has(key)) {
+      cardsByEvent.set(key, { moment, reminder: null });
+    }
   }
-  const horizonEntries = Array.from(horizonEntryMap.values());
+
+  for (const reminder of reminders) {
+    const key = reminderEventKey(reminder);
+    const existingCard = cardsByEvent.get(key);
+    if (!existingCard) continue;
+    if (!reminderMatchesMoment(reminder, existingCard.moment)) continue;
+
+    const existingReminder = existingCard.reminder;
+    if (!existingReminder || reminderPriority(reminder) > reminderPriority(existingReminder)) {
+      cardsByEvent.set(key, { ...existingCard, reminder });
+    }
+  }
+  const horizonEntries = Array.from(cardsByEvent.values()).sort((a, b) => {
+    if (a.moment.eventDate !== b.moment.eventDate) return a.moment.eventDate.localeCompare(b.moment.eventDate);
+    return a.moment.personName.localeCompare(b.moment.personName, undefined, { sensitivity: "base" });
+  });
 
   return {
     activeTodayReminders,
