@@ -449,7 +449,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                   className="dkf-fade-in-80"
                   style={{ fontWeight: 500, fontSize: "16px", color: "var(--muted)", marginTop: "12px", marginBottom: "12px" }}
                 >
-                  Anything else you want to remember? (optional)
+                  Any other important dates to remember
                 </div>
 
                 {sensitiveMoments.length ? (

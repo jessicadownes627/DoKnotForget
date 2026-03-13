@@ -12,15 +12,12 @@ import { getUpcomingReminders, type ReminderEvent } from "../engine/reminderEngi
 import { getRemindersToFire } from "../engine/reminderScheduler";
 import { getReminderId, hasReminderFired, markReminderFired } from "../engine/reminderRegistry";
 import {
-  getAnniversaryPrompts,
-  getBirthdayPrompts,
-  getKidsBirthdayPrompts,
   type AnniversaryPromptItem,
   type BirthdayPromptItem,
   type KidsBirthdayPromptItem,
   type PromptItem,
 } from "../engine/promptEngine";
-import { daysUntilDate, getNextBirthdayFromIso } from "../utils/birthdayUtils";
+import { getNextBirthdayFromIso } from "../utils/birthdayUtils";
 import MomentDatePicker from "../components/MomentDatePicker";
 import { RaisedGoldBullet } from "../components/common/GoldBullets";
 import GoldenSunDivider from "../components/GoldenSunDivider";
@@ -35,6 +32,30 @@ const headerDateFormatter = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
   year: "numeric",
 });
+
+const homeHeaderDateFormatter = new Intl.DateTimeFormat("en-US", {
+  weekday: "long",
+  month: "long",
+  day: "numeric",
+});
+
+const QUICK_IDEA_SUGGESTIONS = [
+  "Buy them a coffee",
+  "Grab a cupcake",
+  "Pick up flowers",
+  "Buy a scratch-off ticket",
+  "Send a funny meme",
+  "Drop off a bottle of wine",
+  "Bring donuts",
+  "Send a pizza",
+  "Take them to lunch",
+  "Send a Venmo coffee",
+  "Bring balloons",
+  "Write a quick card",
+  "Share a photo memory",
+  "Send a voice message",
+  "Stop by with ice cream",
+];
 
 function startOfToday() {
   const now = new Date();
@@ -75,6 +96,25 @@ function formatGiftTypeLabel(value: string) {
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
+function hashText(value: string) {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
+function pickQuickIdeas(seed: string) {
+  if (QUICK_IDEA_SUGGESTIONS.length <= 2) return QUICK_IDEA_SUGGESTIONS;
+
+  const firstIndex = hashText(seed) % QUICK_IDEA_SUGGESTIONS.length;
+  const secondIndex = (firstIndex + 1 + (hashText(`${seed}:next`) % (QUICK_IDEA_SUGGESTIONS.length - 1))) % QUICK_IDEA_SUGGESTIONS.length;
+
+  return [QUICK_IDEA_SUGGESTIONS[firstIndex], QUICK_IDEA_SUGGESTIONS[secondIndex]].filter(
+    (idea, index, all) => all.indexOf(idea) === index
+  );
+}
+
 export default function Home({
 }: {}) {
   const navigate = useNavigate();
@@ -85,7 +125,6 @@ export default function Home({
   const [searchTerm, setSearchTerm] = useState("");
   const [questionTick, setQuestionTick] = useState(0);
   const [shouldPulseBow, setShouldPulseBow] = useState(false);
-  const [arrivalTick, setArrivalTick] = useState(0);
   const [showNiceStart, setShowNiceStart] = useState(false);
   const [handledReminderActions, setHandledReminderActions] = useState<Record<string, true>>(() => {
     try {
@@ -259,21 +298,6 @@ export default function Home({
     return generateCareSuggestions(filteredPeople, today);
   }, [activeTab, filteredPeople, today, questionTick]);
 
-  const anniversaryPrompts = useMemo(() => {
-    if (activeTab !== "home") return [];
-    return getAnniversaryPrompts(people);
-  }, [activeTab, people]);
-
-  const birthdayPrompts = useMemo(() => {
-    if (activeTab !== "home") return [];
-    return getBirthdayPrompts(people);
-  }, [activeTab, people]);
-
-  const kidsBirthdayPrompts = useMemo(() => {
-    if (activeTab !== "home") return [];
-    return getKidsBirthdayPrompts(people);
-  }, [activeTab, people]);
-
   const reminders = useMemo(() => {
     if (activeTab !== "home") return [];
     return getUpcomingReminders(people, today);
@@ -422,10 +446,15 @@ export default function Home({
     const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
     const latestGift = person?.giftHistory?.length ? person.giftHistory[person.giftHistory.length - 1] : null;
     const giftLine = latestGift ? `Last time you sent: ${formatGiftTypeLabel(latestGift.type)}` : null;
+    const quickIdeas =
+      reminder.reminderType === "dayOf"
+        ? [`Quick idea`, ...pickQuickIdeas(getReminderId(reminder)).map((idea) => `• ${idea}`)].join("\n")
+        : null;
     return [
       display.label,
       `${formatReminderDate(reminder.date)} · ${formatReminderMomentType(reminder.momentType)}`,
       giftLine,
+      quickIdeas,
     ]
       .filter(Boolean)
       .join("\n");
@@ -485,16 +514,7 @@ export default function Home({
     if (reminder.reminderType === "sevenDay") {
       return [
         {
-          label: "Add Note",
-          disabled: !person,
-          title: !person ? "This contact is no longer available." : undefined,
-          onClick: () => {
-            if (!person) return;
-            navigate(`/person/${person.id}`);
-          },
-        },
-        {
-          label: "Plan Gift",
+          label: "Send gift",
           href: "https://www.starbucks.com/gift",
           onClick: () => {
             if (!person) return;
@@ -510,15 +530,6 @@ export default function Home({
 
     if (reminder.reminderType === "oneDay") {
       return [
-        {
-          label: "Plan Message",
-          disabled: !person,
-          title: !person ? "This contact is no longer available." : undefined,
-          onClick: () => {
-            if (!person) return;
-            navigate(`/person/${person.id}`);
-          },
-        },
         {
           label: "All set",
           onClick: () => dismissReminderCard(reminder),
@@ -633,7 +644,6 @@ export default function Home({
     } catch {
       // ignore
     }
-    setArrivalTick((t) => t + 1);
   }
 
   function openSmartMessageSuggestions(args: {
@@ -644,54 +654,6 @@ export default function Home({
   }) {
     setSmsSuggestions(args);
   }
-
-  function dedupePrompts<T>(items: T[], getKey: (item: T) => string) {
-    const seen = new Set<string>();
-    const out: T[] = [];
-    for (const item of items) {
-      const key = getKey(item);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(item);
-    }
-    return out;
-  }
-
-  const visibleAnniversaryPrompts = useMemo(() => {
-    const filtered = anniversaryPrompts.filter((p) => {
-      try {
-        return window.localStorage.getItem(promptDismissKey(p)) !== "1";
-      } catch {
-        return true;
-      }
-    });
-    return dedupePrompts(filtered, (p) => `${p.type}_${p.personId}`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anniversaryPrompts, arrivalTick]);
-
-  const visibleBirthdayPrompts = useMemo(() => {
-    const filtered = birthdayPrompts.filter((p) => {
-      try {
-        return window.localStorage.getItem(promptDismissKey(p)) !== "1";
-      } catch {
-        return true;
-      }
-    });
-    return dedupePrompts(filtered, (p) => `${p.type}_${p.personId}`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [birthdayPrompts, arrivalTick]);
-
-  const visibleKidsBirthdayPrompts = useMemo(() => {
-    const filtered = kidsBirthdayPrompts.filter((p) => {
-      try {
-        return window.localStorage.getItem(promptDismissKey(p)) !== "1";
-      } catch {
-        return true;
-      }
-    });
-    return dedupePrompts(filtered, (p) => `${p.type}_${p.parentId}_${p.childId}`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kidsBirthdayPrompts, arrivalTick]);
 
   function formatYmd(date: Date) {
     const y = date.getFullYear();
@@ -743,132 +705,6 @@ export default function Home({
   function isoToDate(iso: string) {
     return parseLocalDate(iso);
   }
-
-  const gentleForecast = useMemo(() => {
-    if (activeTab !== "home") return null;
-
-    type ForecastItem = {
-      key: string;
-      firstName: string;
-      type: string;
-      label: string;
-      date: string;
-      daysUntil: number;
-      occurrenceIso: string; // YYYY-MM-DD for the next occurrence (used for handled-action keys)
-    };
-
-    type ForecastGroups = {
-      today: ForecastItem[];
-      tomorrow: ForecastItem[];
-      week: ForecastItem[];
-      month: ForecastItem[];
-    };
-
-    function parseLocalYmd(value: string): Date | null {
-      const parts = value.split("-");
-      if (parts.length !== 3) return null;
-      const y = Number(parts[0]);
-      const m = Number(parts[1]);
-      const d = Number(parts[2]);
-      if (!y || !m || !d || Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) return null;
-      const parsed = new Date(y, m - 1, d);
-      if (parsed.getFullYear() !== y || parsed.getMonth() !== m - 1 || parsed.getDate() !== d) return null;
-      return parsed;
-    }
-
-    const base = today;
-    const horizonDays = 30;
-    const all: ForecastItem[] = [];
-
-    // Flat array of all moments for all people.
-    for (const person of people) {
-      if (!person?.id) continue;
-      const firstName = (person.name ?? "").trim().split(" ")[0] || person.name;
-
-      for (const moment of person.moments ?? []) {
-        if (!moment?.id || !moment?.date) continue;
-
-        let until: number | null = null;
-        let occurrenceIso = "";
-        if (moment.recurring) {
-          const next = getNextBirthdayFromIso(moment.date, base);
-          if (next) {
-            until = next.daysUntilBirthday;
-            occurrenceIso = next.iso;
-          }
-        } else {
-          const d = parseLocalYmd(moment.date);
-          if (d) {
-            until = daysUntilDate(d, base);
-            occurrenceIso = formatYmd(d);
-          }
-        }
-        if (until === null) continue;
-        if (until < 0 || until > horizonDays) continue;
-        if (!occurrenceIso) continue;
-
-        all.push({
-          key: `${person.id}:${moment.id}`,
-          firstName,
-          type: moment.type,
-          label: moment.label || moment.type,
-          date: moment.date,
-          daysUntil: until,
-          occurrenceIso,
-        });
-      }
-
-      // Kids birthdays (as synthetic moments)
-      for (const child of person.children ?? []) {
-        const childName = (child.name ?? "").trim();
-        const raw = (child.birthday ?? child.birthdate ?? "").trim();
-        if (!child.id || !childName || !raw) continue;
-        const next = getNextBirthdayFromIso(raw, base);
-        if (!next) continue;
-        const until = next.daysUntilBirthday;
-        if (until < 0 || until > horizonDays) continue;
-        all.push({
-          key: `${person.id}:child:${child.id}`,
-          firstName: childName,
-          type: "kidBirthday",
-          label: "Birthday",
-          date: raw,
-          daysUntil: until,
-          occurrenceIso: next.iso,
-        });
-      }
-    }
-
-    all.sort((a, b) => (a.daysUntil - b.daysUntil) || a.firstName.localeCompare(b.firstName) || a.label.localeCompare(b.label));
-
-    const groups: ForecastGroups = { today: [], tomorrow: [], week: [], month: [] };
-    const todayMoments = all.filter((m) => m.daysUntil === 0);
-    const horizonMoments = all.filter((m) => m.daysUntil > 0);
-
-    groups.today = todayMoments;
-
-    for (const item of horizonMoments) {
-      if (item.daysUntil === 1) groups.tomorrow.push(item);
-      else if (item.daysUntil <= 7) groups.week.push(item);
-      else groups.month.push(item);
-    }
-
-    // Limit horizon rendering to keep the block tidy.
-    const maxItems = 6;
-    const limited: ForecastGroups = {
-      today: groups.today,
-      tomorrow: groups.tomorrow,
-      week: groups.week,
-      month: groups.month,
-    };
-
-    const horizonFlat = [...limited.tomorrow, ...limited.week, ...limited.month].slice(0, maxItems);
-    limited.tomorrow = horizonFlat.filter((i) => i.daysUntil === 1);
-    limited.week = horizonFlat.filter((i) => i.daysUntil >= 2 && i.daysUntil <= 7);
-    limited.month = horizonFlat.filter((i) => i.daysUntil >= 8);
-
-    return limited;
-  }, [activeTab, people, today]);
 
   function addDays(date: Date, deltaDays: number) {
     return new Date(date.getFullYear(), date.getMonth(), date.getDate() + deltaDays);
@@ -1224,7 +1060,7 @@ export default function Home({
     setQuestionTick((v) => v + 1);
   }
 
-  const greetingText = activeTab === "home" ? "Moments that matter today" : "Your contacts.";
+  const greetingText = activeTab === "home" ? "Today" : "Your contacts.";
 
   useEffect(() => {
     const personId = location.state?.showPartnerLinkCheck as string | undefined;
@@ -1277,8 +1113,6 @@ export default function Home({
   }, []);
 
   useEffect(() => {
-    const prev = previousPeopleCountRef.current;
-    if (people.length > prev) setArrivalTick((t) => t + 1);
     previousPeopleCountRef.current = people.length;
   }, [people.length]);
 
@@ -1302,14 +1136,13 @@ export default function Home({
   }, []);
 
   return (
-    <div style={{ background: "var(--paper)", color: "var(--ink)", minHeight: "100vh" }}>
+    <div style={{ background: "var(--paper)", color: "var(--ink)" }}>
       <div
         style={{
           maxWidth: "920px",
           margin: "0 auto",
-          padding: "env(safe-area-inset-top) 16px 16px 16px",
+          padding: "32px 16px 16px 16px",
           boxSizing: "border-box",
-          minHeight: "100vh",
         }}
       >
         <div style={{ maxWidth: "560px", margin: "0 auto", paddingTop: "32px" }}>
@@ -1352,7 +1185,7 @@ export default function Home({
           </div>
 
           <div style={{ marginTop: "10px", color: "var(--muted)", fontSize: "14px", fontFamily: "var(--font-sans)" }}>
-            {headerDateFormatter.format(today)}
+            {homeHeaderDateFormatter.format(today)}
           </div>
 
           <div
@@ -1514,7 +1347,7 @@ export default function Home({
                 </div>
               )}
 
-              <div style={{ marginTop: "2.5rem" }}>
+              <div style={{ marginTop: "2.5rem", display: "grid", gap: "12px" }}>
                 <button
                   onClick={() => navigate("/add")}
                   style={{
@@ -1532,6 +1365,24 @@ export default function Home({
                   }}
                 >
                   + Add someone important
+                </button>
+                <button
+                  onClick={() => navigate("/import")}
+                  style={{
+                    border: "1px solid var(--border-strong)",
+                    background: "transparent",
+                    color: "var(--ink)",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    fontWeight: 500,
+                    letterSpacing: "0.01em",
+                    borderRadius: "12px",
+                    padding: "0.65rem 1rem",
+                    fontSize: "0.95rem",
+                    fontFamily: "var(--font-sans)",
+                  }}
+                >
+                  Import from contacts
                 </button>
               </div>
             </section>
@@ -1553,25 +1404,6 @@ export default function Home({
                     <div style={{ marginTop: "4px", color: "var(--muted)" }}>We’ll remind you when it matters.</div>
                   </div>
                 ) : null}
-                {activeReminders.length > 0 ? (
-                  <div
-                    style={{
-                      display: "grid",
-                      gap: "12px",
-                      marginBottom: "18px",
-                    }}
-                  >
-                    {activeReminders.map((reminder) => (
-                      <SmartSuggestionCard
-                        key={`${reminder.date}_${reminder.personId}_${reminder.momentType}_${reminder.reminderType}_${reminder.label}`}
-                        variant="nudge"
-                        message={buildReminderMessage(reminder)}
-                        actions={buildReminderActions(reminder)}
-                        onMaybe={undefined}
-                      />
-                    ))}
-                  </div>
-                ) : null}
                 {(() => {
                   const headerStyle: React.CSSProperties = {
                     fontSize: "18px",
@@ -1584,20 +1416,14 @@ export default function Home({
 
                   const firstOf = (fullName: string) => (fullName ?? "").trim().split(" ")[0] || fullName || "Text";
 
-                  const todayBirthdayPrompts = visibleBirthdayPrompts.filter((p) => p.type === "TODAY_BIRTHDAY");
-
-                  const todayKidsBirthdayPrompts = visibleKidsBirthdayPrompts.filter((p) => p.type === "TODAY_CHILD_BIRTHDAY");
-
-                  const todayAnniversaryPrompts = visibleAnniversaryPrompts.filter((p) => p.type === "ANNIVERSARY_TODAY");
-
-	                  const todayMoments = gentleForecast?.today ?? [];
-	                  const tomorrowMoments = gentleForecast?.tomorrow ?? [];
-	                  const comingSoonMoments = gentleForecast?.week ?? [];
-	                  const horizonMoments = gentleForecast ? [...tomorrowMoments, ...comingSoonMoments, ...gentleForecast.month] : [];
-	                  void visibleCareSuggestions;
-	                  void handleSuggestionAction;
-	                  void handleQuestionChoose;
-	                  void handleQuestionDismiss;
+                  const todayReminders = activeReminders.filter((reminder) => reminder.reminderType === "dayOf");
+                  const tomorrowReminders = activeReminders.filter((reminder) => reminder.reminderType === "oneDay");
+                  const horizonReminders = activeReminders.filter((reminder) => reminder.reminderType === "sevenDay");
+                  const groupedReminders = [...todayReminders, ...tomorrowReminders, ...horizonReminders];
+                  void visibleCareSuggestions;
+                  void handleSuggestionAction;
+                  void handleQuestionChoose;
+                  void handleQuestionDismiss;
                   void handleBirthdayPromptNo;
                   void handleBirthdayPromptYes;
                   void handleAnniversaryPromptNo;
@@ -1605,79 +1431,49 @@ export default function Home({
                   void handleKidsBirthdayPromptNo;
                   void handleKidsBirthdayPromptYes;
                   void partnerLinkPrompt;
+                  const handledToday = reminders.filter((reminder) => {
+                    const actionKey = `text|${getReminderId(reminder)}`;
+                    return reminder.reminderType === "dayOf" && Boolean(handledReminderActions[actionKey]);
+                  });
 
-                  const todayBirthdayByPersonId = new Map(todayBirthdayPrompts.map((p) => [p.personId, p] as const));
-                  const todayAnniversaryByPersonId = new Map(todayAnniversaryPrompts.map((p) => [p.personId, p] as const));
-                  const todayKidBirthdayByKey = new Map(
-                    todayKidsBirthdayPrompts.map((p) => [`${p.parentId}:${p.childId}`, p] as const)
+                  function handledLine(reminder: ReminderEvent) {
+                    const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
+                    const first = firstOf(person?.name ?? reminder.personName);
+                    const display = formatReminderCard(reminder);
+
+                    if (reminder.momentType === "childBirthday") {
+                      const childName = display.label.split(" turns ")[0]?.split("'s birthday")[0]?.trim() || "their child";
+                      return `✓ Texted ${first} about ${childName}'s birthday`;
+                    }
+
+                    if (reminder.momentType === "anniversary") {
+                      return `✓ Sent anniversary message to ${first}`;
+                    }
+
+                    if (reminder.momentType === "birthday") {
+                      return `✓ Texted ${first} for birthday`;
+                    }
+
+                    return `✓ Reached out to ${first}`;
+                  }
+
+                  const renderPromptGrid = (children: React.ReactNode) => (
+                    <div style={{ display: "grid", gap: "12px", marginBottom: "6px" }}>{children}</div>
                   );
 
-                  function displayNameForForecastItem(itemKey: string, fallbackFirstName: string) {
-                    const personId = itemKey.split(":")[0] ?? "";
-                    const person = people.find((p) => p.id === personId) ?? null;
-                    return person?.name?.trim() || fallbackFirstName;
-                  }
-
-                  function possessive(name: string) {
-                    const trimmed = (name ?? "").trim();
-                    if (!trimmed) return "";
-                    return `${trimmed}’s`;
-                  }
-
-	                  function formatMomentText(firstNameOrFull: string, type: string, label: string, daysUntil: number) {
-                    const name = (firstNameOrFull ?? "").trim();
-                    const bdayLike = type === "birthday" || type === "kidBirthday" || label.toLowerCase() === "birthday";
-                    const annLike = type === "anniversary" || label.toLowerCase() === "anniversary";
-
-                    if (bdayLike) {
-                      if (daysUntil === 0) return `Today is ${possessive(name)} birthday`;
-                      if (daysUntil === 1) return `${possessive(name)} birthday is tomorrow`;
-                      return `${possessive(name)} birthday is in ${daysUntil} days`;
-                    }
-
-                    if (annLike) {
-                      if (daysUntil === 0) return `Today is ${possessive(name)} anniversary`;
-                      if (daysUntil === 1) return `${possessive(name)} anniversary is tomorrow`;
-                      return `${possessive(name)} anniversary is in ${daysUntil} days`;
-                    }
-
-                    if (daysUntil === 0) return `${label} for ${name} is today`;
-                    if (daysUntil === 1) return `${label} for ${name} is tomorrow`;
-	                    return `${label} for ${name} is in ${daysUntil} days`;
-	                  }
-
-	                  const handledToday = todayMoments.filter((item) => {
-	                    const actionKey = `text|${item.key}|${item.occurrenceIso}`;
-	                    return Boolean(handledReminderActions[actionKey]) && item.daysUntil === 0;
-	                  });
-
-	                  function handledLine(item: (typeof todayMoments)[number]) {
-	                    const personId = item.key.split(":")[0] ?? "";
-	                    const person = people.find((p) => p.id === personId) ?? null;
-	                    const parentFirst = firstOf(person?.name ?? "");
-	                    const childName = (item.type === "kidBirthday" ? item.firstName : "").trim();
-	                    const first = firstOf(person?.name ?? item.firstName);
-
-	                    if (item.type === "kidBirthday" && childName) {
-	                      return `✓ Texted ${parentFirst} about ${childName}’s birthday`;
-	                    }
-
-	                    if (item.type === "anniversary" || item.label.toLowerCase() === "anniversary") {
-	                      return `✓ Sent anniversary message to ${first}`;
-	                    }
-
-	                    if (item.type === "birthday" || item.label.toLowerCase() === "birthday") {
-	                      return `✓ Texted ${first} for birthday`;
-	                    }
-
-	                    const label = (item.label ?? "").trim();
-	                    if (label) return `✓ Reached out to ${first} — ${label}`;
-	                    return `✓ Reached out to ${first}`;
-	                  }
-
-	                  const renderPromptGrid = (children: React.ReactNode) => (
-	                    <div style={{ display: "grid", gap: "12px", marginBottom: "6px" }}>{children}</div>
-	                  );
+                  const renderReminderCards = (items: ReminderEvent[]) => (
+                    <div style={{ display: "grid", gap: "12px", marginBottom: "6px" }}>
+                      {items.map((reminder) => (
+                        <SmartSuggestionCard
+                          key={getReminderId(reminder)}
+                          variant="nudge"
+                          message={buildReminderMessage(reminder)}
+                          actions={buildReminderActions(reminder)}
+                          onMaybe={undefined}
+                        />
+                      ))}
+                    </div>
+                  );
 
                   const renderEmpty = () => (
                     <div style={{ marginTop: "1.5rem", padding: "2.25rem 0", textAlign: "center" }}>
@@ -1691,325 +1487,61 @@ export default function Home({
                     </div>
                   );
 
-                  if (todayMoments.length === 0 && horizonMoments.length === 0) {
+                  if (groupedReminders.length === 0) {
                     return renderEmpty();
                   }
 
                   return (
                     <>
-	                      {todayMoments.length > 0 ? (
-	                        <>
-	                          <div style={{ ...headerStyle, display: "flex", alignItems: "center" }}>
-	                            <RaisedGoldBullet />
-	                            <span>Today</span>
-	                          </div>
-	                          <div className="dkf-golden-sun-divider" aria-hidden="true" style={{ marginTop: "8px" }}>
-	                            <div className="dkf-golden-sun-divider-line" />
-	                          </div>
-	                          <div style={{ marginTop: "10px", color: "var(--muted)", fontSize: "16px", lineHeight: 1.5 }}>
-	                            You remembered. That already counts.
-	                          </div>
-	                          {renderPromptGrid(
-	                            <>
-		                              {todayMoments.map((moment) => {
-	                                const personId = moment.key.split(":")[0] ?? "";
-	                                const childId = moment.key.includes(":child:") ? moment.key.split(":child:")[1] ?? "" : "";
-	                                const person = people.find((p) => p.id === personId) ?? null;
-	                                const first = firstOf(person?.name ?? moment.firstName);
-		                                const actionKey = `text|${moment.key}|${moment.occurrenceIso}`;
-		                                const isUnhandled = !handledReminderActions[actionKey];
-		                                const isLateDay = new Date().getHours() >= 21;
-		                                const eventLine =
-		                                  moment.type === "birthday" || moment.type === "kidBirthday"
-		                                    ? `It’s ${moment.firstName}’s birthday today.`
-		                                    : moment.type === "anniversary"
-		                                      ? `It’s ${moment.firstName}’s anniversary today.`
-		                                      : `Today: ${moment.firstName} · ${moment.label}`;
-
-                                const birthdayPrompt = moment.type === "birthday" ? todayBirthdayByPersonId.get(personId) ?? null : null;
-                                const anniversaryPrompt =
-                                  moment.type === "anniversary" ? todayAnniversaryByPersonId.get(personId) ?? null : null;
-                                const kidPrompt =
-                                  moment.type === "kidBirthday" && childId
-                                    ? todayKidBirthdayByKey.get(`${personId}:${childId}`) ?? null
-                                    : null;
-
-                                const prompt = (birthdayPrompt ?? anniversaryPrompt ?? kidPrompt) as
-                                  | BirthdayPromptItem
-                                  | AnniversaryPromptItem
-                                  | KidsBirthdayPromptItem
-                                  | null;
-
-		                                const baseMessage = eventLine;
-		                                const message =
-		                                  isLateDay && isUnhandled
-		                                    ? `${baseMessage}\nStill a great time to reach out.`
-		                                    : baseMessage;
-
-		                                const actions = [
-		                                  {
-		                                    label: (() => {
-		                                      const isChildBirthday = moment.key.includes(":child:") || moment.type === "kidBirthday";
-		                                      const parentRoleLabel =
-		                                        person?.parentRole === "mother"
-		                                          ? "mom"
-		                                          : person?.parentRole === "father"
-		                                            ? "dad"
-		                                            : "parent";
-		                                      const childLabel = (moment.firstName ?? "").trim();
-		                                      const baseLabel = isChildBirthday && childLabel
-		                                        ? `Text ${first} (${childLabel}’s ${parentRoleLabel})`
-		                                        : `Text ${first}`;
-		                                      return handledReminderActions[actionKey] ? `${baseLabel} ✓` : baseLabel;
-		                                    })(),
-		                                    disabled: !person?.phone,
-		                                    title: !person?.phone ? "Add a phone number to text them." : undefined,
-		                                    onClick: () => {
-	                                      if (!person?.phone) return;
-                                      markReminderActionHandled(`text|${moment.key}|${moment.occurrenceIso}`);
-
-                                      const toName = (person.name ?? "").trim().split(" ")[0] || person.name || first;
-                                      const isKidBirthday = moment.type === "kidBirthday";
-                                      const kidName = isKidBirthday ? (moment.firstName ?? "").trim() : "";
-
-                                      const isBirthday = moment.type === "birthday" || isKidBirthday;
-                                      const isAnniversary = moment.type === "anniversary" || moment.label?.toLowerCase() === "anniversary";
-
-                                      const birthdayName = kidName || toName;
-
-	                                      const customTitle = moment.type === "custom" ? (moment.label ?? "").trim().toLowerCase() : "";
-	                                      const sensitiveKeywords = ["thinking", "loss", "anniversary", "remembering", "tough", "support", "miss"] as const;
-	                                      const isSensitiveCustom =
-	                                        moment.type === "custom" && sensitiveKeywords.some((k) => customTitle.includes(k));
-
-	                                      const quick = isSensitiveCustom
-	                                        ? "Thinking of you today."
-	                                        : isKidBirthday
-	                                          ? `Happy birthday to ${birthdayName}! Hope it's a great day.`
-	                                          : isBirthday
-	                                            ? `Happy birthday ${birthdayName}! Hope it's a great day.`
-	                                            : isAnniversary
-	                                              ? `Happy anniversary, ${toName}! Hope it's a great day.`
-	                                              : "Thinking of you today. Hope things go well.";
-
-	                                      const friendly = isSensitiveCustom
-	                                        ? "Just wanted to let you know I'm thinking of you today."
-	                                        : isKidBirthday
-	                                          ? `Hope ${birthdayName} is having a great birthday today!`
-	                                          : isBirthday
-	                                            ? "Hope you’re having a great birthday today!"
-	                                            : isAnniversary
-	                                              ? "Hope you’re having a great anniversary today!"
-	                                              : "Hope today goes well — thinking of you.";
-
-	                                      const thoughtful = isSensitiveCustom
-	                                        ? "Just wanted you to know you're on my mind today."
-	                                        : isKidBirthday
-	                                          ? `Thinking of ${birthdayName} today and hoping it’s a really special birthday.`
-	                                          : isBirthday
-	                                            ? "Thinking of you today and hoping it’s a really special birthday."
-	                                            : isAnniversary
-	                                              ? "Thinking of you today and hoping your anniversary feels special."
-	                                              : "Just wanted to check in — thinking of you today and hoping everything goes smoothly.";
-
-	                                      const simple = isSensitiveCustom
-	                                        ? "I'm thinking of you."
-	                                        : isKidBirthday
-	                                          ? `Happy birthday to ${birthdayName}. Hope it's a good one.`
-	                                          : isBirthday
-	                                            ? "Happy birthday. Hope it's a good one."
-	                                            : isAnniversary
-	                                              ? "Happy anniversary. Hope it's a good one."
-	                                              : "Thinking of you today.";
-
-	                                      openSmartMessageSuggestions({
-	                                        personName: toName,
-	                                        phone: person.phone,
-	                                        suggestions: [
-	                                          { id: "quick", label: "Quick", message: quick },
-	                                          { id: "friendly", label: "Friendly", message: friendly },
-	                                          { id: "thoughtful", label: "Thoughtful", message: thoughtful },
-	                                          { id: "simple", label: "Simple", message: simple },
-	                                          { id: "custom", label: "Write my own", message: "" },
-	                                        ],
-	                                        onAfterSend: prompt ? () => dismissPrompt(prompt as any) : undefined,
-	                                      });
-                                    },
-                                  },
-	                                  {
-	                                    label: `Send ${first} an eCard`,
-	                                    href: "https://www.americangreetings.com/ecards",
-	                                    onClick: () => {
-	                                      if (prompt) dismissPrompt(prompt as any);
-	                                    },
-	                                  },
-	                                  {
-	                                    label: `Send ${first} a coffee`,
-	                                    href: "https://www.starbucks.com/gift",
-	                                    onClick: () => {
-	                                      if (prompt) dismissPrompt(prompt as any);
-	                                    },
-	                                  },
-	                                  {
-	                                    label: "Dismiss",
-	                                    onClick: () => {
-	                                      if (prompt) dismissPrompt(prompt as any);
-	                                    },
-	                                  },
-                                ];
-
-                                return (
-                                  <SmartSuggestionCard
-                                    key={`today_${moment.key}`}
-                                    variant="nudge"
-                                    message={message}
-                                    actions={actions}
-                                    onMaybe={undefined}
-                                  />
-                                );
-                              })}
-                            </>
-                          )}
+                      {todayReminders.length > 0 ? (
+                        <>
+                          <div style={{ ...headerStyle, display: "flex", alignItems: "center" }}>
+                            <RaisedGoldBullet />
+                            <span>Today</span>
+                          </div>
+                          <div className="dkf-golden-sun-divider" aria-hidden="true" style={{ marginTop: "8px" }}>
+                            <div className="dkf-golden-sun-divider-line" />
+                          </div>
+                          <div style={{ marginTop: "10px", color: "var(--muted)", fontSize: "16px", lineHeight: 1.5 }}>
+                            You remembered. That already counts.
+                          </div>
+                          {renderPromptGrid(renderReminderCards(todayReminders))}
                         </>
-	                      ) : null}
+                      ) : null}
 
-	                      {tomorrowMoments.length > 0 ? (
-	                        <div
-	                          style={{
-	                            border: "1px solid var(--border)",
-	                            borderRadius: "16px",
-	                            padding: "18px",
-	                            background: "rgba(255,255,255,0.7)",
-	                            boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-	                            marginTop: todayMoments.length > 0 ? "22px" : 0,
-	                            marginBottom: "18px",
-	                          }}
-	                        >
-	                          <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)" }}>Tomorrow</div>
-	                          <div
-	                            style={{
-	                              marginTop: "12px",
-	                              display: "grid",
-	                              gap: "8px",
-	                              color: "var(--muted)",
-	                              fontSize: "16px",
-	                              lineHeight: 1.45,
-	                            }}
-	                          >
-	                            {tomorrowMoments.map((i) => (
-	                              <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
-	                                <RaisedGoldBullet />
-	                                <div style={{ minWidth: 0 }}>
-	                                  {formatMomentText(
-	                                    displayNameForForecastItem(i.key, i.firstName),
-	                                    i.type,
-	                                    i.label,
-	                                    i.daysUntil
-	                                  )}
-	                                </div>
-	                              </div>
-	                            ))}
-	                          </div>
-	                        </div>
-	                      ) : null}
+                      {tomorrowReminders.length > 0 ? (
+                        <>
+                          <div style={{ ...headerStyle, marginTop: todayReminders.length > 0 ? "22px" : "6px" }}>Tomorrow</div>
+                          {renderReminderCards(tomorrowReminders)}
+                        </>
+                      ) : null}
 
-	                      {comingSoonMoments.length > 0 ? (
-	                        <div
-	                          style={{
-	                            border: "1px solid var(--border)",
-	                            borderRadius: "16px",
-	                            padding: "18px",
-	                            background: "rgba(255,255,255,0.7)",
-	                            boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-	                            marginTop: todayMoments.length > 0 || tomorrowMoments.length > 0 ? "14px" : 0,
-	                            marginBottom: "18px",
-	                          }}
-	                        >
-	                          <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)" }}>On the Horizon</div>
-	                          <GoldenSunDivider />
-                          <div
-                            style={{
-                              marginTop: "10px",
-                              display: "grid",
-                              gap: "8px",
-                              color: "var(--muted)",
-                              fontSize: "16px",
-	                              lineHeight: 1.45,
-	                            }}
-	                          >
-	                            {comingSoonMoments.map((i) => (
-	                              <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
-	                                <RaisedGoldBullet />
-	                                <div style={{ minWidth: 0 }}>
-	                                  {formatMomentText(
-	                                    displayNameForForecastItem(i.key, i.firstName),
-	                                    i.type,
-	                                    i.label,
-	                                    i.daysUntil
-	                                  )}
-	                                </div>
-	                              </div>
-	                            ))}
-	                          </div>
-	                        </div>
-	                      ) : null}
+                      {horizonReminders.length > 0 ? (
+                        <>
+                          <div style={{ ...headerStyle, marginTop: todayReminders.length > 0 || tomorrowReminders.length > 0 ? "14px" : "6px" }}>
+                            On the Horizon
+                          </div>
+                          <GoldenSunDivider />
+                          <div style={{ marginTop: "10px" }}>{renderReminderCards(horizonReminders)}</div>
+                        </>
+                      ) : null}
 
-	                      {gentleForecast?.month?.length ? (
-	                        <div
-                          style={{
-                            border: "1px solid var(--border)",
-                            borderRadius: "16px",
-                            padding: "18px",
-                            background: "rgba(255,255,255,0.7)",
-                            boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-                            marginTop: "14px",
-                            marginBottom: "18px",
-                          }}
-                        >
-                          <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)" }}>Plan Ahead</div>
-                          <div
-                            style={{
-                              marginTop: "12px",
-                              display: "grid",
-                              gap: "8px",
-                              color: "var(--muted)",
-                              fontSize: "16px",
-                              lineHeight: 1.45,
-                            }}
-                          >
-                            {gentleForecast.month.map((i) => (
-                              <div key={i.key} style={{ display: "flex", alignItems: "center" }}>
-                                <RaisedGoldBullet />
-                                <div style={{ minWidth: 0 }}>
-                                  {formatMomentText(
-                                    displayNameForForecastItem(i.key, i.firstName),
-                                    i.type,
-                                    i.label,
-                                    i.daysUntil
-                                  )}
-                                </div>
+                      {handledToday.length ? (
+                        <div style={{ marginTop: "22px" }}>
+                          <div style={headerStyle}>Taken Care Of Today</div>
+                          <div style={{ marginTop: "10px", display: "grid", gap: "8px", color: "var(--muted)", fontSize: "16px", lineHeight: 1.45 }}>
+                            {handledToday.map((reminder) => (
+                              <div key={`handled_${getReminderId(reminder)}`} style={{ display: "flex", alignItems: "center" }}>
+                                <div style={{ minWidth: 0 }}>{handledLine(reminder)}</div>
                               </div>
                             ))}
                           </div>
-	                        </div>
-	                      ) : null}
-
-	                      {handledToday.length ? (
-	                        <div style={{ marginTop: "22px" }}>
-	                          <div style={headerStyle}>Taken Care Of Today</div>
-	                          <div style={{ marginTop: "10px", display: "grid", gap: "8px", color: "var(--muted)", fontSize: "16px", lineHeight: 1.45 }}>
-	                            {handledToday.map((item) => (
-	                              <div key={`handled_${item.key}`} style={{ display: "flex", alignItems: "center" }}>
-	                                <div style={{ minWidth: 0 }}>{handledLine(item)}</div>
-	                              </div>
-	                            ))}
-	                          </div>
-	                        </div>
-	                      ) : null}
-	                    </>
-	                  );
-	                })()}
-	              </section>
+                        </div>
+                      ) : null}
+                    </>
+                  );
+                })()}
+              </section>
 
               <div
                 style={{

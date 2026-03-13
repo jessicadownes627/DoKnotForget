@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Person } from "../models/Person";
 import type { Relationship } from "../models/Relationship";
 import PersonEditDrawer from "../components/PersonEditDrawer";
+import MomentDatePicker from "../components/MomentDatePicker";
 import { useAppState } from "../appState";
 import { useLocation, useNavigate, useParams } from "../router";
 import { daysUntilDate, getNextBirthdayFromIso } from "../utils/birthdayUtils";
@@ -12,6 +13,7 @@ import SmartSuggestionCard from "../components/SmartSuggestionCard";
 import { openSmsComposer } from "../components/SoonReminderCard";
 import { generateCareSuggestions, type CareSuggestion } from "../utils/careSuggestions";
 import { parseLocalDate } from "../utils/date";
+import { normalizePhone } from "../utils/phone";
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -51,15 +53,46 @@ function formatMonthDay(isoMonthDay: string, formatter: Intl.DateTimeFormat) {
   return formatter.format(parsed);
 }
 
+function makeId() {
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function parseYmd(value: string) {
+  const [yStr, mStr, dStr] = value.split("-");
+  const y = Number(yStr);
+  const m = Number(mStr);
+  const d = Number(dStr);
+  if (!yStr || Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) return null;
+  return { y, m, d };
+}
+
+function buildMomentIso(monthDay: string, year: string, requireYear: boolean) {
+  if (!monthDay) return "";
+  const parts = parseYmd(monthDay);
+  if (!parts) return "";
+  const mm = String(parts.m).padStart(2, "0");
+  const dd = String(parts.d).padStart(2, "0");
+  const y = year.trim();
+  if (!y) return requireYear ? "" : `0000-${mm}-${dd}`;
+  return `${y.padStart(4, "0")}-${mm}-${dd}`;
+}
+
 export default function PersonDetail({}: {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams<{ id: string }>();
-  const { people, relationships, updatePerson, deletePerson } = useAppState();
+  const { people, relationships, savePerson, updatePerson, deletePerson } = useAppState();
   const person = people.find((p) => p.id === id) ?? null;
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [isCircleOpen, setIsCircleOpen] = useState(false);
   const [suggestionsTick, setSuggestionsTick] = useState(0);
+  const [isAddConnectionOpen, setIsAddConnectionOpen] = useState(false);
+  const [connectionType, setConnectionType] = useState<"partner" | "child" | "grandchild" | "familyMember">("child");
+  const [connectionName, setConnectionName] = useState("");
+  const [connectionPhone, setConnectionPhone] = useState("");
+  const [connectionPhoneError, setConnectionPhoneError] = useState(false);
+  const [connectionBirthdayMonthDay, setConnectionBirthdayMonthDay] = useState("");
+  const [connectionBirthdayYear, setConnectionBirthdayYear] = useState("");
+  const [isConnectionBirthdayOpen, setIsConnectionBirthdayOpen] = useState(false);
   const today = useMemo(() => startOfDay(new Date()), []);
 
   useEffect(() => {
@@ -441,7 +474,69 @@ export default function PersonDetail({}: {}) {
     .filter((group) => group.items.length > 0);
 
   function formatRelationshipType(type: Relationship["type"]) {
+    if (type === "other") return "Family member";
     return type.charAt(0).toUpperCase() + type.slice(1);
+  }
+
+  function resetConnectionDraft() {
+    setConnectionType(resolvedPerson.partnerId ? "child" : "partner");
+    setConnectionName("");
+    setConnectionPhone("");
+    setConnectionPhoneError(false);
+    setConnectionBirthdayMonthDay("");
+    setConnectionBirthdayYear("");
+    setIsConnectionBirthdayOpen(false);
+  }
+
+  function openAddConnection() {
+    resetConnectionDraft();
+    setIsAddConnectionOpen(true);
+  }
+
+  function saveConnection() {
+    const trimmedName = connectionName.trim();
+    if (!trimmedName) return;
+
+    const normalizedPhone = connectionPhone.trim() ? normalizePhone(connectionPhone) : null;
+    if (connectionPhone.trim() && !normalizedPhone) {
+      setConnectionPhoneError(true);
+      return;
+    }
+
+    const birthdayIso = buildMomentIso(connectionBirthdayMonthDay, connectionBirthdayYear, false);
+    const createdPerson: Person = {
+      id: makeId(),
+      name: trimmedName,
+      phone: normalizedPhone || undefined,
+      moments: birthdayIso
+        ? [{ id: makeId(), type: "birthday", label: "Birthday", date: birthdayIso, recurring: true }]
+        : [],
+      partnerId: connectionType === "partner" ? resolvedPerson.id : undefined,
+    };
+
+    const relationshipType: Relationship["type"] =
+      connectionType === "partner" ? "partner" : connectionType === "child" ? "child" : "other";
+
+    const nextPerson: Person =
+      connectionType === "partner"
+        ? { ...resolvedPerson, partnerId: createdPerson.id }
+        : resolvedPerson;
+
+    savePerson({
+      person: nextPerson,
+      createdPeople: [createdPerson],
+      createdRelationships: [
+        {
+          id: makeId(),
+          fromId: resolvedPerson.id,
+          toId: createdPerson.id,
+          type: relationshipType,
+        },
+      ],
+    });
+
+    setIsAddConnectionOpen(false);
+    resetConnectionDraft();
   }
 
   return (
@@ -602,79 +697,83 @@ export default function PersonDetail({}: {}) {
               )}
             </section>
 
-            {thingsToRemember.length || groupedRelatedPeople.length ? (
+            {thingsToRemember.length ? (
               <section aria-label="Things to remember" style={{ marginTop: "28px" }}>
                 <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>
                   Things to remember
                 </div>
 
-                {thingsToRemember.length ? (
-                  <div style={{ marginTop: "12px", display: "grid", gap: "10px", color: "var(--muted)", lineHeight: 1.6 }}>
-                    {thingsToRemember.map((line) => (
-                      <div key={line.label}>
-                        <span style={{ color: "var(--ink)" }}>{line.label}:</span> {line.value}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-
-                <div style={{ marginTop: thingsToRemember.length ? "18px" : "12px" }}>
-                  <button
-                    onClick={() => setIsCircleOpen((prev) => !prev)}
-                    style={{
-                      padding: 0,
-                      border: "none",
-                      background: "none",
-                      cursor: "pointer",
-                      color: "var(--ink)",
-                      fontSize: "16px",
-                      fontFamily: "var(--font-sans)",
-                      fontWeight: 500,
-                      textAlign: "left",
-                    }}
-                  >
-                    Related people <span style={{ color: "var(--muted)" }}>{isCircleOpen ? "—" : "+"}</span>
-                  </button>
-
-                  {isCircleOpen ? (
-                    <div style={{ marginTop: "14px" }}>
-                      {groupedRelatedPeople.length === 0 ? (
-                        <div style={{ color: "var(--muted)", lineHeight: 1.6 }}>No related people yet.</div>
-                      ) : (
-                        <div style={{ display: "grid", gap: "14px" }}>
-                          {groupedRelatedPeople.map((group) => (
-                            <div key={group.type}>
-                              <div style={{ color: "var(--muted)", fontSize: "14px", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.02em" }}>
-                                {formatRelationshipType(group.type)}
-                              </div>
-                              <div style={{ display: "grid", gap: "10px" }}>
-                                {group.items.map(({ person: related }) => (
-                                  <button
-                                    key={related.id}
-                                    onClick={() => navigate(`/person/${related.id}`)}
-                                    style={{
-                                      border: "1px solid var(--border)",
-                                      borderRadius: "14px",
-                                      background: "rgba(255,255,255,0.6)",
-                                      padding: "12px 14px",
-                                      textAlign: "left",
-                                      cursor: "pointer",
-                                      color: "var(--ink)",
-                                    }}
-                                  >
-                                    <div style={{ fontWeight: 500 }}>{related.name}</div>
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                <div style={{ marginTop: "12px", display: "grid", gap: "10px", color: "var(--muted)", lineHeight: 1.6 }}>
+                  {thingsToRemember.map((line) => (
+                    <div key={line.label}>
+                      <span style={{ color: "var(--ink)" }}>{line.label}:</span> {line.value}
                     </div>
-                  ) : null}
+                  ))}
                 </div>
               </section>
             ) : null}
+
+            <section aria-label="Connections" style={{ marginTop: "28px" }}>
+              <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>
+                Connections
+              </div>
+              <div style={{ marginTop: "6px", color: "var(--muted)", lineHeight: 1.6 }}>
+                Add people connected to this person. Name is required, phone is optional.
+              </div>
+
+              {groupedRelatedPeople.length ? (
+                <div style={{ marginTop: "14px", display: "grid", gap: "14px" }}>
+                  {groupedRelatedPeople.map((group) => (
+                    <div key={group.type}>
+                      <div style={{ color: "var(--muted)", fontSize: "14px", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.02em" }}>
+                        {formatRelationshipType(group.type)}
+                      </div>
+                      <div style={{ display: "grid", gap: "10px" }}>
+                        {group.items.map(({ person: related }) => (
+                          <button
+                            key={related.id}
+                            onClick={() => navigate(`/person/${related.id}`)}
+                            style={{
+                              border: "1px solid var(--border)",
+                              borderRadius: "14px",
+                              background: "rgba(255,255,255,0.6)",
+                              padding: "12px 14px",
+                              textAlign: "left",
+                              cursor: "pointer",
+                              color: "var(--ink)",
+                            }}
+                          >
+                            <div style={{ fontWeight: 500 }}>{related.name}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ marginTop: "14px", color: "var(--muted)", lineHeight: 1.6 }}>No connections yet.</div>
+              )}
+
+              <button
+                onClick={openAddConnection}
+                style={{
+                  marginTop: "14px",
+                  width: "100%",
+                  border: "1px solid var(--border-strong)",
+                  background: "transparent",
+                  color: "var(--ink)",
+                  cursor: "pointer",
+                  textAlign: "center",
+                  fontWeight: 500,
+                  letterSpacing: "0.01em",
+                  borderRadius: "12px",
+                  padding: "0.8rem 1rem",
+                  fontSize: "0.95rem",
+                }}
+              >
+                Add connection
+              </button>
+            </section>
 
             {personSuggestions.length ? (
               <section aria-label="Helpful additions" style={{ marginTop: "28px" }}>
@@ -739,6 +838,209 @@ export default function PersonDetail({}: {}) {
           </div>
         </div>
       </div>
+
+      {isAddConnectionOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Add connection"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 18, 24, 0.35)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "flex-end",
+            padding: "12px",
+            zIndex: 55,
+          }}
+          onMouseDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            setIsAddConnectionOpen(false);
+            resetConnectionDraft();
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "720px",
+              background: "var(--card)",
+              border: "1px solid var(--border)",
+              borderRadius: "16px",
+              boxShadow: "0 18px 55px rgba(0,0,0,0.18)",
+              overflow: "hidden",
+            }}
+          >
+            <div className="modalContent" style={{ fontFamily: "var(--font-sans)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "1rem" }}>
+                <div style={{ fontFamily: "var(--font-serif)", fontSize: "1.25rem", fontWeight: 600, color: "var(--ink)" }}>
+                  Add connection
+                </div>
+                <button
+                  onClick={() => {
+                    setIsAddConnectionOpen(false);
+                    resetConnectionDraft();
+                  }}
+                  style={{
+                    padding: 0,
+                    border: "none",
+                    background: "none",
+                    color: "var(--muted)",
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                    textUnderlineOffset: "3px",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
+                <div>
+                  <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Relationship type</div>
+                  <select
+                    value={connectionType}
+                    onChange={(e) => setConnectionType(e.target.value as typeof connectionType)}
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 0.85rem",
+                      borderRadius: "12px",
+                      border: "1px solid var(--border-strong)",
+                      background: "var(--card)",
+                      color: "var(--ink)",
+                      fontSize: "1rem",
+                      marginTop: "6px",
+                    }}
+                  >
+                    <option value="partner" disabled={Boolean(person.partnerId)}>
+                      Partner{person.partnerId ? " (already linked)" : ""}
+                    </option>
+                    <option value="child">Child</option>
+                    <option value="grandchild">Grandchild</option>
+                    <option value="familyMember">Family member</option>
+                  </select>
+                </div>
+
+                <div>
+                  <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Name</div>
+                  <input
+                    value={connectionName}
+                    onChange={(e) => setConnectionName(e.target.value)}
+                    placeholder="Name"
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 0.85rem",
+                      borderRadius: "12px",
+                      border: "1px solid var(--border-strong)",
+                      background: "var(--card)",
+                      color: "var(--ink)",
+                      fontSize: "1rem",
+                      marginTop: "6px",
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Phone (optional)</div>
+                  <input
+                    type="tel"
+                    value={connectionPhone}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setConnectionPhone(next);
+                      if (!next.trim()) setConnectionPhoneError(false);
+                      else if (normalizePhone(next)) setConnectionPhoneError(false);
+                    }}
+                    placeholder="Phone"
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 0.85rem",
+                      borderRadius: "12px",
+                      border: "1px solid var(--border-strong)",
+                      background: "var(--card)",
+                      color: "var(--ink)",
+                      fontSize: "1rem",
+                      marginTop: "6px",
+                    }}
+                  />
+                  {connectionPhoneError ? (
+                    <div style={{ marginTop: "6px", color: "#b42318", fontSize: "0.85rem" }}>
+                      Enter a valid phone number.
+                    </div>
+                  ) : null}
+                </div>
+
+                <button
+                  onClick={() => setIsConnectionBirthdayOpen(true)}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "1rem",
+                    width: "100%",
+                    padding: "0.85rem 0.95rem",
+                    borderRadius: "12px",
+                    border: "1px solid var(--border-strong)",
+                    background: "var(--card)",
+                    cursor: "pointer",
+                    color: "var(--ink)",
+                    fontSize: "0.98rem",
+                    textAlign: "left",
+                  }}
+                >
+                  <span>Birthday (optional)</span>
+                  <span style={{ color: "var(--muted)" }}>
+                    {buildMomentIso(connectionBirthdayMonthDay, connectionBirthdayYear, false)
+                      ? formatMonthDay(
+                          buildMomentIso(connectionBirthdayMonthDay, connectionBirthdayYear, false).split("-").slice(1).join("-"),
+                          monthDayFormatter
+                        )
+                      : "Select date"}
+                  </span>
+                </button>
+
+                <button
+                  onClick={saveConnection}
+                  disabled={!connectionName.trim()}
+                  style={{
+                    border: "1px solid var(--border-strong)",
+                    background: "transparent",
+                    color: connectionName.trim() ? "var(--ink)" : "var(--muted)",
+                    cursor: connectionName.trim() ? "pointer" : "default",
+                    textAlign: "center",
+                    fontWeight: 500,
+                    letterSpacing: "0.01em",
+                    borderRadius: "12px",
+                    padding: "0.85rem 1.1rem",
+                    fontSize: "0.98rem",
+                    boxShadow: "none",
+                  }}
+                >
+                  Save connection
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isConnectionBirthdayOpen ? (
+        <MomentDatePicker
+          isOpen
+          title="Connection birthday"
+          mode="birthday"
+          monthDay={connectionBirthdayMonthDay}
+          setMonthDay={setConnectionBirthdayMonthDay}
+          year={connectionBirthdayYear}
+          setYear={setConnectionBirthdayYear}
+          yearHelperText=""
+          onSave={() => setIsConnectionBirthdayOpen(false)}
+          onCancel={() => setIsConnectionBirthdayOpen(false)}
+          onClear={() => {
+            setConnectionBirthdayMonthDay("");
+            setConnectionBirthdayYear("");
+          }}
+        />
+      ) : null}
 
       <PersonEditDrawer
         isOpen={isEditOpen}

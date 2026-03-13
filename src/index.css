@@ -41,12 +41,19 @@ a:hover {
   color: rgba(10, 27, 42, 0.8);
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
+  padding-top: max(16px, env(safe-area-inset-top));
   min-width: 320px;
-  min-height: 100vh;
+  min-height: 100%;
   background-color: var(--paper);
   color: var(--ink);
+  overflow-y: auto;
 }
 
 #root {

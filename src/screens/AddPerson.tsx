@@ -366,7 +366,7 @@ export default function AddPerson() {
 
       <div style={{ marginTop: "1.5rem", maxWidth: "520px" }}>
         <div style={{ color: "var(--ink)", fontSize: "20px", fontWeight: 500, marginBottom: "12px" }}>
-          Details
+          Basic Info
         </div>
 
         <div
@@ -464,316 +464,6 @@ export default function AddPerson() {
           </div>
         ) : null}
 
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => setOpenRow(openRow === "partner" ? null : "partner")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") setOpenRow(openRow === "partner" ? null : "partner");
-          }}
-          style={{
-            display: "flex",
-            alignItems: "baseline",
-            justifyContent: "space-between",
-            padding: "0.75rem 0",
-            cursor: "pointer",
-            borderBottom: "1px solid rgba(27, 42, 65, 0.22)",
-            gap: "1rem",
-          }}
-        >
-          <div style={{ color: "var(--ink)" }}>Partner</div>
-          <div style={{ color: "var(--muted)", textAlign: "right" }}>
-            {partnerId ? (people.find((p) => p.id === partnerId)?.name ?? "Selected") : "Optional"}
-          </div>
-        </div>
-
-        {openRow === "partner" ? (
-          <div style={{ marginTop: "0.85rem", display: "grid", gap: "0.85rem" }}>
-            <input
-              value={partnerSearch}
-              onChange={(e) => setPartnerSearch(e.target.value)}
-              placeholder="Find someone…"
-              autoFocus
-              style={{
-                padding: "0.75rem 0",
-                fontSize: "1rem",
-                width: "100%",
-                color: "var(--ink)",
-              }}
-            />
-
-            <div style={{ display: "grid", gap: "0.5rem" }}>
-              {people
-                .filter((p) => p.name.toLowerCase().includes(partnerSearch.trim().toLowerCase()))
-                .slice(0, 8)
-                .map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => {
-                      setPartnerId(p.id);
-                      setOpenRow(null);
-                      setPartnerSearch("");
-                    }}
-                    style={{
-                      border: "1px solid rgba(27, 42, 65, 0.18)",
-                      borderRadius: "12px",
-                      background: "rgba(249,246,241,0.45)",
-                      padding: "0.7rem 0.9rem",
-                      textAlign: "left",
-                      cursor: "pointer",
-                      color: "var(--ink)",
-                      fontWeight: 500,
-                    }}
-                  >
-                    {p.name}
-                  </button>
-                ))}
-            </div>
-
-            {partnerId ? (
-              <button
-                type="button"
-                onClick={() => setPartnerId(null)}
-                style={{
-                  padding: 0,
-                  border: "none",
-                  background: "none",
-                  color: "var(--muted)",
-                  cursor: "pointer",
-                  fontSize: "0.9rem",
-                  textDecoration: "underline",
-                  textUnderlineOffset: "3px",
-                  justifySelf: "start",
-                }}
-              >
-                Clear partner
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => setOpenRow(openRow === "family" ? null : "family")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") setOpenRow(openRow === "family" ? null : "family");
-          }}
-          style={{
-            display: "flex",
-            alignItems: "baseline",
-            justifyContent: "space-between",
-            padding: "0.75rem 0",
-            cursor: "pointer",
-            borderBottom: "1px solid rgba(27, 42, 65, 0.22)",
-            gap: "1rem",
-          }}
-        >
-          <div style={{ color: "var(--ink)" }}>Family</div>
-          <div style={{ color: "var(--muted)", textAlign: "right" }}>
-            {hasKids ? (children.length ? `${children.length} ${children.length === 1 ? "child" : "children"}` : "Has kids") : "Optional"}
-          </div>
-        </div>
-
-        {openRow === "family" ? (
-          <div style={{ marginTop: "0.9rem", display: "grid", gap: "1.15rem" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}>
-              <input
-                type="checkbox"
-                checked={hasKids}
-                onChange={(e) => setHasKids(e.target.checked)}
-              />
-              Has kids
-            </label>
-
-            {hasKids ? (
-              <div style={{ display: "grid", gap: "0.65rem" }}>
-                <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Parent role</div>
-                <select
-                  value={parentRole ?? "parent"}
-                  onChange={(e) => setParentRole(e.target.value as Person["parentRole"])}
-                  style={{ width: "100%", padding: "0.65rem 0.75rem", borderRadius: "12px" }}
-                >
-                  <option value="parent">Parent</option>
-                  <option value="mother">Mother</option>
-                  <option value="father">Father</option>
-                </select>
-              </div>
-            ) : null}
-
-            <div style={{ display: "grid", gap: "0.45rem" }}>
-              <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-                Holidays to remember for {firstName}
-              </div>
-              <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Choose any that apply.</div>
-
-              <div style={{ display: "grid", gap: "0.6rem", marginTop: "4px" }}>
-                {(
-                  [
-                    { id: "christian", label: "Christian" },
-                    { id: "orthodox", label: "Orthodox" },
-                    { id: "jewish", label: "Jewish" },
-                    { id: "muslim", label: "Muslim" },
-                    { id: "none", label: "None" },
-                  ] as const
-                ).map((opt) => (
-                  <label
-                    key={opt.id}
-                    style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={religionCulture.includes(opt.id)}
-                      onChange={() => toggleReligionCulture(opt.id)}
-                    />
-                    {opt.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {hasKids ? (
-              <div style={{ display: "grid", gap: "1rem" }}>
-                <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Children</div>
-
-                {children.length ? (
-                  <div style={{ display: "grid", gap: "1rem" }}>
-                    {children.map((child, idx) => (
-                      <div
-                        key={child.id}
-                        style={{
-                          border: "1px solid rgba(27, 42, 65, 0.18)",
-                          borderRadius: "14px",
-                          padding: "0.85rem 0.95rem",
-                          background: "rgba(249,246,241,0.45)",
-                        }}
-                      >
-                        <input
-                          value={child.name ?? ""}
-                          onChange={(e) => {
-                            const nextName = e.target.value;
-                            setChildren((prev) =>
-                              prev.map((c, pIdx) => (pIdx === idx ? { ...c, name: nextName } : c))
-                            );
-                          }}
-                          placeholder="Child name (optional)"
-                          style={{
-                            padding: "0.55rem 0",
-                            fontSize: "1rem",
-                            width: "100%",
-                            color: "var(--ink)",
-                          }}
-                        />
-
-                        <div
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => {
-                            const draft = toDraftFromIso(child.birthday ?? child.birthdate ?? "");
-                            setChildEditingIndex(idx);
-                            setChildDraftMonthDay(draft.monthDay);
-                            setChildDraftYear(draft.year);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              const draft = toDraftFromIso(child.birthday ?? child.birthdate ?? "");
-                              setChildEditingIndex(idx);
-                              setChildDraftMonthDay(draft.monthDay);
-                              setChildDraftYear(draft.year);
-                            }
-                          }}
-                          style={{
-                            display: "flex",
-                            alignItems: "baseline",
-                            justifyContent: "space-between",
-                            padding: "0.65rem 0 0.35rem",
-                            cursor: "pointer",
-                            gap: "1rem",
-                          }}
-                        >
-                          <div style={{ color: "var(--ink)" }}>Birthday</div>
-                          <div style={{ color: "var(--muted)", textAlign: "right" }}>
-                            {child.birthday || child.birthdate ? formatMomentDate(child.birthday ?? child.birthdate ?? "") : "Select date"}
-                          </div>
-                        </div>
-
-                        <button
-                          onClick={() => setChildren((prev) => prev.filter((_, pIdx) => pIdx !== idx))}
-                          style={{
-                            padding: 0,
-                            border: "none",
-                            background: "none",
-                            color: "var(--muted)",
-                            cursor: "pointer",
-                            fontSize: "0.88rem",
-                            textDecoration: "underline",
-                            textUnderlineOffset: "3px",
-                            marginTop: "0.4rem",
-                          }}
-                        >
-                          Remove child
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-
-                <button
-                  onClick={() =>
-                    setChildren((prev) => [
-                      ...prev,
-                      { id: makeId(), name: "", birthday: "" },
-                    ])
-                  }
-                  style={{
-                    border: "1px solid var(--border-strong)",
-                    background: "transparent",
-                    color: "var(--ink)",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    fontWeight: 500,
-                    letterSpacing: "0.01em",
-                    borderRadius: "12px",
-                    padding: "0.55rem 0.95rem",
-                    fontSize: "0.95rem",
-                  }}
-                >
-                  + Add child
-                </button>
-              </div>
-            ) : null}
-
-            {childEditingIndex !== null ? (
-              <MomentDatePicker
-                isOpen
-                title="Child birthday"
-                mode="birthday"
-                monthDay={childDraftMonthDay}
-                setMonthDay={setChildDraftMonthDay}
-                year={childDraftYear}
-                setYear={setChildDraftYear}
-                yearHelperText="Optional."
-                onSave={() => {
-                  const iso = buildMomentIso(childDraftMonthDay, childDraftYear, false);
-                  if (!iso) return;
-                  setChildren((prev) =>
-                    prev.map((c, idx) => (idx === childEditingIndex ? { ...c, birthday: iso, birthdate: undefined } : c))
-                  );
-                  setChildEditingIndex(null);
-                }}
-                onCancel={() => setChildEditingIndex(null)}
-                onClear={() => {
-                  setChildren((prev) =>
-                    prev.map((c, idx) => (idx === childEditingIndex ? { ...c, birthday: "", birthdate: undefined } : c))
-                  );
-                  setChildDraftMonthDay("");
-                  setChildDraftYear("");
-                }}
-              />
-            ) : null}
-          </div>
-        ) : null}
       </div>
 
       <div style={{ marginTop: "1.5rem", maxWidth: "520px" }}>
@@ -1222,15 +912,18 @@ export default function AddPerson() {
 
       <div style={{ marginTop: "1.5rem", maxWidth: "520px" }}>
         <div style={{ color: "var(--ink)", fontSize: "20px", fontWeight: 500, marginBottom: "12px" }}>
-          Related people
+          Connections
+        </div>
+        <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5, marginBottom: "12px" }}>
+          Add people connected to this person (partner, child, or family member).
         </div>
 
         <div
           role="button"
           tabIndex={0}
-          onClick={() => setOpenRow(openRow === "related" ? null : "related")}
+          onClick={() => setOpenRow(openRow === "partner" ? null : "partner")}
           onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") setOpenRow(openRow === "related" ? null : "related");
+            if (e.key === "Enter" || e.key === " ") setOpenRow(openRow === "partner" ? null : "partner");
           }}
           style={{
             display: "flex",
@@ -1242,9 +935,322 @@ export default function AddPerson() {
             gap: "1rem",
           }}
         >
-          <div style={{ color: "var(--ink)" }}>Add related person</div>
-          <div style={{ color: "var(--muted)", textAlign: "right" }}>Add</div>
+          <div style={{ color: "var(--ink)" }}>Partner</div>
+          <div style={{ color: "var(--muted)", textAlign: "right" }}>
+            {partnerId ? (people.find((p) => p.id === partnerId)?.name ?? "Selected") : "Optional"}
+          </div>
         </div>
+
+        {openRow === "partner" ? (
+          <div style={{ marginTop: "0.85rem", display: "grid", gap: "0.85rem" }}>
+            <input
+              value={partnerSearch}
+              onChange={(e) => setPartnerSearch(e.target.value)}
+              placeholder="Find someone…"
+              autoFocus
+              style={{
+                padding: "0.75rem 0",
+                fontSize: "1rem",
+                width: "100%",
+                color: "var(--ink)",
+              }}
+            />
+
+            <div style={{ display: "grid", gap: "0.5rem" }}>
+              {people
+                .filter((p) => p.name.toLowerCase().includes(partnerSearch.trim().toLowerCase()))
+                .slice(0, 8)
+                .map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      setPartnerId(p.id);
+                      setOpenRow(null);
+                      setPartnerSearch("");
+                    }}
+                    style={{
+                      border: "1px solid rgba(27, 42, 65, 0.18)",
+                      borderRadius: "12px",
+                      background: "rgba(249,246,241,0.45)",
+                      padding: "0.7rem 0.9rem",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      color: "var(--ink)",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+            </div>
+
+            {partnerId ? (
+              <button
+                type="button"
+                onClick={() => setPartnerId(null)}
+                style={{
+                  padding: 0,
+                  border: "none",
+                  background: "none",
+                  color: "var(--muted)",
+                  cursor: "pointer",
+                  fontSize: "0.9rem",
+                  textDecoration: "underline",
+                  textUnderlineOffset: "3px",
+                  justifySelf: "start",
+                }}
+              >
+                Clear partner
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setOpenRow(openRow === "family" ? null : "family")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") setOpenRow(openRow === "family" ? null : "family");
+          }}
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            justifyContent: "space-between",
+            padding: "0.75rem 0",
+            cursor: "pointer",
+            borderBottom: "1px solid rgba(27, 42, 65, 0.22)",
+            gap: "1rem",
+          }}
+        >
+          <div style={{ color: "var(--ink)" }}>Family</div>
+          <div style={{ color: "var(--muted)", textAlign: "right" }}>
+            {hasKids ? (children.length ? `${children.length} ${children.length === 1 ? "child" : "children"}` : "Has kids") : "Optional"}
+          </div>
+        </div>
+
+        {openRow === "family" ? (
+          <div style={{ marginTop: "0.9rem", display: "grid", gap: "1.15rem" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}>
+              <input
+                type="checkbox"
+                checked={hasKids}
+                onChange={(e) => setHasKids(e.target.checked)}
+              />
+              Has kids
+            </label>
+
+            {hasKids ? (
+              <div style={{ display: "grid", gap: "0.65rem" }}>
+                <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Parent role</div>
+                <select
+                  value={parentRole ?? "parent"}
+                  onChange={(e) => setParentRole(e.target.value as Person["parentRole"])}
+                  style={{ width: "100%", padding: "0.65rem 0.75rem", borderRadius: "12px" }}
+                >
+                  <option value="parent">Parent</option>
+                  <option value="mother">Mother</option>
+                  <option value="father">Father</option>
+                </select>
+              </div>
+            ) : null}
+
+            <div style={{ display: "grid", gap: "0.45rem" }}>
+              <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                Holidays to remember for {firstName}
+              </div>
+              <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Choose any that apply.</div>
+
+              <div style={{ display: "grid", gap: "0.6rem", marginTop: "4px" }}>
+                {(
+                  [
+                    { id: "christian", label: "Christian" },
+                    { id: "orthodox", label: "Orthodox" },
+                    { id: "jewish", label: "Jewish" },
+                    { id: "muslim", label: "Muslim" },
+                    { id: "none", label: "None" },
+                  ] as const
+                ).map((opt) => (
+                  <label
+                    key={opt.id}
+                    style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={religionCulture.includes(opt.id)}
+                      onChange={() => toggleReligionCulture(opt.id)}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {hasKids ? (
+              <div style={{ display: "grid", gap: "1rem" }}>
+                <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Children</div>
+
+                {children.length ? (
+                  <div style={{ display: "grid", gap: "1rem" }}>
+                    {children.map((child, idx) => (
+                      <div
+                        key={child.id}
+                        style={{
+                          border: "1px solid rgba(27, 42, 65, 0.18)",
+                          borderRadius: "14px",
+                          padding: "0.85rem 0.95rem",
+                          background: "rgba(249,246,241,0.45)",
+                        }}
+                      >
+                        <input
+                          value={child.name ?? ""}
+                          onChange={(e) => {
+                            const nextName = e.target.value;
+                            setChildren((prev) =>
+                              prev.map((c, pIdx) => (pIdx === idx ? { ...c, name: nextName } : c))
+                            );
+                          }}
+                          placeholder="Child name (optional)"
+                          style={{
+                            padding: "0.55rem 0",
+                            fontSize: "1rem",
+                            width: "100%",
+                            color: "var(--ink)",
+                          }}
+                        />
+
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => {
+                            const draft = toDraftFromIso(child.birthday ?? child.birthdate ?? "");
+                            setChildEditingIndex(idx);
+                            setChildDraftMonthDay(draft.monthDay);
+                            setChildDraftYear(draft.year);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              const draft = toDraftFromIso(child.birthday ?? child.birthdate ?? "");
+                              setChildEditingIndex(idx);
+                              setChildDraftMonthDay(draft.monthDay);
+                              setChildDraftYear(draft.year);
+                            }
+                          }}
+                          style={{
+                            display: "flex",
+                            alignItems: "baseline",
+                            justifyContent: "space-between",
+                            padding: "0.65rem 0 0.35rem",
+                            cursor: "pointer",
+                            gap: "1rem",
+                          }}
+                        >
+                          <div style={{ color: "var(--ink)" }}>Birthday</div>
+                          <div style={{ color: "var(--muted)", textAlign: "right" }}>
+                            {child.birthday || child.birthdate ? formatMomentDate(child.birthday ?? child.birthdate ?? "") : "Select date"}
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => setChildren((prev) => prev.filter((_, pIdx) => pIdx !== idx))}
+                          style={{
+                            padding: 0,
+                            border: "none",
+                            background: "none",
+                            color: "var(--muted)",
+                            cursor: "pointer",
+                            fontSize: "0.88rem",
+                            textDecoration: "underline",
+                            textUnderlineOffset: "3px",
+                            marginTop: "0.4rem",
+                          }}
+                        >
+                          Remove child
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                <button
+                  onClick={() =>
+                    setChildren((prev) => [
+                      ...prev,
+                      { id: makeId(), name: "", birthday: "" },
+                    ])
+                  }
+                  style={{
+                    border: "1px solid var(--border-strong)",
+                    background: "transparent",
+                    color: "var(--ink)",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    fontWeight: 500,
+                    letterSpacing: "0.01em",
+                    borderRadius: "12px",
+                    padding: "0.55rem 0.95rem",
+                    fontSize: "0.95rem",
+                  }}
+                >
+                  + Add child
+                </button>
+              </div>
+            ) : null}
+
+            {childEditingIndex !== null ? (
+              <MomentDatePicker
+                isOpen
+                title="Child birthday"
+                mode="birthday"
+                monthDay={childDraftMonthDay}
+                setMonthDay={setChildDraftMonthDay}
+                year={childDraftYear}
+                setYear={setChildDraftYear}
+                yearHelperText="Optional."
+                onSave={() => {
+                  const iso = buildMomentIso(childDraftMonthDay, childDraftYear, false);
+                  if (!iso) return;
+                  setChildren((prev) =>
+                    prev.map((c, idx) => (idx === childEditingIndex ? { ...c, birthday: iso, birthdate: undefined } : c))
+                  );
+                  setChildEditingIndex(null);
+                }}
+                onCancel={() => setChildEditingIndex(null)}
+                onClear={() => {
+                  setChildren((prev) =>
+                    prev.map((c, idx) => (idx === childEditingIndex ? { ...c, birthday: "", birthdate: undefined } : c))
+                  );
+                  setChildDraftMonthDay("");
+                  setChildDraftYear("");
+                }}
+              />
+            ) : null}
+          </div>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={() => setOpenRow(openRow === "related" ? null : "related")}
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0.85rem 1rem",
+            cursor: "pointer",
+            border: "1px solid rgba(27, 42, 65, 0.22)",
+            borderRadius: "12px",
+            background: "transparent",
+            gap: "1rem",
+            color: "var(--ink)",
+            textAlign: "left",
+            fontSize: "1rem",
+          }}
+        >
+          <span>Add connection</span>
+          <span style={{ color: "var(--muted)" }}>{openRow === "related" ? "Hide" : "Open"}</span>
+        </button>
 
         {openRow === "related" ? (
           <div style={{ marginTop: "0.75rem", display: "grid", gap: "1rem" }}>
