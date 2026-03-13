@@ -10,7 +10,7 @@ import { useAppState } from "../appState";
 import SmartSuggestionCard from "../components/SmartSuggestionCard";
 import { getUpcomingReminders, type ReminderEvent } from "../engine/reminderEngine";
 import { getRemindersToFire } from "../engine/reminderScheduler";
-import { getReminderId, hasReminderFired, markReminderFired } from "../engine/reminderRegistry";
+import { getReminderId, markReminderFired } from "../engine/reminderRegistry";
 import {
   type AnniversaryPromptItem,
   type BirthdayPromptItem,
@@ -299,7 +299,7 @@ export default function Home({
   const activeReminders = useMemo(() => {
     return reminders.filter((reminder) => {
       const reminderId = getReminderId(reminder);
-      return !hasReminderFired(reminderId) && !dismissedReminderKeys[reminderId];
+      return !dismissedReminderKeys[reminderId];
     });
   }, [dismissedReminderKeys, reminders]);
 
@@ -1463,6 +1463,10 @@ export default function Home({
                     <div style={{ marginTop: "1.5rem", padding: "2.25rem 0", textAlign: "center" }}>
                       {searchTerm.trim() && filteredPeople.length === 0 ? (
                         <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>No match found.</div>
+                      ) : people.length > 0 ? (
+                        <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>
+                          You're all caught up today.
+                        </div>
                       ) : (
                         <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>
                           When you add people, important dates will appear here.
