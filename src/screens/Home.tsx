@@ -211,6 +211,7 @@ export default function Home({
   const [giftHistoryConfirm, setGiftHistoryConfirm] = useState<null | {
     personId: string;
     type: "coffee" | "ecard" | "gift";
+    reminderId: string;
   }>(null);
   const [smsSuggestions, setSmsSuggestions] = useState<null | {
     personName: string;
@@ -601,6 +602,11 @@ export default function Home({
       title = `Tomorrow: ${stripRelativeSuffix(display.label, "tomorrow")}`;
     } else if (section === "tomorrow" && reminder.reminderType === "dayOf") {
       title = stripRelativeSuffix(display.label, "today");
+    } else if (section === "horizon") {
+      title =
+        reminder.momentType === "childBirthday"
+          ? stripRelativeSuffix(stripRelativeSuffix(display.label, "today"), "tomorrow").replace(/ in 7 days$/, "")
+          : stripRelativeSuffix(stripRelativeSuffix(display.label, "today"), "tomorrow").replace(/ in 7 days$/, "");
     } else if (
       section === "today" &&
       reminder.reminderType === "dayOf" &&
@@ -621,10 +627,9 @@ export default function Home({
     };
   }
 
-  function dismissReminderCard(reminder: ReminderEvent) {
+  function markReminderHandled(reminder: ReminderEvent) {
     const reminderId = getReminderId(reminder);
     markReminderFired(reminderId);
-    recordCareEvent(reminder.personId, "reminderComplete", "Marked reminder complete");
     setHandledReminderActions((prev) => {
       if (prev[reminderId]) return prev;
       return { ...prev, [reminderId]: true };
@@ -632,8 +637,13 @@ export default function Home({
     setDismissedReminderKeys((prev) => ({ ...prev, [reminderId]: true }));
   }
 
-  function promptGiftHistory(personId: string, type: "coffee" | "ecard" | "gift") {
-    setGiftHistoryConfirm({ personId, type });
+  function dismissReminderCard(reminder: ReminderEvent) {
+    recordCareEvent(reminder.personId, "reminderComplete", "Marked reminder complete");
+    markReminderHandled(reminder);
+  }
+
+  function promptGiftHistory(reminder: ReminderEvent, personId: string, type: "coffee" | "ecard" | "gift") {
+    setGiftHistoryConfirm({ personId, type, reminderId: getReminderId(reminder) });
   }
 
   function confirmGiftHistory() {
@@ -661,6 +671,12 @@ export default function Home({
           ? "Sent eCard"
           : "Sent gift";
     recordCareEvent(person.id, giftHistoryConfirm.type, note);
+    setHandledReminderActions((prev) => {
+      if (prev[giftHistoryConfirm.reminderId]) return prev;
+      return { ...prev, [giftHistoryConfirm.reminderId]: true };
+    });
+    setDismissedReminderKeys((prev) => ({ ...prev, [giftHistoryConfirm.reminderId]: true }));
+    markReminderFired(giftHistoryConfirm.reminderId);
     setGiftHistoryConfirm(null);
   }
 
@@ -694,12 +710,8 @@ export default function Home({
           href: "https://www.starbucks.com/gift",
           onClick: () => {
             if (!person) return;
-            promptGiftHistory(person.id, "gift");
+            promptGiftHistory(reminder, person.id, "gift");
           },
-        },
-        {
-          label: "✓ Mark as done",
-          onClick: () => dismissReminderCard(reminder),
         },
       ];
     }
@@ -707,8 +719,20 @@ export default function Home({
     if (reminder.reminderType === "oneDay") {
       return [
         {
-          label: "✓ Mark as done",
-          onClick: () => dismissReminderCard(reminder),
+          label: `Send ${first} an eCard`,
+          href: "https://www.americangreetings.com/ecards",
+          onClick: () => {
+            if (!person) return;
+            promptGiftHistory(reminder, person.id, "ecard");
+          },
+        },
+        {
+          label: "Send gift",
+          href: "https://www.starbucks.com/gift",
+          onClick: () => {
+            if (!person) return;
+            promptGiftHistory(reminder, person.id, "gift");
+          },
         },
       ];
     }
@@ -774,6 +798,7 @@ export default function Home({
             ],
             onAfterSend: () => {
               recordCareEvent(person.id, "text", careEventNoteForReminderText(reminder));
+              markReminderHandled(reminder);
             },
           });
         },
@@ -783,7 +808,7 @@ export default function Home({
         href: "https://www.americangreetings.com/ecards",
         onClick: () => {
           if (!person) return;
-          promptGiftHistory(person.id, "ecard");
+          promptGiftHistory(reminder, person.id, "ecard");
         },
       },
       {
@@ -791,7 +816,7 @@ export default function Home({
         href: "https://www.starbucks.com/gift",
         onClick: () => {
           if (!person) return;
-          promptGiftHistory(person.id, "coffee");
+          promptGiftHistory(reminder, person.id, "coffee");
         },
       },
       {
@@ -1832,7 +1857,11 @@ export default function Home({
                                 const reminderId = getReminderId(reminder);
                                 const display = buildReminderDisplay(reminder, "horizon");
                                 const actions = buildReminderActions(reminder);
-                                const primaryActions = actions.filter((action) => action.label !== "✓ Mark as done");
+                                const primaryActions = actions
+                                  .filter((action) => action.label !== "✓ Mark as done")
+                                  .map((action) =>
+                                    action.label === "Send gift" ? { ...action, label: "Plan gift" } : action
+                                  );
 
                                 return (
                                   <div
