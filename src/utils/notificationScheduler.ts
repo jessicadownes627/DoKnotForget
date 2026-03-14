@@ -11,6 +11,7 @@ import { getReminderId, hasReminderFired } from "../engine/reminderRegistry";
 import { parseLocalDate } from "./date";
 
 const REMINDER_NOTIFICATION_SOURCE = "dkf-reminder";
+const TEST_NOTIFICATION_SOURCE = "dkf-test-reminder";
 export const REMINDER_NOTIFICATION_CATEGORY = "reminder";
 const REMINDER_NOTIFICATION_CHANNEL: Channel = {
   id: REMINDER_NOTIFICATION_CATEGORY,
@@ -137,4 +138,32 @@ export async function scheduleReminderNotifications(reminders: ReminderEvent[], 
 
   if (!notifications.length) return;
   await LocalNotifications.schedule({ notifications });
+}
+
+export async function scheduleTestReminderNotification() {
+  if (!isNativeNotificationsSupported()) return;
+
+  const now = new Date();
+  const notificationId = hashReminderId(`${TEST_NOTIFICATION_SOURCE}:${now.getTime()}`);
+
+  await LocalNotifications.schedule({
+    notifications: [
+      {
+        id: notificationId,
+        title: "Test Reminder",
+        body: "Notification system is working.",
+        sound: "default",
+        actionTypeId: REMINDER_NOTIFICATION_CATEGORY,
+        channelId: REMINDER_NOTIFICATION_CATEGORY,
+        threadIdentifier: REMINDER_NOTIFICATION_CATEGORY,
+        schedule: {
+          at: new Date(now.getTime() + 60_000),
+        },
+        extra: {
+          source: TEST_NOTIFICATION_SOURCE,
+          scheduledAt: now.toISOString(),
+        },
+      },
+    ],
+  });
 }

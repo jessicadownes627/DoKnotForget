@@ -34,6 +34,7 @@ import {
   isNativeNotificationsSupported,
   requestReminderNotificationPermission,
   scheduleReminderNotifications,
+  scheduleTestReminderNotification,
 } from "../utils/notificationScheduler";
 
 const headerDateFormatter = new Intl.DateTimeFormat("en-US", {
@@ -1427,6 +1428,15 @@ export default function Home({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function handleTestNotification() {
+    if (!isNativeNotificationsSupported()) return;
+
+    await configureReminderNotifications();
+    const status = await requestReminderNotificationPermission();
+    if (status?.display !== "granted") return;
+    await scheduleTestReminderNotification();
+  }
+
   return (
     <div style={{ background: "var(--paper)", color: "var(--ink)" }}>
       <div
@@ -1525,6 +1535,32 @@ export default function Home({
             Contacts
           </button>
         </div>
+
+        {isNativeNotificationsSupported() ? (
+          <div style={{ marginTop: "12px" }}>
+            <button
+              type="button"
+              onClick={() => {
+                void handleTestNotification();
+              }}
+              style={{
+                border: "1px solid var(--border-strong)",
+                background: "transparent",
+                color: "var(--muted)",
+                cursor: "pointer",
+                textAlign: "left",
+                fontWeight: 500,
+                letterSpacing: "0.01em",
+                borderRadius: "12px",
+                padding: "0.65rem 1rem",
+                fontSize: "0.95rem",
+                fontFamily: "var(--font-sans)",
+              }}
+            >
+              Test Notification
+            </button>
+          </div>
+        ) : null}
 
         <div style={{ marginTop: "16px" }}>
           <div className="search-label">Search your contacts</div>
