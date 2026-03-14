@@ -11,6 +11,7 @@ import { getUpcomingReminders, type ReminderEvent } from "../engine/reminderEngi
 import { getUpcomingMoments } from "../engine/momentEngine";
 import { getRemindersToFire } from "../engine/reminderScheduler";
 import { getReminderId, markReminderFired } from "../engine/reminderRegistry";
+import { LocalNotifications } from "@capacitor/local-notifications";
 import {
   type AnniversaryPromptItem,
   type BirthdayPromptItem,
@@ -26,6 +27,14 @@ import { filterContacts } from "../utils/contactSearch";
 import SmartMessageSuggestionsModal from "../components/SmartMessageSuggestionsModal";
 import { parseLocalDate } from "../utils/date";
 import { buildHomeSections } from "../utils/homeSections";
+import {
+  cancelScheduledReminderNotificationByReminderId,
+  cancelScheduledReminderNotifications,
+  configureReminderNotifications,
+  isNativeNotificationsSupported,
+  requestReminderNotificationPermission,
+  scheduleReminderNotifications,
+} from "../utils/notificationScheduler";
 
 const headerDateFormatter = new Intl.DateTimeFormat("en-US", {
   weekday: "long",
@@ -220,6 +229,7 @@ export default function Home({
     onAfterSend?: () => void;
   }>(null);
   const previousPeopleCountRef = useRef<number>(people.length);
+  const notificationPermissionRequestedRef = useRef(false);
 
   const [today, setToday] = useState(() => startOfToday());
 
@@ -437,6 +447,7 @@ export default function Home({
     let cancelled = false;
 
     async function deliverReminders() {
+      if (isNativeNotificationsSupported()) return;
       const remindersToFire = getRemindersToFire(people, today);
       if (remindersToFire.length === 0 || cancelled) return;
 
@@ -495,6 +506,82 @@ export default function Home({
       cancelled = true;
     };
   }, [activeTab, people, today]);
+
+  useEffect(() => {
+    if (!isNativeNotificationsSupported()) return;
+    if (people.length === 0) return;
+    if (notificationPermissionRequestedRef.current) return;
+
+    let cancelled = false;
+
+    async function ensureNotificationPermission() {
+      await configureReminderNotifications();
+      const status = await requestReminderNotificationPermission();
+      if (cancelled || !status) return;
+      if (status.display === "granted" || status.display === "denied") {
+        notificationPermissionRequestedRef.current = true;
+      }
+    }
+
+    void ensureNotificationPermission();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [people.length]);
+
+  useEffect(() => {
+    if (!isNativeNotificationsSupported()) return;
+
+    let cancelled = false;
+
+    async function syncNativeReminderNotifications() {
+      await configureReminderNotifications();
+      const permission = await LocalNotifications.checkPermissions();
+      if (cancelled || permission.display !== "granted") return;
+
+      await cancelScheduledReminderNotifications(reminders);
+      if (cancelled) return;
+
+      await scheduleReminderNotifications(reminders, new Date());
+    }
+
+    void syncNativeReminderNotifications();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reminders, people, today]);
+
+  useEffect(() => {
+    if (!isNativeNotificationsSupported()) return;
+
+    let receivedHandle: { remove: () => Promise<void> } | null = null;
+    let actionHandle: { remove: () => Promise<void> } | null = null;
+
+    function markDeliveredReminder(notification: { extra?: { reminderId?: string } }) {
+      const reminderId = notification.extra?.reminderId;
+      if (!reminderId) return;
+      markReminderFired(reminderId);
+    }
+
+    void LocalNotifications.addListener("localNotificationReceived", (notification) => {
+      markDeliveredReminder(notification);
+    }).then((handle) => {
+      receivedHandle = handle;
+    });
+
+    void LocalNotifications.addListener("localNotificationActionPerformed", ({ notification }) => {
+      markDeliveredReminder(notification);
+    }).then((handle) => {
+      actionHandle = handle;
+    });
+
+    return () => {
+      void receivedHandle?.remove();
+      void actionHandle?.remove();
+    };
+  }, []);
 
   function formatReminderDate(value: string) {
     const parsed = parseLocalDate(value);
@@ -630,6 +717,7 @@ export default function Home({
   function markReminderHandled(reminder: ReminderEvent) {
     const reminderId = getReminderId(reminder);
     markReminderFired(reminderId);
+    void cancelScheduledReminderNotificationByReminderId(reminderId);
     setHandledReminderActions((prev) => {
       if (prev[reminderId]) return prev;
       return { ...prev, [reminderId]: true };
@@ -677,6 +765,7 @@ export default function Home({
     });
     setDismissedReminderKeys((prev) => ({ ...prev, [giftHistoryConfirm.reminderId]: true }));
     markReminderFired(giftHistoryConfirm.reminderId);
+    void cancelScheduledReminderNotificationByReminderId(giftHistoryConfirm.reminderId);
     setGiftHistoryConfirm(null);
   }
 
