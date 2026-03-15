@@ -9,9 +9,11 @@ import {
 import type { ReminderEvent } from "../engine/reminderEngine";
 import { getReminderId, hasReminderFired } from "../engine/reminderRegistry";
 import { parseLocalDate } from "./date";
+import { DEFAULT_USER_SETTINGS, type UserSettings } from "./userSettings";
 
 const REMINDER_NOTIFICATION_SOURCE = "dkf-reminder";
 const TEST_NOTIFICATION_SOURCE = "dkf-test-reminder";
+const HANDLED_REMINDER_ACTIONS_STORAGE_KEY = "doknotforget_handled_reminder_actions_v1";
 export const REMINDER_NOTIFICATION_CATEGORY = "reminder";
 const REMINDER_NOTIFICATION_CHANNEL: Channel = {
   id: REMINDER_NOTIFICATION_CATEGORY,
@@ -41,22 +43,50 @@ export function getReminderNotificationIdForReminderId(reminderId: string) {
   return hashReminderId(reminderId);
 }
 
+export function getReminderNudgeNotificationId(reminder: ReminderEvent) {
+  return hashReminderId(`${getReminderNotificationKey(reminder)}_nudge`);
+}
+
+export function getReminderNudgeNotificationIdForReminderId(reminderId: string) {
+  return hashReminderId(`${reminderId}_nudge`);
+}
+
 export function getReminderNotificationKey(reminder: ReminderEvent) {
   return getReminderId(reminder);
 }
 
-export function buildReminderNotification(reminder: ReminderEvent, now = new Date()): LocalNotificationSchema | null {
+function hasReminderBeenHandled(reminderId: string) {
+  try {
+    const raw = window.localStorage.getItem(HANDLED_REMINDER_ACTIONS_STORAGE_KEY);
+    if (!raw) return false;
+
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return false;
+    return (parsed as Record<string, unknown>)[reminderId] === true;
+  } catch {
+    return false;
+  }
+}
+
+export function buildReminderNotification(
+  reminder: ReminderEvent,
+  now = new Date(),
+  userSettings: UserSettings = DEFAULT_USER_SETTINGS
+): LocalNotificationSchema | null {
   if (hasReminderFired(getReminderId(reminder))) return null;
 
   const triggerDate = parseLocalDate(reminder.triggerDate || reminder.date);
   if (!triggerDate) return null;
 
+  const reminderHour = userSettings.reminderHour ?? DEFAULT_USER_SETTINGS.reminderHour;
+  const reminderMinute = userSettings.reminderMinute ?? DEFAULT_USER_SETTINGS.reminderMinute;
+
   const scheduledAt = new Date(
     triggerDate.getFullYear(),
     triggerDate.getMonth(),
     triggerDate.getDate(),
-    9,
-    0,
+    reminderHour,
+    reminderMinute,
     0,
     0
   );
@@ -75,7 +105,56 @@ export function buildReminderNotification(reminder: ReminderEvent, now = new Dat
     },
     extra: {
       source: REMINDER_NOTIFICATION_SOURCE,
+      variant: "primary",
       reminderId: getReminderNotificationKey(reminder),
+      personId: reminder.personId,
+      momentType: reminder.momentType,
+      reminderType: reminder.reminderType,
+      triggerDate: reminder.triggerDate,
+      eventDate: reminder.eventDate,
+    },
+  };
+}
+
+export function buildReminderNudgeNotification(
+  reminder: ReminderEvent,
+  userSettings: UserSettings = DEFAULT_USER_SETTINGS
+): LocalNotificationSchema | null {
+  const reminderId = getReminderNotificationKey(reminder);
+  if (reminder.reminderType !== "dayOf") return null;
+  if (hasReminderBeenHandled(reminderId)) return null;
+
+  const triggerDate = parseLocalDate(reminder.triggerDate || reminder.date);
+  if (!triggerDate) return null;
+
+  const reminderHour = userSettings.reminderHour ?? DEFAULT_USER_SETTINGS.reminderHour;
+  const reminderMinute = userSettings.reminderMinute ?? DEFAULT_USER_SETTINGS.reminderMinute;
+
+  const scheduledAt = new Date(
+    triggerDate.getFullYear(),
+    triggerDate.getMonth(),
+    triggerDate.getDate(),
+    reminderHour,
+    reminderMinute,
+    0,
+    0
+  );
+
+  return {
+    id: getReminderNudgeNotificationId(reminder),
+    title: reminder.label,
+    body: "Still time to send a quick message or do something thoughtful.",
+    sound: "default",
+    actionTypeId: REMINDER_NOTIFICATION_CATEGORY,
+    channelId: REMINDER_NOTIFICATION_CATEGORY,
+    threadIdentifier: REMINDER_NOTIFICATION_CATEGORY,
+    schedule: {
+      at: new Date(scheduledAt.getTime() + 8 * 60 * 60 * 1000),
+    },
+    extra: {
+      source: REMINDER_NOTIFICATION_SOURCE,
+      variant: "nudge",
+      reminderId,
       personId: reminder.personId,
       momentType: reminder.momentType,
       reminderType: reminder.reminderType,
@@ -110,7 +189,10 @@ export async function cancelScheduledReminderNotifications(reminders?: ReminderE
 
   let notifications: LocalNotificationDescriptor[];
   if (reminders?.length) {
-    notifications = reminders.map((reminder) => ({ id: getReminderNotificationId(reminder) }));
+    notifications = reminders.flatMap((reminder) => [
+      { id: getReminderNotificationId(reminder) },
+      { id: getReminderNudgeNotificationId(reminder) },
+    ]);
   } else {
     const pending = await LocalNotifications.getPending();
     notifications = pending.notifications
@@ -125,19 +207,33 @@ export async function cancelScheduledReminderNotifications(reminders?: ReminderE
 export async function cancelScheduledReminderNotificationByReminderId(reminderId: string) {
   if (!isNativeNotificationsSupported()) return;
   await LocalNotifications.cancel({
-    notifications: [{ id: getReminderNotificationIdForReminderId(reminderId) }],
+    notifications: [
+      { id: getReminderNotificationIdForReminderId(reminderId) },
+      { id: getReminderNudgeNotificationIdForReminderId(reminderId) },
+    ],
   });
 }
 
-export async function scheduleReminderNotifications(reminders: ReminderEvent[], now = new Date()) {
+export async function scheduleReminderNotifications(
+  reminders: ReminderEvent[],
+  now = new Date(),
+  userSettings: UserSettings = DEFAULT_USER_SETTINGS
+) {
   if (!isNativeNotificationsSupported()) return;
 
-  const notifications = reminders
-    .map((reminder) => buildReminderNotification(reminder, now))
-    .filter((notification): notification is LocalNotificationSchema => Boolean(notification));
+  const pending = await LocalNotifications.getPending();
+  const existingIds = new Set(pending.notifications.map((notification) => notification.id));
 
-  if (!notifications.length) return;
-  await LocalNotifications.schedule({ notifications });
+  const notifications = reminders
+    .flatMap((reminder) => [
+      buildReminderNotification(reminder, now, userSettings),
+      buildReminderNudgeNotification(reminder, userSettings),
+    ])
+    .filter((notification): notification is LocalNotificationSchema => Boolean(notification));
+  const unscheduledNotifications = notifications.filter((notification) => !existingIds.has(notification.id));
+
+  if (!unscheduledNotifications.length) return;
+  await LocalNotifications.schedule({ notifications: unscheduledNotifications });
 }
 
 export async function scheduleTestReminderNotification() {

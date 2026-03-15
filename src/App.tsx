@@ -2,6 +2,7 @@ import Home from "./screens/Home";
 import AddPerson from "./screens/AddPerson";
 import PersonDetail from "./screens/PersonDetail";
 import ImportContacts from "./screens/ImportContacts";
+import Settings from "./screens/Settings";
 import { Route, Routes } from "./router";
 import { AppStateProvider, useAppState } from "./appState";
 
@@ -17,6 +18,7 @@ function AppRoutes() {
       <Route path="/add" element={<AddPerson />} />
       <Route path="/import" element={<ImportContacts />} />
       <Route path="/person/:id" element={<PersonDetail />} />
+      <Route path="/settings" element={<Settings />} />
     </Routes>
   );
 }

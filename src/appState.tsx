@@ -3,6 +3,12 @@ import type { Person } from "./models/Person";
 import type { CareEvent, CareEventType } from "./models/CareEvent";
 import type { Relationship } from "./models/Relationship";
 import { normalizePhone } from "./utils/phone";
+import {
+  loadUserSettings,
+  normalizeUserSettings,
+  saveUserSettings,
+  type UserSettings,
+} from "./utils/userSettings";
 
 type SavePersonPayload = {
   person: Person;
@@ -16,11 +22,13 @@ type AppState = {
   people: Person[];
   relationships: Relationship[];
   careEvents: CareEvent[];
+  userSettings: UserSettings;
   markOnboardingComplete: () => void;
   createPerson: (person: Person) => void;
   savePerson: (payload: SavePersonPayload) => void;
   updatePerson: (person: Person) => void;
   updatePersonFields: (id: string, patch: Partial<Person>) => void;
+  updateUserSettings: (patch: Partial<UserSettings>) => void;
   recordCareEvent: (personId: string, type: CareEventType, note?: string) => void;
   deletePerson: (id: string) => void;
 };
@@ -38,6 +46,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [people, setPeople] = useState<Person[]>([]);
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [careEvents, setCareEvents] = useState<CareEvent[]>([]);
+  const [userSettings, setUserSettings] = useState<UserSettings>(loadUserSettings);
 
   useEffect(() => {
     const debugHydration = (() => {
@@ -94,6 +103,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     } catch {
       setOnboardingComplete(hydratedPeople.length > 0);
     }
+
+    setUserSettings(loadUserSettings());
 
     if (hydratedPeople.length) setPeople(hydratedPeople);
     setHasHydrated(true);
@@ -171,6 +182,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     }
   }, [hasHydrated, onboardingComplete]);
 
+  useEffect(() => {
+    if (!hasHydrated) return;
+    saveUserSettings(userSettings);
+  }, [hasHydrated, userSettings]);
+
   const value = useMemo<AppState>(() => {
     return {
       hasHydrated,
@@ -178,6 +194,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       people,
       relationships,
       careEvents,
+      userSettings,
       markOnboardingComplete: () => setOnboardingComplete(true),
       createPerson: (person: Person) => {
         setPeople((prev) => {
@@ -223,6 +240,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       updatePersonFields: (id: string, patch: Partial<Person>) => {
         setPeople((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
       },
+      updateUserSettings: (patch: Partial<UserSettings>) => {
+        setUserSettings((prev) => {
+          const next = normalizeUserSettings({
+            reminderHour:
+              typeof patch.reminderHour === "number" ? patch.reminderHour : prev.reminderHour,
+            reminderMinute:
+              typeof patch.reminderMinute === "number" ? patch.reminderMinute : prev.reminderMinute,
+          });
+          saveUserSettings(next);
+          return next;
+        });
+      },
       recordCareEvent: (personId: string, type: CareEventType, note?: string) => {
         setCareEvents((prev) => [
           {
@@ -245,7 +274,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         setCareEvents((prev) => prev.filter((event) => event.personId !== id));
       },
     };
-  }, [careEvents, hasHydrated, onboardingComplete, people, relationships]);
+  }, [careEvents, hasHydrated, onboardingComplete, people, relationships, userSettings]);
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }

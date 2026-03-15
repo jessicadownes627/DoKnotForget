@@ -29,7 +29,6 @@ import { parseLocalDate } from "../utils/date";
 import { buildHomeSections } from "../utils/homeSections";
 import {
   cancelScheduledReminderNotificationByReminderId,
-  cancelScheduledReminderNotifications,
   configureReminderNotifications,
   isNativeNotificationsSupported,
   requestReminderNotificationPermission,
@@ -188,7 +187,7 @@ export default function Home({
 }: {}) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { people, updatePerson, updatePersonFields, createPerson, recordCareEvent } = useAppState();
+  const { people, updatePerson, updatePersonFields, createPerson, recordCareEvent, userSettings } = useAppState();
   const initialTab = location.state?.defaultTab === "contacts" ? "contacts" : "home";
   const [activeTab, setActiveTab] = useState<"home" | "contacts">(initialTab);
   const [searchTerm, setSearchTerm] = useState("");
@@ -541,10 +540,7 @@ export default function Home({
       const permission = await LocalNotifications.checkPermissions();
       if (cancelled || permission.display !== "granted") return;
 
-      await cancelScheduledReminderNotifications(reminders);
-      if (cancelled) return;
-
-      await scheduleReminderNotifications(reminders, new Date());
+      await scheduleReminderNotifications(reminders, new Date(), userSettings);
     }
 
     void syncNativeReminderNotifications();
@@ -552,7 +548,7 @@ export default function Home({
     return () => {
       cancelled = true;
     };
-  }, [reminders, people, today]);
+  }, [reminders, people, today, userSettings]);
 
   useEffect(() => {
     if (!isNativeNotificationsSupported()) return;
@@ -1533,6 +1529,24 @@ export default function Home({
             }}
           >
             Contacts
+          </button>
+          <div aria-hidden="true" style={{ color: "var(--muted)" }}>
+            |
+          </div>
+          <button
+            onClick={() => navigate("/settings")}
+            style={{
+              padding: 0,
+              border: "none",
+              background: "none",
+              cursor: "pointer",
+              fontSize: "1.05rem",
+              fontWeight: 600,
+              color: "var(--muted)",
+              fontFamily: "var(--font-sans)",
+            }}
+          >
+            Settings
           </button>
         </div>
 
