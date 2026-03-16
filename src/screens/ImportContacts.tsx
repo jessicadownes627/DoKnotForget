@@ -1,3 +1,4 @@
+import { Contacts } from "@capacitor-community/contacts";
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "../router";
 import { useAppState } from "../appState";
@@ -20,6 +21,15 @@ type CapacitorContactsResult =
   | { contacts?: any[] }
   | any;
 
+const CONTACT_PROJECTION = {
+  name: true,
+  organization: true,
+  birthday: true,
+  note: true,
+  phones: true,
+  emails: true,
+} as const;
+
 function makeId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -33,6 +43,7 @@ function contactKey(c: PickedContact) {
 }
 
 function getCapacitorContactsPlugin(): any | null {
+  if (Contacts) return Contacts;
   const cap = (window as any)?.Capacitor;
   const plugins = cap?.Plugins;
   if (!plugins) return null;
@@ -264,6 +275,47 @@ export default function ImportContacts() {
 
   const supported = typeof window !== "undefined" && Boolean(getCapacitorContactsPlugin());
 
+  async function fetchContactsWithProjection(plugin: any) {
+    const result: CapacitorContactsResult = plugin.getContacts
+      ? await plugin.getContacts({ projection: CONTACT_PROJECTION })
+      : { contacts: [] };
+    const contacts = Array.isArray((result as any)?.contacts)
+      ? (result as any).contacts
+      : Array.isArray(result)
+        ? result
+        : [];
+
+    if (!plugin.getContact) return contacts;
+
+    const missingDetails = contacts.some((contact: any) => {
+      const hasName = Boolean(extractName(contact));
+      const hasPhone = Boolean(extractPhone(contact));
+      return Boolean(contact?.contactId) && (!hasName || !hasPhone);
+    });
+    if (!missingDetails) return contacts;
+
+    const hydratedContacts = await Promise.all(
+      contacts.map(async (contact: any) => {
+        if (!contact?.contactId) return contact;
+        const hasName = Boolean(extractName(contact));
+        const hasPhone = Boolean(extractPhone(contact));
+        if (hasName && hasPhone) return contact;
+
+        try {
+          const detailed = await plugin.getContact({
+            contactId: contact.contactId,
+            projection: CONTACT_PROJECTION,
+          });
+          return (detailed as any)?.contact ?? contact;
+        } catch {
+          return contact;
+        }
+      })
+    );
+
+    return hydratedContacts;
+  }
+
   async function loadContacts() {
     setError(null);
     if (!supported) return [];
@@ -272,11 +324,24 @@ export default function ImportContacts() {
     try {
       const plugin = getCapacitorContactsPlugin();
       if (!plugin) return [];
-      if (plugin.requestPermissions) await plugin.requestPermissions();
-      else if (plugin.getPermissions) await plugin.getPermissions();
+      const permissionStatus = plugin.requestPermissions
+        ? await plugin.requestPermissions()
+        : plugin.checkPermissions
+          ? await plugin.checkPermissions()
+          : plugin.getPermissions
+            ? await plugin.getPermissions()
+            : null;
+      const contactsPermission = String((permissionStatus as any)?.contacts ?? "").toLowerCase();
+      if (
+        contactsPermission &&
+        contactsPermission !== "granted" &&
+        contactsPermission !== "limited"
+      ) {
+        setError("Contacts permission was not granted.");
+        return [];
+      }
 
-      const result: CapacitorContactsResult = plugin.getContacts ? await plugin.getContacts() : { contacts: [] };
-      const contacts = Array.isArray((result as any)?.contacts) ? (result as any).contacts : Array.isArray(result) ? result : [];
+      const contacts = await fetchContactsWithProjection(plugin);
       const next: PickedContact[] = [];
       for (const c of contacts ?? []) {
         const trimmedName = extractName(c);
@@ -394,8 +459,8 @@ export default function ImportContacts() {
   async function handleImportAll() {
     const contacts = await loadContacts();
     if (!contacts.length) return;
-    const createdIds = importContacts(contacts);
-    navigate("/import", { replace: true, state: { reviewImportedIds: createdIds } });
+    importContacts(contacts);
+    navigate("/home", { replace: true });
   }
 
   async function handleSelectContacts() {
@@ -418,8 +483,8 @@ export default function ImportContacts() {
   function handleImportSelected() {
     const selectedContacts = sortedPicked.filter((contact) => selectedKeys.has(contactKey(contact)));
     if (!selectedContacts.length) return;
-    const createdIds = importContacts(selectedContacts);
-    navigate("/import", { replace: true, state: { reviewImportedIds: createdIds } });
+    importContacts(selectedContacts);
+    navigate("/home", { replace: true });
   }
 
   function openChildForm(personId: string) {

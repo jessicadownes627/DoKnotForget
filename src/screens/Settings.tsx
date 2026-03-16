@@ -123,27 +123,37 @@ export default function Settings() {
           >
             Choose the time of day when local reminder notifications should fire.
           </div>
-          <input
-            id="reminder-time"
-            type="time"
-            value={reminderTimeValue}
-            onChange={(event) => {
-              void handleReminderTimeChange(event.target.value);
-            }}
+          <div
             style={{
               marginTop: "14px",
-              width: "100%",
-              display: "block",
-              padding: "0.85rem 1rem",
-              borderRadius: "14px",
-              border: "1px solid var(--border-strong)",
-              background: "var(--paper)",
-              color: "var(--ink)",
-              fontSize: "1rem",
-              fontFamily: "var(--font-sans)",
-              boxSizing: "border-box",
+              display: "flex",
+              justifyContent: "center",
             }}
-          />
+          >
+            <input
+              id="reminder-time"
+              type="time"
+              value={reminderTimeValue}
+              onChange={(event) => {
+                void handleReminderTimeChange(event.target.value);
+              }}
+              style={{
+                width: "100%",
+                maxWidth: "220px",
+                display: "block",
+                padding: "0.7rem 0.9rem",
+                borderRadius: "999px",
+                border: "1px solid var(--border-strong)",
+                background: "rgba(255,255,255,0.82)",
+                color: "var(--ink)",
+                fontSize: "1rem",
+                fontFamily: "var(--font-sans)",
+                textAlign: "center",
+                boxSizing: "border-box",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.55)",
+              }}
+            />
+          </div>
         </section>
       </div>
     </div>

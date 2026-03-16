@@ -538,6 +538,33 @@ export default function PersonDetail({}: {}) {
               )}
             </section>
 
+            <section aria-label="Details" style={{ marginTop: "28px" }}>
+              <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>Details</div>
+              <div style={{ marginTop: "14px", display: "grid", gap: "18px" }}>
+                <div>
+                  <div style={{ color: "var(--muted)", fontSize: "0.9rem", marginBottom: "8px" }}>Holidays they celebrate</div>
+                  <div style={{ display: "grid", gap: "0.6rem" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}>
+                      <input type="checkbox" checked={religionCulture.includes("christian")} readOnly />
+                      Christian
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}>
+                      <input type="checkbox" checked={religionCulture.includes("jewish")} readOnly />
+                      Jewish
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}>
+                      <input type="checkbox" checked={religionCulture.includes("muslim")} readOnly />
+                      Muslim
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}>
+                      <input type="checkbox" checked={celebratesOther} readOnly />
+                      Other
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </section>
+
             <section aria-label="Care history" style={{ marginTop: "28px" }}>
               <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>Care History</div>
 
@@ -566,33 +593,6 @@ export default function PersonDetail({}: {}) {
                   No interactions recorded yet.
                 </div>
               )}
-            </section>
-
-            <section aria-label="Details" style={{ marginTop: "28px" }}>
-              <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>Details</div>
-              <div style={{ marginTop: "14px", display: "grid", gap: "18px" }}>
-                <div>
-                  <div style={{ color: "var(--muted)", fontSize: "0.9rem", marginBottom: "8px" }}>Holidays they celebrate</div>
-                  <div style={{ display: "grid", gap: "0.6rem" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}>
-                      <input type="checkbox" checked={religionCulture.includes("christian")} readOnly />
-                      Christian
-                    </label>
-                    <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}>
-                      <input type="checkbox" checked={religionCulture.includes("jewish")} readOnly />
-                      Jewish
-                    </label>
-                    <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}>
-                      <input type="checkbox" checked={religionCulture.includes("muslim")} readOnly />
-                      Muslim
-                    </label>
-                    <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}>
-                      <input type="checkbox" checked={celebratesOther} readOnly />
-                      Other
-                    </label>
-                  </div>
-                </div>
-              </div>
             </section>
 
             <div style={{ marginTop: "34px", paddingTop: "18px", borderTop: "1px solid var(--border)" }}>

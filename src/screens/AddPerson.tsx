@@ -1221,37 +1221,6 @@ export default function AddPerson() {
               </div>
             ) : null}
 
-            <div style={{ display: "grid", gap: "0.45rem" }}>
-              <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-                Holidays to remember for {firstName}
-              </div>
-              <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Choose any that apply.</div>
-
-              <div style={{ display: "grid", gap: "0.6rem", marginTop: "4px" }}>
-                {(
-                  [
-                    { id: "christian", label: "Christian" },
-                    { id: "orthodox", label: "Orthodox" },
-                    { id: "jewish", label: "Jewish" },
-                    { id: "muslim", label: "Muslim" },
-                    { id: "none", label: "None" },
-                  ] as const
-                ).map((opt) => (
-                  <label
-                    key={opt.id}
-                    style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={religionCulture.includes(opt.id)}
-                      onChange={() => toggleReligionCulture(opt.id)}
-                    />
-                    {opt.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-
             {hasKids ? (
               <div style={{ display: "grid", gap: "1rem" }}>
                 <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Children</div>
@@ -1389,8 +1358,39 @@ export default function AddPerson() {
                   setChildDraftMonthDay("");
                   setChildDraftYear("");
                 }}
-              />
-            ) : null}
+                />
+              ) : null}
+
+            <div style={{ display: "grid", gap: "0.45rem" }}>
+              <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                Holidays to remember for {firstName}
+              </div>
+              <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Choose any that apply.</div>
+
+              <div style={{ display: "grid", gap: "0.6rem", marginTop: "4px" }}>
+                {(
+                  [
+                    { id: "christian", label: "Christian" },
+                    { id: "orthodox", label: "Orthodox" },
+                    { id: "jewish", label: "Jewish" },
+                    { id: "muslim", label: "Muslim" },
+                    { id: "none", label: "None" },
+                  ] as const
+                ).map((opt) => (
+                  <label
+                    key={opt.id}
+                    style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={religionCulture.includes(opt.id)}
+                      onChange={() => toggleReligionCulture(opt.id)}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         ) : null}
 

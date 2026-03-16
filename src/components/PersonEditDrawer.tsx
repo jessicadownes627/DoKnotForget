@@ -18,17 +18,21 @@ const overlayStyle: React.CSSProperties = {
   justifyContent: "center",
   alignItems: "flex-end",
   padding: "12px",
+  overflowY: "auto",
+  WebkitOverflowScrolling: "touch",
   zIndex: 50,
 };
 
 const sheetStyle: React.CSSProperties = {
   width: "100%",
   maxWidth: "720px",
+  maxHeight: "calc(100dvh - 24px)",
   background: "var(--card)",
   border: "1px solid var(--border)",
   borderRadius: "16px",
   boxShadow: "0 18px 55px rgba(0,0,0,0.18)",
-  overflow: "hidden",
+  display: "flex",
+  flexDirection: "column",
 };
 
 function makeId() {
@@ -314,7 +318,17 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
       }}
     >
       <div style={sheetStyle}>
-        <div className="modalContent" style={{ fontFamily: "var(--font-sans)" }}>
+        <div
+          className="modalContent"
+          style={{
+            fontFamily: "var(--font-sans)",
+            overflowY: "auto",
+            WebkitOverflowScrolling: "touch",
+            minHeight: 0,
+            borderRadius: "inherit",
+            paddingBottom: "calc(24px + env(safe-area-inset-bottom))",
+          }}
+        >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "1rem" }}>
             <div style={{ fontFamily: "var(--font-serif)", fontSize: "1.35rem", fontWeight: 600, color: "var(--ink)" }}>
               Edit
@@ -637,6 +651,182 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                       </div>
                     </div>
                   </div>
+
+                  <div style={{ display: "grid", gap: "12px" }}>
+                    <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Kids</div>
+
+                    {children.map((child, idx) => (
+                      <div
+                        key={child.id}
+                        style={{
+                          border: "1px solid var(--border)",
+                          background: "var(--paper)",
+                          borderRadius: "12px",
+                          padding: "12px",
+                          display: "grid",
+                          gap: "10px",
+                        }}
+                      >
+                        <input
+                          value={child.name ?? ""}
+                          onChange={(e) => {
+                            const nextName = e.target.value;
+                            setChildren((prev) => prev.map((c, i) => (i === idx ? { ...c, name: nextName } : c)));
+                          }}
+                          placeholder="Child name"
+                          style={{
+                            width: "100%",
+                            padding: "0.65rem 0.75rem",
+                            borderRadius: "12px",
+                            border: "1px solid var(--border-strong)",
+                            background: "var(--card)",
+                            color: "var(--ink)",
+                          }}
+                        />
+
+                        <button
+                          onClick={() => {
+                            const draft = toDraftFromIso(child.birthday ?? child.birthdate ?? "");
+                            setChildEditingIndex(idx);
+                            setChildDraftMonthDay(draft.monthDay);
+                            setChildDraftYear(draft.year);
+                          }}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: "1rem",
+                            width: "100%",
+                            padding: "0.75rem 0.85rem",
+                            borderRadius: "12px",
+                            border: "1px solid var(--border-strong)",
+                            background: "var(--card)",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            color: "var(--ink)",
+                          }}
+                        >
+                          <span>Birthday</span>
+                          <span style={{ color: "var(--muted)" }}>
+                            {child.birthday || child.birthdate ? formatMomentDate(child.birthday ?? child.birthdate ?? "") : "Select date"}
+                          </span>
+                        </button>
+
+                        <div style={{ display: "grid", gap: "8px" }}>
+                          <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>School milestones</div>
+                          {(child.schoolEvents ?? []).length ? (
+                            <div style={{ display: "grid", gap: "6px" }}>
+                              {(child.schoolEvents ?? []).map((ev) => (
+                                <div
+                                  key={`${ev.type}-${ev.date}`}
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    gap: "1rem",
+                                    padding: "0.6rem 0.75rem",
+                                    borderRadius: "12px",
+                                    border: "1px solid var(--border)",
+                                    background: "var(--card)",
+                                  }}
+                                >
+                                  <div style={{ color: "var(--ink)" }}>{schoolEventLabel(ev.type)}</div>
+                                  <button
+                                    onClick={() => {
+                                      setChildren((prev) =>
+                                        prev.map((c, i) => {
+                                          if (i !== idx) return c;
+                                          return {
+                                            ...c,
+                                            schoolEvents: (c.schoolEvents ?? []).filter(
+                                              (s) => !(s.type === ev.type && s.date === ev.date)
+                                            ),
+                                          };
+                                        })
+                                      );
+                                    }}
+                                    title="This removes the moment from your list."
+                                    style={{
+                                      padding: 0,
+                                      border: "none",
+                                      background: "none",
+                                      cursor: "pointer",
+                                      color: "var(--muted)",
+                                      textDecoration: "underline",
+                                      textUnderlineOffset: "3px",
+                                      fontSize: "0.85rem",
+                                    }}
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>None yet.</div>
+                          )}
+
+                          <button
+                            onClick={() => {
+                              setMilestoneEditing({ childIndex: idx });
+                              setMilestoneType("firstDay");
+                              setMilestoneDraftMonthDay("");
+                              setMilestoneDraftYear("");
+                            }}
+                            style={{
+                              padding: 0,
+                              border: "none",
+                              background: "none",
+                              cursor: "pointer",
+                              color: "var(--ink)",
+                              textDecoration: "underline",
+                              textUnderlineOffset: "3px",
+                              fontSize: "0.92rem",
+                              justifySelf: "start",
+                            }}
+                          >
+                            Add a milestone
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={() => setChildren((prev) => prev.filter((_, i) => i !== idx))}
+                          title="This removes the moment from your list."
+                          style={{
+                            padding: 0,
+                            border: "none",
+                            background: "none",
+                            cursor: "pointer",
+                            color: "var(--muted)",
+                            textDecoration: "underline",
+                            textUnderlineOffset: "3px",
+                            fontSize: "0.9rem",
+                            justifySelf: "start",
+                            marginTop: "2px",
+                          }}
+                        >
+                          Remove child
+                        </button>
+                      </div>
+                    ))}
+
+                    <button
+                      onClick={() => setChildren((prev) => [...prev, { id: makeId(), name: "", birthday: "" }])}
+                      style={{
+                        border: "1px solid var(--border-strong)",
+                        background: "transparent",
+                        color: "var(--ink)",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        fontWeight: 500,
+                        letterSpacing: "0.01em",
+                        borderRadius: "12px",
+                        padding: "0.65rem 1rem",
+                        fontSize: "0.95rem",
+                        justifySelf: "start",
+                      }}
+                    >
+                      + Add child
+                    </button>
+                  </div>
                 </div>
               ) : null}
 
@@ -673,183 +863,6 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                 </div>
               </div>
 
-              {hasKids ? (
-                <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
-                  <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Kids</div>
-
-                  {children.map((child, idx) => (
-                    <div
-                      key={child.id}
-                      style={{
-                        border: "1px solid var(--border)",
-                        background: "var(--paper)",
-                        borderRadius: "12px",
-                        padding: "12px",
-                        display: "grid",
-                        gap: "10px",
-                      }}
-                    >
-                      <input
-                        value={child.name ?? ""}
-                        onChange={(e) => {
-                          const nextName = e.target.value;
-                          setChildren((prev) => prev.map((c, i) => (i === idx ? { ...c, name: nextName } : c)));
-                        }}
-                        placeholder="Child name"
-                        style={{
-                          width: "100%",
-                          padding: "0.65rem 0.75rem",
-                          borderRadius: "12px",
-                          border: "1px solid var(--border-strong)",
-                          background: "var(--card)",
-                          color: "var(--ink)",
-                        }}
-                      />
-
-                      <button
-                        onClick={() => {
-                          const draft = toDraftFromIso(child.birthday ?? child.birthdate ?? "");
-                          setChildEditingIndex(idx);
-                          setChildDraftMonthDay(draft.monthDay);
-                          setChildDraftYear(draft.year);
-                        }}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: "1rem",
-                          width: "100%",
-                          padding: "0.75rem 0.85rem",
-                          borderRadius: "12px",
-                          border: "1px solid var(--border-strong)",
-                          background: "var(--card)",
-                          cursor: "pointer",
-                          textAlign: "left",
-                          color: "var(--ink)",
-                        }}
-                      >
-                        <span>Birthday</span>
-                        <span style={{ color: "var(--muted)" }}>
-                          {child.birthday || child.birthdate ? formatMomentDate(child.birthday ?? child.birthdate ?? "") : "Select date"}
-                        </span>
-                      </button>
-
-                        <div style={{ display: "grid", gap: "8px" }}>
-                          <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>School milestones</div>
-                          {(child.schoolEvents ?? []).length ? (
-                            <div style={{ display: "grid", gap: "6px" }}>
-                              {(child.schoolEvents ?? []).map((ev) => (
-                              <div
-                                key={`${ev.type}-${ev.date}`}
-                                style={{
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  gap: "1rem",
-                                  padding: "0.6rem 0.75rem",
-                                  borderRadius: "12px",
-                                  border: "1px solid var(--border)",
-                                  background: "var(--card)",
-                                }}
-                              >
-                                <div style={{ color: "var(--ink)" }}>{schoolEventLabel(ev.type)}</div>
-                                <button
-                                  onClick={() => {
-                                    setChildren((prev) =>
-                                      prev.map((c, i) => {
-                                        if (i !== idx) return c;
-                                        return {
-                                          ...c,
-                                          schoolEvents: (c.schoolEvents ?? []).filter(
-                                            (s) => !(s.type === ev.type && s.date === ev.date)
-                                          ),
-                                        };
-                                      })
-                                    );
-                                  }}
-                                  title="This removes the moment from your list."
-                                  style={{
-                                    padding: 0,
-                                    border: "none",
-                                    background: "none",
-                                    cursor: "pointer",
-                                    color: "var(--muted)",
-                                    textDecoration: "underline",
-                                    textUnderlineOffset: "3px",
-                                    fontSize: "0.85rem",
-                                  }}
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>None yet.</div>
-                        )}
-
-                        <button
-                          onClick={() => {
-                            setMilestoneEditing({ childIndex: idx });
-                            setMilestoneType("firstDay");
-                            setMilestoneDraftMonthDay("");
-                            setMilestoneDraftYear("");
-                          }}
-                          style={{
-                            padding: 0,
-                            border: "none",
-                            background: "none",
-                            cursor: "pointer",
-                            color: "var(--ink)",
-                            textDecoration: "underline",
-                            textUnderlineOffset: "3px",
-                            fontSize: "0.92rem",
-                            justifySelf: "start",
-                          }}
-                        >
-                          Add a milestone
-                        </button>
-                      </div>
-
-                      <button
-                        onClick={() => setChildren((prev) => prev.filter((_, i) => i !== idx))}
-                        title="This removes the moment from your list."
-                        style={{
-                          padding: 0,
-                          border: "none",
-                          background: "none",
-                          cursor: "pointer",
-                          color: "var(--muted)",
-                          textDecoration: "underline",
-                          textUnderlineOffset: "3px",
-                          fontSize: "0.9rem",
-                          justifySelf: "start",
-                          marginTop: "2px",
-                        }}
-                      >
-                        Remove child
-                      </button>
-                    </div>
-                  ))}
-
-                  <button
-                    onClick={() => setChildren((prev) => [...prev, { id: makeId(), name: "", birthday: "" }])}
-                    style={{
-                      border: "1px solid var(--border-strong)",
-                      background: "transparent",
-                      color: "var(--ink)",
-                      cursor: "pointer",
-                      textAlign: "left",
-                      fontWeight: 500,
-                      letterSpacing: "0.01em",
-                      borderRadius: "12px",
-                      padding: "0.65rem 1rem",
-                      fontSize: "0.95rem",
-                      justifySelf: "start",
-                    }}
-                  >
-                    + Add child
-                  </button>
-                </div>
-              ) : null}
             </div>
 
             <div style={{ display: "flex", gap: "0.75rem", marginTop: "6px", justifyContent: "flex-end" }}>
