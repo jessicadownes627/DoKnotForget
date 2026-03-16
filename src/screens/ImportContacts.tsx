@@ -257,7 +257,7 @@ function calculateContactScore(contact: {
 export default function ImportContacts() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { people, createPerson, updatePerson } = useAppState();
+  const { people, createPeople, updatePerson } = useAppState();
   const [picked, setPicked] = useState<PickedContact[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set());
   const [mode, setMode] = useState<"idle" | "select">("idle");
@@ -319,8 +319,6 @@ export default function ImportContacts() {
   async function loadContacts() {
     setError(null);
     if (!supported) return [];
-
-    setIsLoading(true);
     try {
       const plugin = getCapacitorContactsPlugin();
       if (!plugin) return [];
@@ -376,8 +374,6 @@ export default function ImportContacts() {
       // User cancelled or permission denied.
       setError(e?.message ? String(e.message) : "Couldn’t access contacts.");
       return [];
-    } finally {
-      setIsLoading(false);
     }
   }
 
@@ -422,7 +418,7 @@ export default function ImportContacts() {
   }
 
   function importContacts(contacts: PickedContact[]) {
-    const createdIds: string[] = [];
+    const createdPeople: Person[] = [];
     for (const c of contacts) {
       const normalizedPhone = normalizePhoneE164(c.phone) ?? null;
       const moments: Person["moments"] = [];
@@ -450,25 +446,37 @@ export default function ImportContacts() {
         phone: normalizedPhone || undefined,
         moments,
       };
-      createPerson(person);
-      createdIds.push(person.id);
+      createdPeople.push(person);
     }
-    return createdIds;
+    if (createdPeople.length) createPeople(createdPeople);
+    return createdPeople;
   }
 
   async function handleImportAll() {
-    const contacts = await loadContacts();
-    if (!contacts.length) return;
-    importContacts(contacts);
-    navigate("/home", { replace: true });
+    if (isLoading) return;
+    setIsLoading(true);
+    try {
+      const contacts = await loadContacts();
+      if (!contacts.length) return;
+      importContacts(contacts);
+      navigate("/home", { replace: true });
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   async function handleSelectContacts() {
-    const contacts = await loadContacts();
-    if (!contacts.length) return;
-    setPicked(contacts);
-    setSelectedKeys(new Set());
-    setMode("select");
+    if (isLoading) return;
+    setIsLoading(true);
+    try {
+      const contacts = await loadContacts();
+      if (!contacts.length) return;
+      setPicked(contacts);
+      setSelectedKeys(new Set());
+      setMode("select");
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   function toggleSelected(key: string) {
@@ -481,10 +489,16 @@ export default function ImportContacts() {
   }
 
   function handleImportSelected() {
+    if (isLoading) return;
     const selectedContacts = sortedPicked.filter((contact) => selectedKeys.has(contactKey(contact)));
     if (!selectedContacts.length) return;
-    importContacts(selectedContacts);
-    navigate("/home", { replace: true });
+    setIsLoading(true);
+    try {
+      importContacts(selectedContacts);
+      navigate("/home", { replace: true });
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   function openChildForm(personId: string) {
@@ -892,9 +906,9 @@ export default function ImportContacts() {
                 <button
                   type="button"
                   onClick={handleImportSelected}
-                  disabled={selectedKeys.size === 0}
+                  disabled={selectedKeys.size === 0 || isLoading}
                 >
-                  Import Selected Contacts
+                  {isLoading ? "Importing contacts..." : "Import Selected Contacts"}
                 </button>
                 <button
                   type="button"

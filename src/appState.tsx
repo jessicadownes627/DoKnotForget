@@ -25,6 +25,7 @@ type AppState = {
   userSettings: UserSettings;
   markOnboardingComplete: () => void;
   createPerson: (person: Person) => void;
+  createPeople: (people: Person[]) => void;
   savePerson: (payload: SavePersonPayload) => void;
   updatePerson: (person: Person) => void;
   updatePersonFields: (id: string, patch: Partial<Person>) => void;
@@ -201,6 +202,24 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           const byId = new Map<string, Person>();
           for (const p of prev) byId.set(p.id, p);
           byId.set(person.id, person);
+          const next = Array.from(byId.values());
+          if (prev.length === 0 && next.length > 0) {
+            try {
+              window.localStorage.setItem("doknotforget_just_added_first_contact", String(Date.now()));
+            } catch {
+              // ignore
+            }
+          }
+          return next;
+        });
+      },
+      createPeople: (peopleToCreate: Person[]) => {
+        setPeople((prev) => {
+          const byId = new Map<string, Person>();
+          for (const p of prev) byId.set(p.id, p);
+          for (const person of peopleToCreate) {
+            byId.set(person.id, person);
+          }
           const next = Array.from(byId.values());
           if (prev.length === 0 && next.length > 0) {
             try {

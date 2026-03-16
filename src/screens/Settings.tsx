@@ -126,8 +126,10 @@ export default function Settings() {
           <div
             style={{
               marginTop: "14px",
-              display: "flex",
-              justifyContent: "center",
+              width: "100%",
+              maxWidth: "220px",
+              marginLeft: "auto",
+              marginRight: "auto",
             }}
           >
             <input
@@ -139,7 +141,6 @@ export default function Settings() {
               }}
               style={{
                 width: "100%",
-                maxWidth: "220px",
                 display: "block",
                 padding: "0.7rem 0.9rem",
                 borderRadius: "999px",
