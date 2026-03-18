@@ -28,6 +28,7 @@ type AppState = {
   createPeople: (people: Person[]) => void;
   savePerson: (payload: SavePersonPayload) => void;
   updatePerson: (person: Person) => void;
+  upsertRelationship: (relationship: Relationship) => void;
   updatePersonFields: (id: string, patch: Partial<Person>) => void;
   updateUserSettings: (patch: Partial<UserSettings>) => void;
   recordCareEvent: (personId: string, type: CareEventType, note?: string) => void;
@@ -255,6 +256,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         setPeople((prev) =>
           prev.map((p) => (p.id === person.id ? { ...p, ...person } : p))
         );
+      },
+      upsertRelationship: (relationship: Relationship) => {
+        setRelationships((prev) => {
+          const existingIndex = prev.findIndex((item) => item.id === relationship.id);
+          if (existingIndex >= 0) {
+            return prev.map((item) => (item.id === relationship.id ? relationship : item));
+          }
+          return [...prev, relationship];
+        });
       },
       updatePersonFields: (id: string, patch: Partial<Person>) => {
         setPeople((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));

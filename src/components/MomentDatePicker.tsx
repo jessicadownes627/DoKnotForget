@@ -101,7 +101,7 @@ export default function MomentDatePicker({
         display: "grid",
         placeItems: "center",
         padding: "1.25rem",
-        zIndex: 50,
+        zIndex: 70,
       }}
     >
       <div

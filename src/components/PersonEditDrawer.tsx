@@ -598,10 +598,10 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
             </div>
 
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px", marginTop: "10px" }}>
-              <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "12px", marginBottom: "12px" }}>Kids</div>
+              <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "12px", marginBottom: "12px" }}>Parent</div>
               <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", marginTop: "10px" }}>
                 <input type="checkbox" checked={hasKids} onChange={(e) => setHasKids(e.target.checked)} />
-                Kids
+                Has children
               </label>
 
               {hasKids ? (
@@ -712,7 +712,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                         </button>
 
                         <div style={{ display: "grid", gap: "8px" }}>
-                          <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>School milestones</div>
+                          <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Important moments</div>
                           {(child.schoolEvents ?? []).length ? (
                             <div style={{ display: "grid", gap: "6px" }}>
                               {(child.schoolEvents ?? []).map((ev) => (
@@ -761,7 +761,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                               ))}
                             </div>
                           ) : (
-                            <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>None yet.</div>
+                            <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Nothing added yet</div>
                           )}
 
                           <button
@@ -783,7 +783,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                               justifySelf: "start",
                             }}
                           >
-                            Add a milestone
+                            + Add a moment
                           </button>
                         </div>
 

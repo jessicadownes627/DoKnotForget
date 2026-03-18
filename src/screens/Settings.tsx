@@ -126,10 +126,8 @@ export default function Settings() {
           <div
             style={{
               marginTop: "14px",
-              width: "100%",
-              maxWidth: "220px",
-              marginLeft: "auto",
-              marginRight: "auto",
+              display: "flex",
+              justifyContent: "center",
             }}
           >
             <input
@@ -140,9 +138,9 @@ export default function Settings() {
                 void handleReminderTimeChange(event.target.value);
               }}
               style={{
-                width: "100%",
                 display: "block",
-                padding: "0.7rem 0.9rem",
+                minWidth: "160px",
+                padding: "0.85rem 1.5rem",
                 borderRadius: "999px",
                 border: "1px solid var(--border-strong)",
                 background: "rgba(255,255,255,0.82)",

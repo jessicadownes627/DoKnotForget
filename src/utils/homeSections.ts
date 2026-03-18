@@ -1,6 +1,5 @@
 import type { ReminderEvent } from "../engine/reminderEngine";
 import type { UpcomingMomentEvent } from "../engine/momentEngine";
-import { getReminderId } from "../engine/reminderRegistry";
 import { parseLocalDate } from "./date";
 import { eventKey } from "./eventKey";
 
@@ -80,46 +79,30 @@ type Args = {
 
 export function buildHomeSections({
   reminders,
-  activeReminders,
   upcomingMoments,
   today,
-  handledReminderActions,
   dismissedHorizonKeys,
 }: Args) {
-  const activeRemindersByEventDate = activeReminders.filter((reminder) => {
-    const eventDate = parseLocalDate(reminder.eventDate);
-    return Boolean(eventDate);
-  });
-
   const remindersByEventDate = reminders.filter((reminder) => {
     const eventDate = parseLocalDate(reminder.eventDate);
     return Boolean(eventDate);
   });
 
-  const activeTodayCardsByEvent = buildReminderCardMap(
-    activeRemindersByEventDate.filter((reminder) => {
+  const todayCardsByEvent = buildReminderCardMap(
+    remindersByEventDate.filter((reminder) => {
       const eventDate = parseLocalDate(reminder.eventDate);
       return eventDate ? dayDifference(eventDate, today) === 0 : false;
     })
   );
-  const activeTodayReminders = sortReminderCards(activeTodayCardsByEvent);
+  const activeTodayReminders = sortReminderCards(todayCardsByEvent);
 
   const tomorrowCardsByEvent = buildReminderCardMap(
-    activeRemindersByEventDate.filter((reminder) => {
+    remindersByEventDate.filter((reminder) => {
       const eventDate = parseLocalDate(reminder.eventDate);
       return eventDate ? dayDifference(eventDate, today) === 1 : false;
     })
   );
   const tomorrowReminders = sortReminderCards(tomorrowCardsByEvent);
-
-  const completedTodayCardsByEvent = buildReminderCardMap(
-    remindersByEventDate.filter((reminder) => {
-      const eventDate = parseLocalDate(reminder.eventDate);
-      const isToday = eventDate ? dayDifference(eventDate, today) === 0 : false;
-      return isToday && Boolean(handledReminderActions[getReminderId(reminder)]);
-    })
-  );
-  const completedTodayReminders = sortReminderCards(completedTodayCardsByEvent);
 
   const horizonMoments = upcomingMoments.filter((moment) => {
     if (dismissedHorizonKeys[moment.id]) return false;
@@ -152,7 +135,6 @@ export function buildHomeSections({
 
   return {
     activeTodayReminders,
-    completedTodayReminders,
     tomorrowReminders,
     horizonEntries,
   };
