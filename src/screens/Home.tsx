@@ -318,14 +318,14 @@ export default function Home({
 
     createPerson({
       id: "demo-emma",
-      name: "Emma Parker",
+      name: "Sample Contact A",
       phone: "+14155550101",
       moments: [mkBirthdayMoment("demo-emma", todayDate)],
     });
 
     createPerson({
       id: "demo-chris",
-      name: "Chris Rivera",
+      name: "Sample Contact B",
       phone: "+14155550102",
       moments: [],
       hasKids: true,
@@ -333,7 +333,7 @@ export default function Home({
       children: [
         {
           id: "demo-liam",
-          name: "Liam",
+          name: "Sample Child",
           birthday: monthDayIso(todayDate),
         },
       ],
@@ -341,14 +341,14 @@ export default function Home({
 
     createPerson({
       id: "demo-dad",
-      name: "Dad",
+      name: "Sample Contact C",
       phone: "+14155550103",
       moments: [mkBirthdayMoment("demo-dad", plus5Date)],
     });
 
     createPerson({
       id: "demo-sarah",
-      name: "Sarah Chen",
+      name: "Sample Contact D",
       phone: "+14155550104",
       moments: [mkAnniversaryMoment("demo-sarah", tomorrowDate)],
     });
@@ -427,7 +427,7 @@ export default function Home({
           person.name.toLowerCase().includes(normalizedSearch)
         );
 
-  const isSearching = Boolean(searchTerm.trim());
+  const isSearching = activeTab === "contacts" && Boolean(searchTerm.trim());
   const contactSearchResults = useMemo(() => {
     const matched = filterContacts(people, searchTerm);
     return [...matched].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
@@ -853,10 +853,12 @@ export default function Home({
     return [
       {
         label: reminderTextActionLabel(reminder, person),
-        disabled: !person?.phone,
         title: !person?.phone ? "Add a phone number to text them." : undefined,
         onClick: () => {
-          if (!person?.phone) return;
+          if (!person?.phone) {
+            window.alert("Add a phone number to text them.");
+            return;
+          }
 
           const toName = (person.name ?? "").trim().split(" ")[0] || person.name || first;
           const display = formatReminderCard(reminder);
@@ -925,7 +927,7 @@ export default function Home({
         },
       },
       {
-        label: `Buy ${first} a coffee`,
+        label: `Treat ${first} to a coffee`,
         href: "https://www.starbucks.com/gift",
         onClick: () => {
           if (!person) return;
@@ -1523,9 +1525,11 @@ export default function Home({
               background: "none",
               cursor: "pointer",
               fontSize: "1.05rem",
-              fontWeight: 600,
+              fontWeight: activeTab === "home" ? 700 : 600,
               color: activeTab === "home" ? "var(--ink)" : "var(--muted)",
               fontFamily: "var(--font-sans)",
+              textDecoration: activeTab === "home" ? "underline" : "none",
+              textUnderlineOffset: "6px",
             }}
           >
             Home
@@ -1541,9 +1545,11 @@ export default function Home({
               background: "none",
               cursor: "pointer",
               fontSize: "1.05rem",
-              fontWeight: 600,
+              fontWeight: activeTab === "contacts" ? 700 : 600,
               color: activeTab === "contacts" ? "var(--ink)" : "var(--muted)",
               fontFamily: "var(--font-sans)",
+              textDecoration: activeTab === "contacts" ? "underline" : "none",
+              textUnderlineOffset: "6px",
             }}
           >
             Contacts
@@ -1562,37 +1568,73 @@ export default function Home({
               fontWeight: 600,
               color: "var(--muted)",
               fontFamily: "var(--font-sans)",
+              textDecoration: "underline",
+              textUnderlineOffset: "6px",
             }}
           >
             Settings
           </button>
         </div>
 
-        <div style={{ marginTop: "16px" }}>
-          <div className="search-label">Search your contacts</div>
-          <input
-            type="search"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") setSearchTerm(e.currentTarget.value);
-            }}
-            placeholder="Find someone…"
-            style={{
-              width: "100%",
-              display: "block",
-              padding: "0.85rem 1rem",
-              borderRadius: "14px",
-              border: "1px solid var(--border-strong)",
-              background: "var(--card)",
-              color: "var(--ink)",
-              fontSize: "1rem",
-              fontFamily: "var(--font-sans)",
-            }}
-          />
-        </div>
+        {activeTab === "contacts" ? (
+          <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
+            <button
+              onClick={() => navigate("/import")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "10px",
+                border: "1px solid var(--border-strong)",
+                background: "rgba(255,255,255,0.78)",
+                color: "var(--ink)",
+                cursor: "pointer",
+                textAlign: "left",
+                fontWeight: 600,
+                letterSpacing: "0.01em",
+                borderRadius: "14px",
+                padding: "0.85rem 1rem",
+                fontSize: "0.98rem",
+                fontFamily: "var(--font-sans)",
+                boxShadow: "0 4px 14px rgba(27,42,65,0.06)",
+              }}
+            >
+              <span aria-hidden="true" style={{ fontSize: "1.05rem", lineHeight: 1 }}>
+                ↓
+              </span>
+              <span>Import from Phone Contacts</span>
+            </button>
+            <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
+              Pull in your phone contacts in seconds — no retyping
+            </div>
+          </div>
+        ) : null}
 
-        {isSearching ? (
+        {activeTab === "contacts" ? (
+          <div style={{ marginTop: "16px" }}>
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") setSearchTerm(e.currentTarget.value);
+              }}
+              placeholder="Find someone…"
+              style={{
+                width: "100%",
+                display: "block",
+                padding: "0.85rem 1rem",
+                borderRadius: "14px",
+                border: "1px solid var(--border-strong)",
+                background: "var(--card)",
+                color: "var(--ink)",
+                fontSize: "1rem",
+                fontFamily: "var(--font-sans)",
+              }}
+            />
+          </div>
+        ) : null}
+
+        {activeTab === "contacts" && isSearching ? (
           <div style={{ marginTop: "10px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
             <ContactsSearchResults
               results={contactSearchResults}
@@ -1603,12 +1645,23 @@ export default function Home({
 
         <main style={{ marginTop: "24px" }}>
 	          {isSearching ? null : people.length === 0 ? (
-	            <div style={{ marginTop: "3.25rem", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
-	              <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)", letterSpacing: "-0.01em" }}>
-	                Remember the moments that matter.
+	            <div
+	              style={{
+	                marginTop: "64px",
+	                maxWidth: "560px",
+	                marginLeft: "auto",
+	                marginRight: "auto",
+	                display: "grid",
+	                gap: "16px",
+	                justifyItems: "center",
+	                textAlign: "center",
+	              }}
+	            >
+	              <div style={{ fontSize: "28px", fontWeight: 600, color: "var(--ink)", letterSpacing: "-0.02em" }}>
+	                Start by adding someone important
 	              </div>
-	              <div style={{ marginTop: "0.6rem", color: "var(--muted)", lineHeight: 1.6, whiteSpace: "pre-line" }}>
-	                Start with a few people you care about —{"\n"}DoKnotForget will remind you when it counts.
+	              <div style={{ maxWidth: "460px", color: "var(--muted)", lineHeight: 1.6, fontSize: "1rem" }}>
+	                We’ll remind you about birthdays, anniversaries, and the moments that matter.
 	              </div>
 	              <div style={{ marginTop: "1.5rem", display: "grid", gap: "12px" }}>
 	                <button
@@ -1618,7 +1671,7 @@ export default function Home({
 	                    background: "transparent",
 	                    color: "var(--ink)",
                     cursor: "pointer",
-                    textAlign: "left",
+                    textAlign: "center",
                     fontWeight: 500,
                     letterSpacing: "0.01em",
                     borderRadius: "12px",
@@ -1627,7 +1680,7 @@ export default function Home({
 	                    fontFamily: "var(--font-sans)",
 	                  }}
 	                >
-	                  Add Person
+	                  + Add someone
 	                </button>
 	                <button
 	                  onClick={() => navigate("/import")}
@@ -1636,7 +1689,7 @@ export default function Home({
 	                    background: "transparent",
 	                    color: "var(--ink)",
                     cursor: "pointer",
-                    textAlign: "left",
+                    textAlign: "center",
                     fontWeight: 500,
                     letterSpacing: "0.01em",
                     borderRadius: "12px",
@@ -1671,30 +1724,6 @@ export default function Home({
             </div>
           ) : activeTab === "contacts" ? (
             <section aria-label="Contacts" style={{ marginTop: "24px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
-              <div style={{ display: "grid", gap: "8px" }}>
-                <button
-                  onClick={() => navigate("/import")}
-                  style={{
-                    border: "1px solid var(--border-strong)",
-                    background: "transparent",
-                    color: "var(--ink)",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    fontWeight: 500,
-                    letterSpacing: "0.01em",
-                    borderRadius: "12px",
-                    padding: "0.65rem 1rem",
-                    fontSize: "0.95rem",
-                    fontFamily: "var(--font-sans)",
-                  }}
-                >
-                  Import Contacts
-                </button>
-                <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
-                  Pull in your phone contacts in seconds — no retyping
-                </div>
-              </div>
-
               {filteredPeople.length === 0 ? (
                 <div style={{ marginTop: "1.5rem" }}>
                   <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>No match found.</div>
@@ -1829,59 +1858,6 @@ export default function Home({
                               </div>
                             ) : null}
 
-                            {primaryActions.length ? (
-                              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                                {primaryActions.map((action) =>
-                                  action.href ? (
-                                    <a
-                                      key={action.label}
-                                      href={action.href}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      onClick={action.onClick}
-                                      aria-disabled={action.disabled ? "true" : undefined}
-                                      title={action.title}
-                                      style={{
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                        borderRadius: "var(--radius-button)",
-                                        border: "1px solid var(--border-strong)",
-                                        padding: "0.85rem 1.15rem",
-                                        fontSize: "1rem",
-                                        fontWeight: 500,
-                                        fontFamily: "inherit",
-                                        backgroundColor: "transparent",
-                                        color: "var(--ink)",
-                                        cursor: "pointer",
-                                        boxShadow: "none",
-                                        textDecoration: "none",
-                                        opacity: action.disabled ? 0.5 : 1,
-                                        pointerEvents: action.disabled ? "none" : undefined,
-                                      }}
-                                    >
-                                      {action.label}
-                                    </a>
-                                  ) : (
-                                    <button
-                                      key={action.label}
-                                      type="button"
-                                      onClick={action.onClick}
-                                      disabled={action.disabled}
-                                      title={action.title}
-                                      style={{
-                                        borderRadius: "12px",
-                                        padding: "0.75rem 1rem",
-                                        fontSize: "1rem",
-                                      }}
-                                    >
-                                      {action.label}
-                                    </button>
-                                  )
-                                )}
-                              </div>
-                            ) : null}
-
                             {!isCompleted && display.ideaHeading && display.ideas.length ? (
                               <div
                                 style={{
@@ -1899,6 +1875,59 @@ export default function Home({
                                     <div key={idea}>• {idea}</div>
                                   ))}
                                 </div>
+                              </div>
+                            ) : null}
+
+                            {primaryActions.length ? (
+                              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                {primaryActions.map((action) =>
+                                  action.href ? (
+                                    <a
+                                      key={action.label}
+                                      href={action.href}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={action.onClick}
+                                      aria-disabled={"disabled" in action && action.disabled ? "true" : undefined}
+                                      title={action.title}
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        borderRadius: "var(--radius-button)",
+                                        border: "1px solid var(--border-strong)",
+                                        padding: "0.85rem 1.15rem",
+                                        fontSize: "1rem",
+                                        fontWeight: 500,
+                                        fontFamily: "inherit",
+                                        backgroundColor: "transparent",
+                                        color: "var(--ink)",
+                                        cursor: "pointer",
+                                        boxShadow: "none",
+                                        textDecoration: "none",
+                                        opacity: "disabled" in action && action.disabled ? 0.5 : 1,
+                                        pointerEvents: "disabled" in action && action.disabled ? "none" : undefined,
+                                      }}
+                                    >
+                                      {action.label}
+                                    </a>
+                                  ) : (
+                                    <button
+                                      key={action.label}
+                                      type="button"
+                                      onClick={action.onClick}
+                                      disabled={Boolean("disabled" in action && action.disabled)}
+                                      title={action.title}
+                                      style={{
+                                        borderRadius: "12px",
+                                        padding: "0.75rem 1rem",
+                                        fontSize: "1rem",
+                                      }}
+                                    >
+                                      {action.label}
+                                    </button>
+                                  )
+                                )}
                               </div>
                             ) : null}
 
@@ -2090,19 +2119,21 @@ export default function Home({
                 <button
                   onClick={() => navigate("/import")}
                   style={{
-                    marginTop: "12px",
-                    padding: 0,
-                    border: "none",
-                    background: "none",
-                    color: "var(--muted)",
+                    marginTop: "16px",
+                    border: "1px solid var(--border-strong)",
+                    background: "transparent",
+                    color: "var(--ink)",
                     cursor: "pointer",
-                    textDecoration: "underline",
-                    textUnderlineOffset: "3px",
-                    fontSize: "0.92rem",
+                    textAlign: "left",
+                    fontWeight: 500,
+                    letterSpacing: "0.01em",
+                    borderRadius: "12px",
+                    padding: "0.65rem 1rem",
+                    fontSize: "0.95rem",
                     fontFamily: "var(--font-sans)",
                   }}
                 >
-                  Import from your contacts
+                  Import Contacts
                 </button>
               </div>
             </>

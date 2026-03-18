@@ -181,8 +181,7 @@ export default function PersonEditDrawer({
 
   const [milestoneEditing, setMilestoneEditing] = useState<{ childIndex: number } | null>(null);
   const [milestoneType, setMilestoneType] = useState<ChildSchoolEventType>("firstDay");
-  const [milestoneDraftMonthDay, setMilestoneDraftMonthDay] = useState("");
-  const [milestoneDraftYear, setMilestoneDraftYear] = useState("");
+  const [milestoneDate, setMilestoneDate] = useState("");
 
   const [sensitiveTitle, setSensitiveTitle] = useState("");
   const [sensitiveDate, setSensitiveDate] = useState("");
@@ -790,8 +789,7 @@ export default function PersonEditDrawer({
                             onClick={() => {
                               setMilestoneEditing({ childIndex: idx });
                               setMilestoneType("firstDay");
-                              setMilestoneDraftMonthDay("");
-                              setMilestoneDraftYear("");
+                              setMilestoneDate("");
                             }}
                             style={{
                               padding: 0,
@@ -993,24 +991,10 @@ export default function PersonEditDrawer({
         <div style={overlayStyle} onMouseDown={(e) => e.target === e.currentTarget && setMilestoneEditing(null)}>
           <div style={sheetStyle}>
             <div className="modalContent" style={{ fontFamily: "var(--font-sans)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "1rem" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "1rem" }}>
                 <div style={{ fontFamily: "var(--font-serif)", fontSize: "1.25rem", fontWeight: 600, color: "var(--ink)" }}>
                   Add milestone
                 </div>
-                <button
-                  onClick={() => setMilestoneEditing(null)}
-                  style={{
-                    padding: 0,
-                    border: "none",
-                    background: "none",
-                    color: "var(--muted)",
-                    cursor: "pointer",
-                    textDecoration: "underline",
-                    textUnderlineOffset: "3px",
-                  }}
-                >
-                  Cancel
-                </button>
               </div>
 
               <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
@@ -1041,37 +1025,72 @@ export default function PersonEditDrawer({
                   </select>
                 </div>
 
-                <MomentDatePicker
-                  isOpen
-                  title="Milestone date"
-                  mode="custom"
-                  monthDay={milestoneDraftMonthDay}
-                  setMonthDay={setMilestoneDraftMonthDay}
-                  year={milestoneDraftYear}
-                  setYear={setMilestoneDraftYear}
-                  yearHelperText=""
-                  requireYear
-                  onSave={() => {
-                    const iso = buildMomentIso(milestoneDraftMonthDay, milestoneDraftYear, true);
-                    if (!iso) return;
-                    const idx = milestoneEditing.childIndex;
-                    setChildren((prev) =>
-                      prev.map((c, i) => {
-                        if (i !== idx) return c;
-                        return {
-                          ...c,
-                          schoolEvents: [...(c.schoolEvents ?? []), { type: milestoneType, date: iso }],
-                        };
-                      })
-                    );
-                    setMilestoneEditing(null);
-                  }}
-                  onCancel={() => setMilestoneEditing(null)}
-                  onClear={() => {
-                    setMilestoneDraftMonthDay("");
-                    setMilestoneDraftYear("");
-                  }}
-                />
+                <div>
+                  <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Date</div>
+                  <input
+                    type="date"
+                    value={milestoneDate}
+                    onChange={(e) => setMilestoneDate(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 0.85rem",
+                      borderRadius: "12px",
+                      border: "1px solid var(--border-strong)",
+                      background: "var(--card)",
+                      color: "var(--ink)",
+                      fontSize: "1rem",
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                  <button
+                    onClick={() => setMilestoneEditing(null)}
+                    style={{
+                      padding: 0,
+                      border: "none",
+                      background: "none",
+                      color: "var(--muted)",
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                      textUnderlineOffset: "3px",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!milestoneDate) return;
+                      const idx = milestoneEditing.childIndex;
+                      setChildren((prev) =>
+                        prev.map((c, i) => {
+                          if (i !== idx) return c;
+                          return {
+                            ...c,
+                            schoolEvents: [...(c.schoolEvents ?? []), { type: milestoneType, date: milestoneDate }],
+                          };
+                        })
+                      );
+                      setMilestoneEditing(null);
+                      setMilestoneDate("");
+                    }}
+                    style={{
+                      border: "1px solid var(--border-strong)",
+                      background: "transparent",
+                      color: milestoneDate ? "var(--ink)" : "var(--muted)",
+                      cursor: milestoneDate ? "pointer" : "default",
+                      textAlign: "center",
+                      fontWeight: 500,
+                      letterSpacing: "0.01em",
+                      borderRadius: "12px",
+                      padding: "0.85rem 1.1rem",
+                      fontSize: "0.98rem",
+                      boxShadow: "none",
+                    }}
+                  >
+                    Save
+                  </button>
+                </div>
               </div>
             </div>
           </div>

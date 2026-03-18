@@ -271,27 +271,90 @@ export default function PersonDetail({}: {}) {
       : null;
 
   const familyTimeline = useMemo(() => {
-    return relatedPeople
-      .map((item) => {
-        const birthday = (item.person.moments ?? []).find((moment) => moment.type === "birthday") ?? null;
-        if (!birthday?.date) return null;
-        const nextBirthday = getNextBirthdayFromIso(birthday.date, today);
-        if (!nextBirthday) return null;
-        return {
-          id: `${item.person.id}:${birthday.date}`,
-          personName: item.person.name,
-          label: "birthday",
-          targetDate: nextBirthday.target,
-        };
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    const events: Array<{ id: string; personName: string; label: string; targetDate: Date }> = [];
+
+    const addRecurringEvent = (id: string, label: string, isoDate: string | undefined) => {
+      if (!isoDate) return;
+      const next = getNextBirthdayFromIso(isoDate, today);
+      if (!next || next.target < today) return;
+      events.push({
+        id,
+        personName: resolvedPerson.name,
+        label,
+        targetDate: next.target,
+      });
+    };
+
+    const addOneTimeOrRecurringMoment = (momentId: string, label: string, isoDate: string, recurring: boolean) => {
+      if (!isoDate) return;
+      if (recurring) {
+        addRecurringEvent(momentId, label, isoDate);
+        return;
+      }
+      const parsed = parseLocalDate(isoDate);
+      if (!parsed || parsed < today) return;
+      events.push({
+        id: momentId,
+        personName: resolvedPerson.name,
+        label,
+        targetDate: parsed,
+      });
+    };
+
+    const birthdayMoment = (resolvedPerson.moments ?? []).find((moment) => moment.type === "birthday") ?? null;
+    addRecurringEvent(
+      `${resolvedPerson.id}:birthday`,
+      "Birthday",
+      birthdayMoment?.date
+    );
+
+    const anniversaryMoment = (resolvedPerson.moments ?? []).find((moment) => moment.type === "anniversary") ?? null;
+    const anniversaryIso = anniversaryMoment?.date
+      ? anniversaryMoment.date
+      : resolvedPerson.anniversary
+        ? `0000-${resolvedPerson.anniversary}`
+        : undefined;
+    addRecurringEvent(`${resolvedPerson.id}:anniversary`, "Anniversary", anniversaryIso);
+
+    for (const child of resolvedPerson.children ?? []) {
+      const childBirthday = (child.birthday ?? child.birthdate ?? "").trim();
+      if (!childBirthday) continue;
+      const childName = child.name?.trim() || "Child";
+      addRecurringEvent(`${resolvedPerson.id}:child:${child.id}`, `${childName}'s birthday`, childBirthday);
+    }
+
+    for (const moment of resolvedPerson.moments ?? []) {
+      if (moment.type !== "custom") continue;
+      addOneTimeOrRecurringMoment(moment.id, moment.label, moment.date, moment.recurring);
+    }
+
+    for (const moment of resolvedPerson.importantDates ?? []) {
+      if (moment.type !== "custom") continue;
+      addOneTimeOrRecurringMoment(`important:${moment.id}`, moment.label, moment.date, moment.recurring);
+    }
+
+    for (const moment of resolvedPerson.sensitiveMoments ?? []) {
+      if (moment.type !== "custom") continue;
+      addOneTimeOrRecurringMoment(`sensitive:${moment.id}`, moment.label, moment.date, moment.recurring);
+    }
+
+    return events
       .sort((a, b) => {
         if (a.targetDate.getTime() !== b.targetDate.getTime()) {
           return a.targetDate.getTime() - b.targetDate.getTime();
         }
-        return a.personName.localeCompare(b.personName, undefined, { sensitivity: "base" });
+        return a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
       });
-  }, [relatedPeople, today]);
+  }, [
+    resolvedPerson.anniversary,
+    resolvedPerson.children,
+    resolvedPerson.id,
+    resolvedPerson.importantDates,
+    resolvedPerson.moments,
+    resolvedPerson.name,
+    resolvedPerson.sensitiveMoments,
+    today,
+  ]);
 
   const careHistory = useMemo(() => {
     return [...careEvents]
