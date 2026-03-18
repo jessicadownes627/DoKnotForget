@@ -234,8 +234,6 @@ export default function Home({
   const navigate = useNavigate();
   const location = useLocation();
   const { people, updatePerson, updatePersonFields, createPerson, recordCareEvent, userSettings } = useAppState();
-  const initialTab = location.state?.defaultTab === "contacts" ? "contacts" : "home";
-  const [activeTab, setActiveTab] = useState<"home" | "contacts">(initialTab);
   const [searchTerm, setSearchTerm] = useState("");
   const [questionTick, setQuestionTick] = useState(0);
   const [shouldPulseBow, setShouldPulseBow] = useState(false);
@@ -273,10 +271,11 @@ export default function Home({
   const notificationPermissionRequestedRef = useRef(false);
 
   const [today, setToday] = useState(() => startOfToday());
-
-  useEffect(() => {
-    setActiveTab(initialTab);
-  }, [initialTab]);
+  const isHome = location.pathname === "/" || location.pathname === "/home";
+  const isContacts = location.pathname === "/contacts";
+  const isSettings = location.pathname === "/settings";
+  const activeTab: "home" | "contacts" = isContacts ? "contacts" : "home";
+  const hasContacts = people.length > 0;
 
   useEffect(() => {
     function refreshToday() {
@@ -1365,7 +1364,7 @@ export default function Home({
     setQuestionTick((v) => v + 1);
   }
 
-  const greetingText = activeTab === "home" ? "Today" : "Your contacts.";
+  const greetingText = isContacts ? "Your contacts." : "Today";
 
   useEffect(() => {
     const personId = location.state?.showPartnerLinkCheck as string | undefined;
@@ -1434,11 +1433,15 @@ export default function Home({
   }, []);
 
   useEffect(() => {
-    if (location.state?.defaultTab || location.state?.showPartnerLinkCheck) {
-      window.history.replaceState({}, document.title);
+    if (location.state?.defaultTab === "contacts" && isHome) {
+      navigate("/contacts", { replace: true });
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
+    if (location.state?.defaultTab || location.state?.showPartnerLinkCheck) {
+      window.history.replaceState({}, document.title, location.pathname);
+    }
+  }, [isHome, location.pathname, location.state, navigate]);
 
   return (
     <div style={{ background: "var(--paper)", color: "var(--ink)" }}>
@@ -1505,17 +1508,17 @@ export default function Home({
 
         <div style={{ marginTop: "24px", display: "flex", gap: "8px", alignItems: "baseline" }}>
           <button
-            onClick={() => setActiveTab("home")}
+            onClick={() => navigate("/home")}
             style={{
               padding: 0,
               border: "none",
               background: "none",
               cursor: "pointer",
               fontSize: "1.05rem",
-              fontWeight: activeTab === "home" ? 700 : 600,
-              color: activeTab === "home" ? "var(--ink)" : "var(--muted)",
+              fontWeight: isHome ? 700 : 600,
+              color: isHome ? "var(--ink)" : "var(--muted)",
               fontFamily: "var(--font-sans)",
-              textDecoration: activeTab === "home" ? "underline" : "none",
+              textDecoration: isHome ? "underline" : "none",
               textUnderlineOffset: "6px",
             }}
           >
@@ -1525,17 +1528,17 @@ export default function Home({
             |
           </div>
           <button
-            onClick={() => setActiveTab("contacts")}
+            onClick={() => navigate("/contacts")}
             style={{
               padding: 0,
               border: "none",
               background: "none",
               cursor: "pointer",
               fontSize: "1.05rem",
-              fontWeight: activeTab === "contacts" ? 700 : 600,
-              color: activeTab === "contacts" ? "var(--ink)" : "var(--muted)",
+              fontWeight: isContacts ? 700 : 600,
+              color: isContacts ? "var(--ink)" : "var(--muted)",
               fontFamily: "var(--font-sans)",
-              textDecoration: activeTab === "contacts" ? "underline" : "none",
+              textDecoration: isContacts ? "underline" : "none",
               textUnderlineOffset: "6px",
             }}
           >
@@ -1552,10 +1555,10 @@ export default function Home({
               background: "none",
               cursor: "pointer",
               fontSize: "1.05rem",
-              fontWeight: 600,
-              color: "var(--muted)",
+              fontWeight: isSettings ? 700 : 600,
+              color: isSettings ? "var(--ink)" : "var(--muted)",
               fontFamily: "var(--font-sans)",
-              textDecoration: "underline",
+              textDecoration: isSettings ? "underline" : "none",
               textUnderlineOffset: "6px",
             }}
           >
@@ -1563,40 +1566,7 @@ export default function Home({
           </button>
         </div>
 
-        {activeTab === "contacts" ? (
-          <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
-            <button
-              onClick={() => navigate("/import")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "10px",
-                border: "1px solid var(--border-strong)",
-                background: "rgba(255,255,255,0.78)",
-                color: "var(--ink)",
-                cursor: "pointer",
-                textAlign: "left",
-                fontWeight: 600,
-                letterSpacing: "0.01em",
-                borderRadius: "14px",
-                padding: "0.85rem 1rem",
-                fontSize: "0.98rem",
-                fontFamily: "var(--font-sans)",
-                boxShadow: "0 4px 14px rgba(27,42,65,0.06)",
-              }}
-            >
-              <span aria-hidden="true" style={{ fontSize: "1.05rem", lineHeight: 1 }}>
-                ↓
-              </span>
-              <span>Import from Phone Contacts</span>
-            </button>
-            <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
-              Pull in your phone contacts in seconds — no retyping
-            </div>
-          </div>
-        ) : null}
-
-        {activeTab === "contacts" ? (
+        {activeTab === "contacts" && hasContacts ? (
           <div style={{ marginTop: "16px" }}>
             <input
               type="search"
@@ -1621,6 +1591,52 @@ export default function Home({
           </div>
         ) : null}
 
+        {activeTab === "contacts" ? (
+          <div
+            style={{
+              marginTop: hasContacts ? "16px" : "64px",
+              display: "grid",
+              gap: "12px",
+              maxWidth: hasContacts ? undefined : "420px",
+              marginLeft: hasContacts ? undefined : "auto",
+              marginRight: hasContacts ? undefined : "auto",
+              justifyItems: hasContacts ? undefined : "center",
+              textAlign: hasContacts ? "left" : "center",
+            }}
+          >
+            <button
+              onClick={() => navigate("/import")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: hasContacts ? "flex-start" : "center",
+                gap: "10px",
+                width: hasContacts ? undefined : "100%",
+                border: "1px solid var(--border-strong)",
+                background: hasContacts ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.92)",
+                color: "var(--ink)",
+                cursor: "pointer",
+                textAlign: hasContacts ? "left" : "center",
+                fontWeight: 650,
+                letterSpacing: "0.01em",
+                borderRadius: "14px",
+                padding: "0.85rem 1rem",
+                fontSize: "0.98rem",
+                fontFamily: "var(--font-sans)",
+                boxShadow: "0 6px 18px rgba(27,42,65,0.08)",
+              }}
+            >
+              <span aria-hidden="true" style={{ fontSize: "1.05rem", lineHeight: 1 }}>
+                ↓
+              </span>
+              <span>Import from Phone Contacts</span>
+            </button>
+            <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
+              Pull in your phone contacts in seconds — no retyping
+            </div>
+          </div>
+        ) : null}
+
         {activeTab === "contacts" && isSearching ? (
           <div style={{ marginTop: "10px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
             <ContactsSearchResults
@@ -1631,7 +1647,7 @@ export default function Home({
         ) : null}
 
         <main style={{ marginTop: "24px" }}>
-	          {isSearching ? null : people.length === 0 ? (
+	          {isSearching ? null : activeTab === "contacts" && !hasContacts ? null : people.length === 0 ? (
 	            <div
 	              style={{
 	                marginTop: "64px",

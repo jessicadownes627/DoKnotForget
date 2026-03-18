@@ -15,6 +15,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/home" element={<Home />} />
+      <Route path="/contacts" element={<Home />} />
       <Route path="/add" element={<AddPerson />} />
       <Route path="/import" element={<ImportContacts />} />
       <Route path="/person/:id" element={<PersonDetail />} />

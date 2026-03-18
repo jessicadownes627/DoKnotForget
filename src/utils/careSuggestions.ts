@@ -151,6 +151,7 @@ function schoolEventLabel(type: string) {
   if (type === "confirmation") return "confirmation";
   if (type === "barMitzvah") return "bar mitzvah";
   if (type === "batMitzvah") return "bat mitzvah";
+  if (type === "custom") return "milestone";
   return "milestone";
 }
 
@@ -580,7 +581,7 @@ export function generateCareFeed(people: Person[], baseDate = new Date()): CareC
           personId: person.id,
           childId: child.id,
           date: toIsoDate(target),
-          title: `${childLabel} · ${schoolEventLabel(ev.type)} · ${monthDayFormatter.format(target)}`,
+          title: `${childLabel} · ${(ev.label ?? "").trim() || schoolEventLabel(ev.type)} · ${monthDayFormatter.format(target)}`,
           message: "Want to plan ahead?",
           sortDaysUntil: daysUntil,
           sortPriority: 3,
@@ -735,7 +736,7 @@ export function generateCareSuggestions(people: Person[], baseDate = new Date())
           if (daysUntil < 0 || daysUntil > schoolHorizonDays) continue;
 
           const who = childNameLabel(child, person);
-          const label = schoolEventLabel(ev.type);
+          const label = (ev.label ?? "").trim() || schoolEventLabel(ev.type);
 
           suggestions.push({
             id: `school_${person.id}_${child.id}_${ev.type}_${toIsoDate(target)}`,

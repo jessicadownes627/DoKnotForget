@@ -769,7 +769,9 @@ export default function PersonDetail({}: {}) {
                   ))}
                 </div>
               ) : (
-                <div style={{ marginTop: "16px", color: "var(--muted)", lineHeight: 1.6 }}>No connections yet.</div>
+                <div style={{ marginTop: "16px", color: "var(--muted)", lineHeight: 1.6 }}>
+                  No connections yet — link someone to unlock shared reminders
+                </div>
               )}
 
               <button

@@ -131,7 +131,7 @@ function schoolEventLabel(type: ChildSchoolEventType) {
   if (type === "confirmation") return "Confirmation";
   if (type === "barMitzvah") return "Bar mitzvah";
   if (type === "batMitzvah") return "Bat mitzvah";
-  return "Milestone";
+  return "Custom milestone";
 }
 
 export default function PersonEditDrawer({
@@ -181,6 +181,7 @@ export default function PersonEditDrawer({
 
   const [milestoneEditing, setMilestoneEditing] = useState<{ childIndex: number } | null>(null);
   const [milestoneType, setMilestoneType] = useState<ChildSchoolEventType>("firstDay");
+  const [milestoneCustomTitle, setMilestoneCustomTitle] = useState("");
   const [milestoneDate, setMilestoneDate] = useState("");
 
   const [sensitiveTitle, setSensitiveTitle] = useState("");
@@ -706,12 +707,12 @@ export default function PersonEditDrawer({
                         </button>
 
                         <div style={{ display: "grid", gap: "8px" }}>
-                          <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Important moments</div>
+                          <div style={{ color: "var(--ink)", fontSize: "1rem", fontWeight: 600 }}>Important moments</div>
                           {(child.schoolEvents ?? []).length ? (
                             <div style={{ display: "grid", gap: "6px" }}>
                               {(child.schoolEvents ?? []).map((ev) => (
                                 <div
-                                  key={`${ev.type}-${ev.date}`}
+                                  key={`${ev.type}-${ev.label ?? ""}-${ev.date}`}
                                   style={{
                                     display: "flex",
                                     justifyContent: "space-between",
@@ -722,7 +723,7 @@ export default function PersonEditDrawer({
                                     background: "var(--card)",
                                   }}
                                 >
-                                  <div style={{ color: "var(--ink)" }}>{schoolEventLabel(ev.type)}</div>
+                                  <div style={{ color: "var(--ink)" }}>{ev.label?.trim() || schoolEventLabel(ev.type)}</div>
                                   <button
                                     onClick={() => {
                                       setChildren((prev) =>
@@ -731,7 +732,7 @@ export default function PersonEditDrawer({
                                           return {
                                             ...c,
                                             schoolEvents: (c.schoolEvents ?? []).filter(
-                                              (s) => !(s.type === ev.type && s.date === ev.date)
+                                              (s) => !(s.type === ev.type && s.date === ev.date && (s.label ?? "") === (ev.label ?? ""))
                                             ),
                                           };
                                         })
@@ -755,13 +756,14 @@ export default function PersonEditDrawer({
                               ))}
                             </div>
                           ) : (
-                            <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Nothing added yet</div>
+                            <div style={{ color: "rgba(27, 42, 65, 0.58)", fontSize: "0.85rem" }}>Nothing added yet</div>
                           )}
 
                           <button
                             onClick={() => {
                               setMilestoneEditing({ childIndex: idx });
                               setMilestoneType("firstDay");
+                              setMilestoneCustomTitle("");
                               setMilestoneDate("");
                             }}
                             style={{
@@ -992,32 +994,74 @@ export default function PersonEditDrawer({
               </div>
 
               <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
-                <div>
-                  <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Type</div>
-                  <select
-                    value={milestoneType}
-                    onChange={(e) => setMilestoneType(e.target.value as ChildSchoolEventType)}
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem 0.85rem",
-                      borderRadius: "12px",
-                      border: "1px solid var(--border-strong)",
-                      background: "var(--card)",
-                      color: "var(--ink)",
-                      fontSize: "1rem",
-                    }}
-                  >
-                    <option value="firstDay">First day of school</option>
-                    <option value="kGrad">Kindergarten graduation</option>
-                    <option value="5thMoveUp">5th grade moving-up</option>
-                    <option value="8thGrad">8th grade graduation</option>
-                    <option value="hsGrad">High school graduation</option>
-                    <option value="communion">Communion</option>
-                    <option value="confirmation">Confirmation</option>
-                    <option value="barMitzvah">Bar mitzvah</option>
-                    <option value="batMitzvah">Bat mitzvah</option>
-                  </select>
-                </div>
+                {milestoneType === "custom" ? (
+                  <div style={{ display: "grid", gap: "8px" }}>
+                    <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Title</div>
+                    <input
+                      type="text"
+                      value={milestoneCustomTitle}
+                      onChange={(e) => setMilestoneCustomTitle(e.target.value)}
+                      placeholder="Custom milestone"
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem 0.85rem",
+                        borderRadius: "12px",
+                        border: "1px solid var(--border-strong)",
+                        background: "var(--card)",
+                        color: "var(--ink)",
+                        fontSize: "1rem",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMilestoneType("firstDay");
+                        setMilestoneCustomTitle("");
+                      }}
+                      style={{
+                        padding: 0,
+                        border: "none",
+                        background: "none",
+                        color: "var(--muted)",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        textUnderlineOffset: "3px",
+                        fontSize: "0.9rem",
+                        justifySelf: "start",
+                      }}
+                    >
+                      Choose a preset instead
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Type</div>
+                    <select
+                      value={milestoneType}
+                      onChange={(e) => setMilestoneType(e.target.value as ChildSchoolEventType)}
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem 0.85rem",
+                        borderRadius: "12px",
+                        border: "1px solid var(--border-strong)",
+                        background: "var(--card)",
+                        color: "var(--ink)",
+                        fontSize: "1rem",
+                      }}
+                    >
+                      <option value="firstDay">First day of school</option>
+                      <option value="kGrad">Kindergarten graduation</option>
+                      <option value="5thMoveUp">5th grade moving-up</option>
+                      <option value="8thGrad">8th grade graduation</option>
+                      <option value="hsGrad">High school graduation</option>
+                      <option value="communion">Communion</option>
+                      <option value="confirmation">Confirmation</option>
+                      <option value="barMitzvah">Bar mitzvah</option>
+                      <option value="batMitzvah">Bat mitzvah</option>
+                      <option value="custom">+ Custom milestone</option>
+                    </select>
+                  </div>
+                )}
 
                 <div>
                   <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Date</div>
@@ -1055,24 +1099,39 @@ export default function PersonEditDrawer({
                   <button
                     onClick={() => {
                       if (!milestoneDate) return;
+                      if (milestoneType === "custom" && !milestoneCustomTitle.trim()) return;
                       const idx = milestoneEditing.childIndex;
                       setChildren((prev) =>
                         prev.map((c, i) => {
                           if (i !== idx) return c;
                           return {
                             ...c,
-                            schoolEvents: [...(c.schoolEvents ?? []), { type: milestoneType, date: milestoneDate }],
+                            schoolEvents: [
+                              ...(c.schoolEvents ?? []),
+                              {
+                                type: milestoneType,
+                                date: milestoneDate,
+                                label: milestoneType === "custom" ? milestoneCustomTitle.trim() : undefined,
+                              },
+                            ],
                           };
                         })
                       );
                       setMilestoneEditing(null);
+                      setMilestoneCustomTitle("");
                       setMilestoneDate("");
                     }}
                     style={{
                       border: "1px solid var(--border-strong)",
                       background: "transparent",
-                      color: milestoneDate ? "var(--ink)" : "var(--muted)",
-                      cursor: milestoneDate ? "pointer" : "default",
+                      color:
+                        milestoneDate && (milestoneType !== "custom" || milestoneCustomTitle.trim())
+                          ? "var(--ink)"
+                          : "var(--muted)",
+                      cursor:
+                        milestoneDate && (milestoneType !== "custom" || milestoneCustomTitle.trim())
+                          ? "pointer"
+                          : "default",
                       textAlign: "center",
                       fontWeight: 500,
                       letterSpacing: "0.01em",

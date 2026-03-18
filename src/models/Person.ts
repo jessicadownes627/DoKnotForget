@@ -16,11 +16,13 @@ export type ChildSchoolEventType =
   | "communion"
   | "confirmation"
   | "barMitzvah"
-  | "batMitzvah";
+  | "batMitzvah"
+  | "custom";
 
 export type ChildSchoolEvent = {
   type: ChildSchoolEventType;
   date: string; // YYYY-MM-DD
+  label?: string;
 };
 
 export type Child = {
