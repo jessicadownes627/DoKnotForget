@@ -189,6 +189,8 @@ export default function PersonEditDrawer({
   const [sensitiveDraftMonthDay, setSensitiveDraftMonthDay] = useState("");
   const [sensitiveDraftYear, setSensitiveDraftYear] = useState("");
   const [openSensitivePicker, setOpenSensitivePicker] = useState(false);
+  const [showAdditionalDates, setShowAdditionalDates] = useState(false);
+  const [showImportantHolidays, setShowImportantHolidays] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -216,6 +218,8 @@ export default function PersonEditDrawer({
     setSensitiveDraftMonthDay("");
     setSensitiveDraftYear("");
     setMomentPulseTick(0);
+    setShowAdditionalDates(Boolean(sensitiveMoments.length));
+    setShowImportantHolidays(Boolean(getSelectedHolidays(person).length));
   }, [isOpen, person]);
 
   useEffect(() => {
@@ -351,7 +355,7 @@ export default function PersonEditDrawer({
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "1rem" }}>
             <div style={{ fontFamily: "var(--font-serif)", fontSize: "1.35rem", fontWeight: 600, color: "var(--ink)" }}>
-              Edit
+              Edit {name.trim() || person.name.trim() || "person"}
             </div>
             <button
               onClick={onClose}
@@ -479,141 +483,156 @@ export default function PersonEditDrawer({
               </div>
 
               <div style={{ marginTop: "24px", paddingTop: "16px", borderTop: "1px solid var(--border)" }}>
-                <div
-                  className="dkf-fade-in-80"
-                  style={{ fontWeight: 500, fontSize: "16px", color: "var(--muted)", marginTop: "8px", marginBottom: "16px" }}
+                <button
+                  type="button"
+                  onClick={() => setShowAdditionalDates((prev) => !prev)}
+                  style={{
+                    padding: 0,
+                    border: "none",
+                    background: "none",
+                    cursor: "pointer",
+                    color: "var(--ink)",
+                    textDecoration: "underline",
+                    textUnderlineOffset: "3px",
+                    fontSize: "0.98rem",
+                    fontWeight: 500,
+                  }}
                 >
-                  Any other important dates to remember
-                </div>
+                  + Add another important date
+                </button>
 
-                {sensitiveMoments.length ? (
-                  <div style={{ marginTop: "10px", display: "grid", gap: "8px" }}>
-                    {sensitiveMoments.map((m) => (
-                      <div
-                        key={m.id}
+                {showAdditionalDates ? (
+                  <>
+                    {sensitiveMoments.length ? (
+                      <div style={{ marginTop: "10px", display: "grid", gap: "8px" }}>
+                        {sensitiveMoments.map((m) => (
+                          <div
+                            key={m.id}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: "1rem",
+                              padding: "0.75rem 0.85rem",
+                              borderRadius: "12px",
+                              border: "1px solid var(--border)",
+                              background: "var(--card)",
+                            }}
+                          >
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ color: "var(--ink)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {m.label}
+                              </div>
+                              <div style={{ color: "var(--muted)", fontSize: "0.9rem", marginTop: "2px" }}>
+                                {formatMomentDate(m.date)}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => removeMomentById(m.id)}
+                              title="This removes the moment from your list."
+                              style={{
+                                padding: 0,
+                                border: "none",
+                                background: "none",
+                                cursor: "pointer",
+                                color: "var(--muted)",
+                                textDecoration: "underline",
+                                textUnderlineOffset: "3px",
+                                fontSize: "0.9rem",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ marginTop: "10px", color: "var(--muted)", fontSize: "0.92rem" }}>
+                        None yet.
+                      </div>
+                    )}
+
+                    <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
+                      <input
+                        value={sensitiveTitle}
+                        onChange={(e) => setSensitiveTitle(e.target.value)}
+                        placeholder="Label"
+                        style={{
+                          width: "100%",
+                          padding: "0.75rem 0.85rem",
+                          borderRadius: "12px",
+                          border: "1px solid var(--border-strong)",
+                          background: "var(--card)",
+                          color: "var(--ink)",
+                          fontSize: "1rem",
+                        }}
+                      />
+
+                      <button
+                        onClick={() => {
+                          const draft = toDraftFromIso(sensitiveDate);
+                          setSensitiveDraftMonthDay(draft.monthDay);
+                          setSensitiveDraftYear(draft.year);
+                          setOpenSensitivePicker(true);
+                        }}
                         style={{
                           display: "flex",
                           justifyContent: "space-between",
                           gap: "1rem",
-                          padding: "0.75rem 0.85rem",
+                          width: "100%",
+                          padding: "0.85rem 0.95rem",
                           borderRadius: "12px",
-                          border: "1px solid var(--border)",
+                          border: "1px solid var(--border-strong)",
                           background: "var(--card)",
+                          cursor: "pointer",
+                          color: "var(--ink)",
+                          fontSize: "0.98rem",
+                          textAlign: "left",
                         }}
                       >
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ color: "var(--ink)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {m.label}
-                          </div>
-                          <div style={{ color: "var(--muted)", fontSize: "0.9rem", marginTop: "2px" }}>
-                            {formatMomentDate(m.date)}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => removeMomentById(m.id)}
-                          title="This removes the moment from your list."
-                          style={{
-                            padding: 0,
-                            border: "none",
-                            background: "none",
-                            cursor: "pointer",
-                            color: "var(--muted)",
-                            textDecoration: "underline",
-                            textUnderlineOffset: "3px",
-                            fontSize: "0.9rem",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ marginTop: "10px", color: "var(--muted)", fontSize: "0.92rem" }}>
-                    None yet.
-                  </div>
-                )}
+                        <span>Date</span>
+                        <span style={{ color: "var(--muted)" }}>
+                          {sensitiveDate ? formatMomentDate(sensitiveDate) : "Select date"}
+                        </span>
+                      </button>
 
-                <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
-                  <input
-                    value={sensitiveTitle}
-                    onChange={(e) => setSensitiveTitle(e.target.value)}
-                    placeholder="Label"
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem 0.85rem",
-                      borderRadius: "12px",
-                      border: "1px solid var(--border-strong)",
-                      background: "var(--card)",
-                      color: "var(--ink)",
-                      fontSize: "1rem",
-                    }}
-                  />
-
-                  <button
-                    onClick={() => {
-                      const draft = toDraftFromIso(sensitiveDate);
-                      setSensitiveDraftMonthDay(draft.monthDay);
-                      setSensitiveDraftYear(draft.year);
-                      setOpenSensitivePicker(true);
-                    }}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: "1rem",
-                      width: "100%",
-                      padding: "0.85rem 0.95rem",
-                      borderRadius: "12px",
-                      border: "1px solid var(--border-strong)",
-                      background: "var(--card)",
-                      cursor: "pointer",
-                      color: "var(--ink)",
-                      fontSize: "0.98rem",
-                      textAlign: "left",
-                    }}
-                  >
-                    <span>Date</span>
-                    <span style={{ color: "var(--muted)" }}>
-                      {sensitiveDate ? formatMomentDate(sensitiveDate) : "Select date"}
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      if (!sensitiveTitle.trim() || !sensitiveDate) return;
-                      const moment: Moment = {
-                        id: makeId(),
-                        type: "custom",
-                        label: sensitiveTitle.trim(),
-                        date: sensitiveDate,
-                        recurring: true,
-                        category: "sensitive",
-                      };
-                      onSave(deriveMomentBuckets(buildDraftPerson([...person.moments, moment])));
-                      setSensitiveTitle("");
-                      setSensitiveDate("");
-                      setMomentPulseTick((t) => t + 1);
-                    }}
-                    className={momentPulseTick ? "dkf-row-pulse" : undefined}
-                    style={{
-                      border: "1px solid var(--border-strong)",
-                      background: "transparent",
-                      color: "var(--ink)",
-                      cursor: "pointer",
-                      textAlign: "center",
-                      fontWeight: 500,
-                      letterSpacing: "0.01em",
-                      borderRadius: "12px",
-                      padding: "0.75rem 1rem",
-                      fontSize: "0.95rem",
-                      boxShadow: "none",
-                      justifySelf: "start",
-                    }}
-                  >
-                    Add moment
-                  </button>
-                </div>
+                      <button
+                        onClick={() => {
+                          if (!sensitiveTitle.trim() || !sensitiveDate) return;
+                          const moment: Moment = {
+                            id: makeId(),
+                            type: "custom",
+                            label: sensitiveTitle.trim(),
+                            date: sensitiveDate,
+                            recurring: true,
+                            category: "sensitive",
+                          };
+                          onSave(deriveMomentBuckets(buildDraftPerson([...person.moments, moment])));
+                          setSensitiveTitle("");
+                          setSensitiveDate("");
+                          setMomentPulseTick((t) => t + 1);
+                        }}
+                        className={momentPulseTick ? "dkf-row-pulse" : undefined}
+                        style={{
+                          border: "1px solid var(--border-strong)",
+                          background: "transparent",
+                          color: "var(--ink)",
+                          cursor: "pointer",
+                          textAlign: "center",
+                          fontWeight: 500,
+                          letterSpacing: "0.01em",
+                          borderRadius: "12px",
+                          padding: "0.75rem 1rem",
+                          fontSize: "0.95rem",
+                          boxShadow: "none",
+                          justifySelf: "start",
+                        }}
+                      >
+                        Add moment
+                      </button>
+                    </div>
+                  </>
+                ) : null}
               </div>
             </div>
 
@@ -626,52 +645,6 @@ export default function PersonEditDrawer({
 
               {hasKids ? (
                 <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
-                  <div style={{ display: "grid", gap: "8px" }}>
-                    <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Parent role</div>
-                    <div style={{ display: "grid", gap: "10px" }}>
-                      <div>
-                        <div style={{ color: "var(--muted)", fontSize: "0.82rem" }}>Mother’s Day</div>
-                        <select
-                          value={mothersDayPref}
-                          onChange={(e) => setMothersDayPref((e.target.value as typeof mothersDayPref) ?? "")}
-                          style={{
-                            width: "100%",
-                            padding: "0.65rem 0.75rem",
-                            borderRadius: "12px",
-                            border: "1px solid var(--border-strong)",
-                            background: "var(--card)",
-                            color: "var(--ink)",
-                            marginTop: "6px",
-                          }}
-                        >
-                          <option value="">Ask later</option>
-                          <option value="include">Include</option>
-                          <option value="exclude">Exclude</option>
-                        </select>
-                      </div>
-                      <div>
-                        <div style={{ color: "var(--muted)", fontSize: "0.82rem" }}>Father’s Day</div>
-                        <select
-                          value={fathersDayPref}
-                          onChange={(e) => setFathersDayPref((e.target.value as typeof fathersDayPref) ?? "")}
-                          style={{
-                            width: "100%",
-                            padding: "0.65rem 0.75rem",
-                            borderRadius: "12px",
-                            border: "1px solid var(--border-strong)",
-                            background: "var(--card)",
-                            color: "var(--ink)",
-                            marginTop: "6px",
-                          }}
-                        >
-                          <option value="">Ask later</option>
-                          <option value="include">Include</option>
-                          <option value="exclude">Exclude</option>
-                          </select>
-                      </div>
-                    </div>
-                  </div>
-
                   <div style={{ display: "grid", gap: "16px" }}>
                     <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Children</div>
 
@@ -851,26 +824,47 @@ export default function PersonEditDrawer({
               ) : null}
 
               <div style={{ marginTop: "16px" }}>
-                <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Important Holidays</div>
-                <div style={{ color: "var(--muted)", fontSize: "0.85rem", marginTop: "4px" }}>
-                  Choose any that apply.
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowImportantHolidays((prev) => !prev)}
+                  style={{
+                    padding: 0,
+                    border: "none",
+                    background: "none",
+                    cursor: "pointer",
+                    color: "var(--ink)",
+                    textDecoration: "underline",
+                    textUnderlineOffset: "3px",
+                    fontSize: "0.98rem",
+                    fontWeight: 500,
+                  }}
+                >
+                  + Important Holidays
+                </button>
 
-                <div style={{ display: "grid", gap: "0.6rem", marginTop: "10px" }}>
-                  {PERSON_HOLIDAY_OPTIONS.map((opt) => (
-                    <label
-                      key={opt.id}
-                      style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedHolidays.includes(opt.id)}
-                        onChange={() => toggleSelectedHoliday(opt.id)}
-                      />
-                      {opt.label}
-                    </label>
-                  ))}
-                </div>
+                {showImportantHolidays ? (
+                  <>
+                    <div style={{ color: "var(--muted)", fontSize: "0.85rem", marginTop: "8px" }}>
+                      Choose any that apply.
+                    </div>
+
+                    <div style={{ display: "grid", gap: "0.6rem", marginTop: "10px" }}>
+                      {PERSON_HOLIDAY_OPTIONS.map((opt) => (
+                        <label
+                          key={opt.id}
+                          style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedHolidays.includes(opt.id)}
+                            onChange={() => toggleSelectedHoliday(opt.id)}
+                          />
+                          {opt.label}
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
               </div>
 
             </div>

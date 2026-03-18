@@ -789,7 +789,7 @@ export default function PersonDetail({}: {}) {
                   fontSize: "0.95rem",
                 }}
               >
-                + Add connection
+                Link a person
               </button>
             </section>
 
@@ -956,7 +956,7 @@ export default function PersonDetail({}: {}) {
             <div className="modalContent" style={{ fontFamily: "var(--font-sans)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "1rem" }}>
                 <div style={{ fontFamily: "var(--font-serif)", fontSize: "1.25rem", fontWeight: 600, color: "var(--ink)" }}>
-                  {editingConnection ? "Edit connection" : "Link existing contact"}
+                  {editingConnection ? "Edit connection" : "Link a person"}
                 </div>
                 <button
                   onClick={() => {

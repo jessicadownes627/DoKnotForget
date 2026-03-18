@@ -153,14 +153,6 @@ function reminderEventDate(reminder: ReminderEvent) {
   return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate() + offset);
 }
 
-function todayIsoDate() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
 function formatGiftTypeLabel(value: string) {
   const normalized = (value ?? "").trim().toLowerCase();
   if (!normalized) return "Gift";
@@ -168,6 +160,34 @@ function formatGiftTypeLabel(value: string) {
   if (normalized === "coffee") return "Coffee";
   if (normalized === "gift") return "Gift";
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function parseGiftHistoryDate(entry: { date: string; timestamp?: string }) {
+  const precise = (entry.timestamp ?? "").trim();
+  if (precise) {
+    const parsed = new Date(precise);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+
+  const fallback = parseLocalDate(entry.date);
+  return fallback ? new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate()) : null;
+}
+
+function formatGiftHistoryLine(entry: { type: string; date: string; timestamp?: string }, now: Date) {
+  const action = formatGiftTypeLabel(entry.type);
+  const actionDate = parseGiftHistoryDate(entry);
+  if (!actionDate) return `Last time you sent: ${action}`;
+
+  const diffMs = Math.max(0, now.getTime() - actionDate.getTime());
+  if (diffMs < 60 * 1000) return `Sent just now: ${action}`;
+
+  const sameDay =
+    now.getFullYear() === actionDate.getFullYear() &&
+    now.getMonth() === actionDate.getMonth() &&
+    now.getDate() === actionDate.getDate();
+  if (sameDay) return `Sent today: ${action}`;
+
+  return `Last time you sent: ${action}`;
 }
 
 function hashText(value: string) {
@@ -243,11 +263,6 @@ export default function Home({
       return {};
     }
   });
-  const [giftHistoryConfirm, setGiftHistoryConfirm] = useState<null | {
-    personId: string;
-    type: "coffee" | "ecard" | "gift";
-    reminderId: string;
-  }>(null);
   const [smsSuggestions, setSmsSuggestions] = useState<null | {
     personName: string;
     phone: string;
@@ -730,7 +745,7 @@ export default function Home({
     return {
       title,
       date: formatReminderDate(eventDate ? formatYmd(eventDate) : reminder.date),
-      giftLine: latestGift ? `Last time you sent: ${formatGiftTypeLabel(latestGift.type)}` : null,
+      giftLine: latestGift ? formatGiftHistoryLine(latestGift, new Date()) : null,
       ideaHeading:
         reminder.reminderType === "dayOf" && section === "today" ? `A small way to brighten ${possessive(firstName)} day` : null,
       ideas: reminder.reminderType === "dayOf" && section === "today" ? pickQuickIdeas(getReminderId(reminder), ideaPool) : [],
@@ -753,43 +768,30 @@ export default function Home({
     markReminderHandled(reminder);
   }
 
-  function promptGiftHistory(reminder: ReminderEvent, personId: string, type: "coffee" | "ecard" | "gift") {
-    setGiftHistoryConfirm({ personId, type, reminderId: getReminderId(reminder) });
-  }
+  function recordGiftHistoryAction(reminder: ReminderEvent, type: "coffee" | "ecard" | "gift") {
+    const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
+    if (!person) return;
 
-  function confirmGiftHistory() {
-    if (!giftHistoryConfirm) return;
-    const person = people.find((candidate) => candidate.id === giftHistoryConfirm.personId) ?? null;
-    if (!person) {
-      setGiftHistoryConfirm(null);
-      return;
-    }
-
+    const timestamp = new Date().toISOString();
     updatePerson({
       ...person,
       giftHistory: [
         ...(person.giftHistory ?? []),
         {
-          type: giftHistoryConfirm.type,
-          date: todayIsoDate(),
+          type,
+          date: timestamp.slice(0, 10),
+          timestamp,
         },
       ],
     });
+
     const note =
-      giftHistoryConfirm.type === "coffee"
+      type === "coffee"
         ? `Bought ${person.name} a coffee`
-        : giftHistoryConfirm.type === "ecard"
+        : type === "ecard"
           ? `Sent ${person.name} an eCard`
           : `Sent ${person.name} a gift`;
-    recordCareEvent(person.id, giftHistoryConfirm.type, note);
-    setHandledReminderActions((prev) => {
-      if (prev[giftHistoryConfirm.reminderId]) return prev;
-      return { ...prev, [giftHistoryConfirm.reminderId]: true };
-    });
-    setDismissedReminderKeys((prev) => ({ ...prev, [giftHistoryConfirm.reminderId]: true }));
-    markReminderFired(giftHistoryConfirm.reminderId);
-    void cancelScheduledReminderNotificationByReminderId(giftHistoryConfirm.reminderId);
-    setGiftHistoryConfirm(null);
+    recordCareEvent(person.id, type, note);
   }
 
   function careEventNoteForReminderText(reminder: ReminderEvent) {
@@ -821,10 +823,7 @@ export default function Home({
         {
           label: "Send gift",
           href: "https://www.starbucks.com/gift",
-          onClick: () => {
-            if (!person) return;
-            promptGiftHistory(reminder, person.id, "gift");
-          },
+          onClick: () => recordGiftHistoryAction(reminder, "gift"),
         },
       ];
     }
@@ -834,18 +833,12 @@ export default function Home({
         {
           label: `Send ${first} an eCard`,
           href: "https://www.americangreetings.com/ecards",
-          onClick: () => {
-            if (!person) return;
-            promptGiftHistory(reminder, person.id, "ecard");
-          },
+          onClick: () => recordGiftHistoryAction(reminder, "ecard"),
         },
         {
           label: "Send gift",
           href: "https://www.starbucks.com/gift",
-          onClick: () => {
-            if (!person) return;
-            promptGiftHistory(reminder, person.id, "gift");
-          },
+          onClick: () => recordGiftHistoryAction(reminder, "gift"),
         },
       ];
     }
@@ -921,18 +914,12 @@ export default function Home({
       {
         label: `Send ${first} an eCard`,
         href: "https://www.americangreetings.com/ecards",
-        onClick: () => {
-          if (!person) return;
-          promptGiftHistory(reminder, person.id, "ecard");
-        },
+        onClick: () => recordGiftHistoryAction(reminder, "ecard"),
       },
       {
         label: `Treat ${first} to a coffee`,
         href: "https://www.starbucks.com/gift",
-        onClick: () => {
-          if (!person) return;
-          promptGiftHistory(reminder, person.id, "coffee");
-        },
+        onClick: () => recordGiftHistoryAction(reminder, "coffee"),
       },
       {
         label: "✓ Mark as done",
@@ -1879,7 +1866,7 @@ export default function Home({
                             ) : null}
 
                             {primaryActions.length ? (
-                              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                              <div style={{ display: "grid", gap: section === "today" ? "10px" : "8px" }}>
                                 {primaryActions.map((action) =>
                                   action.href ? (
                                     <a
@@ -1905,6 +1892,7 @@ export default function Home({
                                         cursor: "pointer",
                                         boxShadow: "none",
                                         textDecoration: "none",
+                                        width: section === "today" ? "100%" : undefined,
                                         opacity: "disabled" in action && action.disabled ? 0.5 : 1,
                                         pointerEvents: "disabled" in action && action.disabled ? "none" : undefined,
                                       }}
@@ -1922,6 +1910,7 @@ export default function Home({
                                         borderRadius: "12px",
                                         padding: "0.75rem 1rem",
                                         fontSize: "1rem",
+                                        width: section === "today" ? "100%" : undefined,
                                       }}
                                     >
                                       {action.label}
@@ -2251,54 +2240,6 @@ export default function Home({
               setChildBirthdayDraftYear("");
             }}
           />
-        ) : null}
-
-        {giftHistoryConfirm ? (
-          <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.28)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "16px",
-              zIndex: 50,
-            }}
-          >
-            <div
-              style={{
-                width: "100%",
-                maxWidth: "360px",
-                borderRadius: "16px",
-                border: "1px solid var(--border)",
-                background: "rgba(255,255,255,0.96)",
-                color: "var(--ink)",
-                padding: "18px",
-                boxShadow: "0 10px 30px rgba(0,0,0,0.14)",
-                display: "grid",
-                gap: "14px",
-              }}
-            >
-              <div style={{ fontSize: "1rem", fontWeight: 600 }}>Did you send this?</div>
-              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                <button type="button" onClick={confirmGiftHistory}>
-                  Yes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGiftHistoryConfirm(null)}
-                  style={{
-                    border: "1px solid var(--border-strong)",
-                    background: "transparent",
-                    color: "var(--ink)",
-                  }}
-                >
-                  Not yet
-                </button>
-              </div>
-            </div>
-          </div>
         ) : null}
 
         {smsSuggestions ? (

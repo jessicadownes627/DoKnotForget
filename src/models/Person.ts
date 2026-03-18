@@ -45,7 +45,7 @@ export type Person = {
   name: string;
   phone?: string;
   moments: Moment[];
-  giftHistory?: { type: string; date: string }[];
+  giftHistory?: { type: string; date: string; timestamp?: string }[];
   isMother?: boolean | null; // null/undefined = unknown, true/false = answered
   isFather?: boolean | null; // null/undefined = unknown, true/false = answered
   partnerId?: string | null; // partnered person id

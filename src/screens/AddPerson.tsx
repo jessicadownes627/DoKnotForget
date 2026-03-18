@@ -1395,7 +1395,7 @@ export default function AddPerson() {
             fontSize: "1rem",
           }}
         >
-          <span>Add connection</span>
+          <span>Link a person</span>
           <span style={{ color: "var(--muted)" }}>{openRow === "related" ? "Hide" : "Open"}</span>
         </button>
 
