@@ -27,6 +27,7 @@ import { filterContacts } from "../utils/contactSearch";
 import SmartMessageSuggestionsModal from "../components/SmartMessageSuggestionsModal";
 import { parseLocalDate } from "../utils/date";
 import { buildHomeSections } from "../utils/homeSections";
+import { isContactImportSupported } from "../utils/contactImport";
 import {
   cancelScheduledReminderNotificationByReminderId,
   configureReminderNotifications,
@@ -276,6 +277,7 @@ export default function Home({
   const isSettings = location.pathname === "/settings";
   const activeTab: "home" | "contacts" = isContacts ? "contacts" : "home";
   const hasContacts = people.length > 0;
+  const contactImportSupported = isContactImportSupported();
 
   useEffect(() => {
     function refreshToday() {
@@ -1591,7 +1593,7 @@ export default function Home({
           </div>
         ) : null}
 
-        {activeTab === "contacts" ? (
+        {activeTab === "contacts" && contactImportSupported ? (
           <div
             style={{
               marginTop: hasContacts ? "16px" : "64px",
@@ -1685,6 +1687,7 @@ export default function Home({
 	                >
 	                  + Add someone
 	                </button>
+                  {contactImportSupported ? (
 	                <button
 	                  onClick={() => navigate("/import")}
 	                  style={{
@@ -1703,6 +1706,7 @@ export default function Home({
 	                >
 	                  Import Contacts
 	                </button>
+                  ) : null}
                 {import.meta.env.DEV ? (
                   <button
                     onClick={seedDevData}
@@ -2121,25 +2125,27 @@ export default function Home({
                 >
                   + Add someone important
                 </button>
-                <button
-                  onClick={() => navigate("/import")}
-                  style={{
-                    marginTop: "16px",
-                    border: "1px solid var(--border-strong)",
-                    background: "transparent",
-                    color: "var(--ink)",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    fontWeight: 500,
-                    letterSpacing: "0.01em",
-                    borderRadius: "12px",
-                    padding: "0.65rem 1rem",
-                    fontSize: "0.95rem",
-                    fontFamily: "var(--font-sans)",
-                  }}
-                >
-                  Import Contacts
-                </button>
+                {contactImportSupported ? (
+                  <button
+                    onClick={() => navigate("/import")}
+                    style={{
+                      marginTop: "16px",
+                      border: "1px solid var(--border-strong)",
+                      background: "transparent",
+                      color: "var(--ink)",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontWeight: 500,
+                      letterSpacing: "0.01em",
+                      borderRadius: "12px",
+                      padding: "0.65rem 1rem",
+                      fontSize: "0.95rem",
+                      fontFamily: "var(--font-sans)",
+                    }}
+                  >
+                    Import Contacts
+                  </button>
+                ) : null}
               </div>
             </>
           )}

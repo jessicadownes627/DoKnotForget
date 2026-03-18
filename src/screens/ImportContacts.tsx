@@ -1,9 +1,9 @@
-import { Contacts } from "@capacitor-community/contacts";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "../router";
 import { useAppState } from "../appState";
 import type { Person } from "../models/Person";
 import { normalizePhone as normalizePhoneE164 } from "../utils/phone";
+import { getCapacitorContactsPlugin, isContactImportSupported } from "../utils/contactImport";
 
 type PickedContact = {
   name: string;
@@ -40,14 +40,6 @@ function normalizePhone(raw: string) {
 
 function contactKey(c: PickedContact) {
   return `${c.name}::${c.phone}`;
-}
-
-function getCapacitorContactsPlugin(): any | null {
-  if (Contacts) return Contacts;
-  const cap = (window as any)?.Capacitor;
-  const plugins = cap?.Plugins;
-  if (!plugins) return null;
-  return plugins.Contacts || plugins.CapacitorContacts || plugins.Contact || null;
 }
 
 function extractName(c: any) {
@@ -273,7 +265,7 @@ export default function ImportContacts() {
     return Array.isArray(raw) ? raw.filter((value): value is string => typeof value === "string" && value.trim().length > 0) : [];
   }, [location.state]);
 
-  const supported = typeof window !== "undefined" && Boolean(getCapacitorContactsPlugin());
+  const supported = isContactImportSupported();
 
   useEffect(() => {
     if (reviewImportedIds.length || !supported || picked.length || isLoading || mode === "select") return;

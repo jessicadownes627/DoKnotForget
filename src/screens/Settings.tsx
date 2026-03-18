@@ -1,5 +1,5 @@
 import { LocalNotifications } from "@capacitor/local-notifications";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppState } from "../appState";
 import { getUpcomingReminders } from "../engine/reminderEngine";
 import { useNavigate } from "../router";
@@ -22,11 +22,34 @@ function startOfToday() {
 export default function Settings() {
   const navigate = useNavigate();
   const { people, userSettings, updateUserSettings } = useAppState();
+  const [notificationStatus, setNotificationStatus] = useState<"on" | "off">("off");
 
   const reminderTimeValue = useMemo(
     () => formatTimeValue(userSettings.reminderHour, userSettings.reminderMinute),
     [userSettings.reminderHour, userSettings.reminderMinute]
   );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function refreshNotificationStatus() {
+      if (!isNativeNotificationsSupported()) {
+        if (isMounted) setNotificationStatus("off");
+        return;
+      }
+
+      const permission = await LocalNotifications.checkPermissions();
+      if (isMounted) {
+        setNotificationStatus(permission.display === "granted" ? "on" : "off");
+      }
+    }
+
+    void refreshNotificationStatus();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   async function handleReminderTimeChange(value: string) {
     const [hourValue, minuteValue] = value.split(":");
@@ -46,6 +69,7 @@ export default function Settings() {
 
     await configureReminderNotifications();
     const permission = await LocalNotifications.checkPermissions();
+    setNotificationStatus(permission.display === "granted" ? "on" : "off");
     if (permission.display !== "granted") return;
 
     const reminders = getUpcomingReminders(people, startOfToday());
@@ -125,6 +149,17 @@ export default function Settings() {
           </div>
           <div
             style={{
+              marginTop: "8px",
+              color: "var(--muted)",
+              fontSize: "0.9rem",
+              lineHeight: 1.5,
+              fontFamily: "var(--font-sans)",
+            }}
+          >
+            {notificationStatus === "on" ? "Notifications: On" : "Notifications are off — enable in Settings"}
+          </div>
+          <div
+            style={{
               marginTop: "16px",
               display: "flex",
               justifyContent: "center",
@@ -154,6 +189,18 @@ export default function Settings() {
             />
           </div>
         </section>
+
+        <div
+          style={{
+            marginTop: "48px",
+            textAlign: "center",
+            color: "rgba(27, 42, 65, 0.58)",
+            fontSize: "0.9rem",
+            fontFamily: "var(--font-sans)",
+          }}
+        >
+          Your people. On time.
+        </div>
       </div>
     </div>
   );
