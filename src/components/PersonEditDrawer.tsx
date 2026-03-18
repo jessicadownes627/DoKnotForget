@@ -2,10 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import type { Child, ChildSchoolEventType, Moment, Person } from "../models/Person";
 import MomentDatePicker from "./MomentDatePicker";
 import { normalizePhone } from "../utils/phone";
+import {
+  getSelectedHolidays,
+  PERSON_HOLIDAY_OPTIONS,
+  toggleHolidaySelection,
+} from "../utils/personHolidays";
 
 type Props = {
   isOpen: boolean;
   person: Person;
+  initialChildId?: string | null;
+  startWithNewChild?: boolean;
   onClose: () => void;
   onSave: (updated: Person) => void;
 };
@@ -17,7 +24,7 @@ const overlayStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "center",
   alignItems: "flex-end",
-  padding: "12px",
+  padding: "16px",
   overflowY: "auto",
   WebkitOverflowScrolling: "touch",
   zIndex: 50,
@@ -127,7 +134,14 @@ function schoolEventLabel(type: ChildSchoolEventType) {
   return "Milestone";
 }
 
-export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Props) {
+export default function PersonEditDrawer({
+  isOpen,
+  person,
+  initialChildId = null,
+  startWithNewChild = false,
+  onClose,
+  onSave,
+}: Props) {
   const birthdayMoment = useMemo(() => person.moments.find((m) => m.type === "birthday") ?? null, [person]);
   const anniversaryMoment = useMemo(
     () => person.moments.find((m) => m.type === "anniversary") ?? null,
@@ -142,17 +156,8 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
   const [phone, setPhone] = useState(person.phone ?? "");
   const [phoneError, setPhoneError] = useState(false);
   const [hasKids, setHasKids] = useState(Boolean(person.hasKids || (person.children?.length ?? 0) > 0));
-  function normalizeReligionCulture(value: unknown): NonNullable<Person["religionCulture"]> {
-    if (Array.isArray(value)) return value as NonNullable<Person["religionCulture"]>;
-    if (typeof value === "string" && value.trim()) {
-      // Back-compat: older records stored a single string.
-      return [value.trim() as NonNullable<Person["religionCulture"]>[number]];
-    }
-    return [];
-  }
-
-  const [religionCulture, setReligionCulture] = useState<NonNullable<Person["religionCulture"]>>(
-    normalizeReligionCulture((person as any).religionCulture)
+  const [selectedHolidays, setSelectedHolidays] = useState<NonNullable<Person["selectedHolidays"]>>(
+    getSelectedHolidays(person)
   );
   const [mothersDayPref, setMothersDayPref] = useState<"" | "include" | "exclude">(
     person.holidayPrefs?.mothersDay === true ? "include" : person.holidayPrefs?.mothersDay === false ? "exclude" : ""
@@ -192,7 +197,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
     setPhone(person.phone ?? "");
     setPhoneError(false);
     setHasKids(Boolean(person.hasKids || (person.children?.length ?? 0) > 0));
-    setReligionCulture(normalizeReligionCulture((person as any).religionCulture));
+    setSelectedHolidays(getSelectedHolidays(person));
     setMothersDayPref(
       person.holidayPrefs?.mothersDay === true ? "include" : person.holidayPrefs?.mothersDay === false ? "exclude" : ""
     );
@@ -214,23 +219,49 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
     setMomentPulseTick(0);
   }, [isOpen, person]);
 
+  useEffect(() => {
+    if (!isOpen || !initialChildId) return;
+    const element = document.getElementById(`person-child-${initialChildId}`);
+    if (!element) return;
+    requestAnimationFrame(() => {
+      element.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  }, [initialChildId, isOpen, children.length]);
+
+  useEffect(() => {
+    if (!isOpen || !startWithNewChild) return;
+    const childId = makeId();
+    setHasKids(true);
+    setChildren((prev) => [...prev, { id: childId, name: "", birthday: "" }]);
+    requestAnimationFrame(() => {
+      const element = document.getElementById(`person-child-${childId}`);
+      if (!element) return;
+      element.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  }, [isOpen, startWithNewChild]);
+
   if (!isOpen) return null;
 
-  const firstName = (name.trim().split(" ")[0] || "this person").trim();
+  function toggleSelectedHoliday(value: NonNullable<Person["selectedHolidays"]>[number]) {
+    setSelectedHolidays((prev) => toggleHolidaySelection(prev, value));
+  }
 
-  function toggleReligionCulture(value: NonNullable<Person["religionCulture"]>[number]) {
-    setReligionCulture((prev) => {
-      const next = new Set(prev);
-      if (next.has(value)) next.delete(value);
-      else next.add(value);
-
-      if (value === "none") {
-        return next.has("none") ? ["none"] : [];
-      }
-
-      next.delete("none");
-      return Array.from(next);
-    });
+  function buildDraftPerson(momentsOverride?: Moment[]) {
+    return {
+      ...person,
+      name: name.trim(),
+      phone: phone.trim() ? normalizePhone(phone) || phone.trim() : undefined,
+      hasKids: hasKids ? true : false,
+      selectedHolidays: selectedHolidays.length ? selectedHolidays : undefined,
+      holidayPrefs: hasKids
+        ? {
+            mothersDay: mothersDayPref === "" ? undefined : mothersDayPref === "include",
+            fathersDay: fathersDayPref === "" ? undefined : fathersDayPref === "include",
+          }
+        : undefined,
+      children: hasKids ? children : [],
+      moments: momentsOverride ?? person.moments,
+    } satisfies Person;
   }
 
   function save() {
@@ -258,21 +289,11 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
     }
 
     const updated: Person = {
-      ...person,
-      name: name.trim(),
+      ...buildDraftPerson(nextMoments),
       phone: normalizedPhone || undefined,
-      hasKids: hasKids ? true : false,
-      religionCulture: religionCulture.length ? religionCulture : undefined,
-      holidayPrefs: hasKids
-        ? {
-            mothersDay: mothersDayPref === "" ? undefined : mothersDayPref === "include",
-            fathersDay: fathersDayPref === "" ? undefined : fathersDayPref === "include",
-          }
-        : undefined,
-      children: hasKids ? children : [],
-      moments: nextMoments,
     };
 
+    console.log("Saved children:", updated.children ?? []);
     onSave(deriveMomentBuckets(updated));
     onClose();
   }
@@ -286,7 +307,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
       : { id: makeId(), type: "birthday", label: "Birthday", date: iso, recurring: true };
 
     const other = person.moments.filter((m) => m.type !== "birthday");
-    const updated = { ...person, moments: [updatedMoment, ...other] };
+    const updated = buildDraftPerson([updatedMoment, ...other]);
     onSave(deriveMomentBuckets(updated));
   }
 
@@ -299,12 +320,12 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
       : { id: makeId(), type: "anniversary", label: "Anniversary", date: iso, recurring: true };
 
     const other = person.moments.filter((m) => m.type !== "anniversary");
-    const updated = { ...person, moments: [updatedMoment, ...other] };
+    const updated = buildDraftPerson([updatedMoment, ...other]);
     onSave(deriveMomentBuckets(updated));
   }
 
   function removeMomentById(id: string) {
-    onSave(deriveMomentBuckets({ ...person, moments: person.moments.filter((m) => m.id !== id) }));
+    onSave(deriveMomentBuckets(buildDraftPerson(person.moments.filter((m) => m.id !== id))));
   }
 
   return (
@@ -349,7 +370,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
             </button>
           </div>
 
-          <div style={{ marginTop: "18px", display: "grid", gap: "14px" }}>
+          <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
             <div>
               <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Name</div>
               <input
@@ -397,10 +418,10 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
               ) : null}
             </div>
 
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px" }}>
-              <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "12px", marginBottom: "12px" }}>Moments</div>
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "16px" }}>
+              <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "8px", marginBottom: "16px" }}>Moments</div>
 
-              <div style={{ marginTop: "12px", display: "grid", gap: "10px" }}>
+              <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
                 <button
                   onClick={() => {
                     const draft = toDraftFromIso(momentDate(birthdayMoment));
@@ -458,10 +479,10 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                 </button>
               </div>
 
-              <div style={{ marginTop: "18px", paddingTop: "14px", borderTop: "1px solid var(--border)" }}>
+              <div style={{ marginTop: "24px", paddingTop: "16px", borderTop: "1px solid var(--border)" }}>
                 <div
                   className="dkf-fade-in-80"
-                  style={{ fontWeight: 500, fontSize: "16px", color: "var(--muted)", marginTop: "12px", marginBottom: "12px" }}
+                  style={{ fontWeight: 500, fontSize: "16px", color: "var(--muted)", marginTop: "8px", marginBottom: "16px" }}
                 >
                   Any other important dates to remember
                 </div>
@@ -515,7 +536,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                   </div>
                 )}
 
-                <div style={{ marginTop: "12px", display: "grid", gap: "10px" }}>
+                <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
                   <input
                     value={sensitiveTitle}
                     onChange={(e) => setSensitiveTitle(e.target.value)}
@@ -570,7 +591,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                         recurring: true,
                         category: "sensitive",
                       };
-                      onSave(deriveMomentBuckets({ ...person, moments: [...person.moments, moment] }));
+                      onSave(deriveMomentBuckets(buildDraftPerson([...person.moments, moment])));
                       setSensitiveTitle("");
                       setSensitiveDate("");
                       setMomentPulseTick((t) => t + 1);
@@ -597,15 +618,15 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
               </div>
             </div>
 
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px", marginTop: "10px" }}>
-              <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "12px", marginBottom: "12px" }}>Parent</div>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", marginTop: "10px" }}>
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "16px", marginTop: "16px" }}>
+              <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "8px", marginBottom: "16px" }}>Parent</div>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
                 <input type="checkbox" checked={hasKids} onChange={(e) => setHasKids(e.target.checked)} />
                 Has children
               </label>
 
               {hasKids ? (
-                <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
+                <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
                   <div style={{ display: "grid", gap: "8px" }}>
                     <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Parent role</div>
                     <div style={{ display: "grid", gap: "10px" }}>
@@ -652,19 +673,20 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                     </div>
                   </div>
 
-                  <div style={{ display: "grid", gap: "12px" }}>
-                    <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Kids</div>
+                  <div style={{ display: "grid", gap: "16px" }}>
+                    <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Children</div>
 
                     {children.map((child, idx) => (
                       <div
                         key={child.id}
+                        id={`person-child-${child.id}`}
                         style={{
                           border: "1px solid var(--border)",
                           background: "var(--paper)",
                           borderRadius: "12px",
-                          padding: "12px",
+                          padding: "16px",
                           display: "grid",
-                          gap: "10px",
+                          gap: "12px",
                         }}
                       >
                         <input
@@ -830,32 +852,22 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                 </div>
               ) : null}
 
-              <div style={{ marginTop: "12px" }}>
-                <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-                  Holidays to remember for {firstName}
-                </div>
+              <div style={{ marginTop: "16px" }}>
+                <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Important Holidays</div>
                 <div style={{ color: "var(--muted)", fontSize: "0.85rem", marginTop: "4px" }}>
                   Choose any that apply.
                 </div>
 
                 <div style={{ display: "grid", gap: "0.6rem", marginTop: "10px" }}>
-                  {(
-                    [
-                      { id: "christian", label: "Christian" },
-                      { id: "orthodox", label: "Orthodox" },
-                      { id: "jewish", label: "Jewish" },
-                      { id: "muslim", label: "Muslim" },
-                      { id: "none", label: "None" },
-                    ] as const
-                  ).map((opt) => (
+                  {PERSON_HOLIDAY_OPTIONS.map((opt) => (
                     <label
                       key={opt.id}
                       style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}
                     >
                       <input
                         type="checkbox"
-                        checked={religionCulture.includes(opt.id)}
-                        onChange={() => toggleReligionCulture(opt.id)}
+                        checked={selectedHolidays.includes(opt.id)}
+                        onChange={() => toggleSelectedHoliday(opt.id)}
                       />
                       {opt.label}
                     </label>
@@ -865,7 +877,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
 
             </div>
 
-            <div style={{ display: "flex", gap: "0.75rem", marginTop: "6px", justifyContent: "flex-end" }}>
+                <div style={{ display: "flex", gap: "8px", marginTop: "8px", justifyContent: "flex-end" }}>
               <button
                 onClick={onClose}
                 style={{
@@ -1001,7 +1013,7 @@ export default function PersonEditDrawer({ isOpen, person, onClose, onSave }: Pr
                 </button>
               </div>
 
-              <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
+              <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
                 <div>
                   <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Type</div>
                   <select

@@ -1,10 +1,11 @@
 export type HolidayId =
   | "mothersDay"
   | "fathersDay"
+  | "christmas"
   | "easterWestern"
   | "easterOrthodox"
   | "hanukkah"
-  | "ramadan"
+  | "diwali"
   | "eidAlFitr";
 
 export type HolidayOccurrence = {
@@ -40,6 +41,10 @@ export function mothersDay(year: number) {
 export function fathersDay(year: number) {
   // US: third Sunday in June
   return nthWeekdayOfMonth(year, 5, 0, 3);
+}
+
+export function christmas(year: number) {
+  return new Date(year, 11, 25);
 }
 
 export function westernEaster(year: number) {
@@ -119,18 +124,37 @@ export function nextHanukkahStart(baseDate = new Date()) {
   });
 }
 
-export function nextRamadanStart(baseDate = new Date()) {
-  // 1 Ramadan
-  return findNextCalendarMatch("islamic", baseDate, 370, (month, day) => {
-    return month.toLowerCase().includes("ramadan") && day === "1";
-  });
-}
-
 export function nextEidAlFitr(baseDate = new Date()) {
   // 1 Shawwal
   return findNextCalendarMatch("islamic", baseDate, 370, (month, day) => {
     return month.toLowerCase().includes("shawwal") && day === "1";
   });
+}
+
+const DIWALI_DATES: Record<number, { month: number; day: number }> = {
+  2024: { month: 11, day: 1 },
+  2025: { month: 10, day: 20 },
+  2026: { month: 11, day: 8 },
+  2027: { month: 10, day: 29 },
+  2028: { month: 10, day: 17 },
+  2029: { month: 11, day: 5 },
+  2030: { month: 10, day: 25 },
+  2031: { month: 11, day: 13 },
+  2032: { month: 11, day: 1 },
+  2033: { month: 10, day: 21 },
+  2034: { month: 11, day: 10 },
+  2035: { month: 10, day: 30 },
+};
+
+export function nextDiwali(baseDate = new Date()) {
+  const today = startOfToday(baseDate);
+  for (let year = today.getFullYear(); year <= today.getFullYear() + 2; year += 1) {
+    const known = DIWALI_DATES[year];
+    if (!known) continue;
+    const date = new Date(year, known.month - 1, known.day);
+    if (date >= today) return date;
+  }
+  return null;
 }
 
 export function getUpcomingHolidays(baseDate = new Date(), horizonDays = 21): HolidayOccurrence[] {
@@ -140,6 +164,7 @@ export function getUpcomingHolidays(baseDate = new Date(), horizonDays = 21): Ho
   const candidates: HolidayOccurrence[] = [
     { id: "mothersDay", label: "Mother’s Day", date: mothersDay(year) },
     { id: "fathersDay", label: "Father’s Day", date: fathersDay(year) },
+    { id: "christmas", label: "Christmas", date: christmas(year) },
     { id: "easterWestern", label: "Easter", date: westernEaster(year) },
     { id: "easterOrthodox", label: "Greek Easter", date: orthodoxEaster(year) },
   ];
@@ -147,11 +172,11 @@ export function getUpcomingHolidays(baseDate = new Date(), horizonDays = 21): Ho
   const hanukkah = nextHanukkahStart(today);
   if (hanukkah) candidates.push({ id: "hanukkah", label: "Hanukkah", date: hanukkah });
 
-  const ramadan = nextRamadanStart(today);
-  if (ramadan) candidates.push({ id: "ramadan", label: "Ramadan", date: ramadan });
-
   const eid = nextEidAlFitr(today);
   if (eid) candidates.push({ id: "eidAlFitr", label: "Eid al-Fitr", date: eid });
+
+  const diwali = nextDiwali(today);
+  if (diwali) candidates.push({ id: "diwali", label: "Diwali", date: diwali });
 
   return candidates
     .map((h) => ({ ...h, date: startOfToday(h.date) }))
@@ -161,4 +186,3 @@ export function getUpcomingHolidays(baseDate = new Date(), horizonDays = 21): Ho
     })
     .sort((a, b) => a.date.getTime() - b.date.getTime());
 }
-

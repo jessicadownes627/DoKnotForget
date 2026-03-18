@@ -2,6 +2,7 @@ import type { Moment, Person } from "../models/Person";
 import type { Child } from "../models/Person";
 import { getUpcomingHolidays } from "./holidays";
 import { parseLocalDate } from "./date";
+import { getSelectedHolidays } from "./personHolidays";
 
 export type CareSuggestionType =
   | "birthday"
@@ -138,32 +139,6 @@ function getRecurringOccurrenceInNextDays(isoDate: string, today: Date, horizonD
   const daysUntil = daysBetween(target, today);
   if (daysUntil < 0 || daysUntil > horizonDays) return null;
   return { target, daysUntil, year: target.getFullYear(), birthYear: parts.y > 0 ? parts.y : null };
-}
-
-function religionMatches(tag: string | undefined, kind: "orthodox" | "western" | "jewish" | "muslim") {
-  const normalized = (tag ?? "").trim().toLowerCase();
-  if (!normalized) return false;
-  if (kind === "orthodox") return normalized.includes("orthodox") || normalized.includes("greek");
-  if (kind === "western") return normalized.includes("christian") || normalized.includes("catholic");
-  if (kind === "jewish") return normalized.includes("jew") || normalized.includes("hebrew");
-  if (kind === "muslim") return normalized.includes("islam") || normalized.includes("muslim");
-  return false;
-}
-
-function resolvedReligionCulture(person: Person): NonNullable<Person["religionCulture"]> {
-  const stored = (person as any).religionCulture;
-  if (Array.isArray(stored)) return stored as NonNullable<Person["religionCulture"]>;
-  if (typeof stored === "string" && stored.trim()) {
-    const v = stored.trim() as NonNullable<Person["religionCulture"]>[number];
-    return v === "none" ? [] : [v];
-  }
-
-  // Back-compat: infer a best guess from legacy free-text.
-  if (religionMatches(person.religionTag, "orthodox")) return ["orthodox"];
-  if (religionMatches(person.religionTag, "western")) return ["christian"];
-  if (religionMatches(person.religionTag, "jewish")) return ["jewish"];
-  if (religionMatches(person.religionTag, "muslim")) return ["muslim"];
-  return [];
 }
 
 function schoolEventLabel(type: string) {
@@ -403,7 +378,7 @@ export function generateCareFeed(people: Person[], baseDate = new Date()): CareC
   for (const person of people) {
     const who = firstName(person);
     const hasKids = Boolean(person.hasKids || (person.children?.length ?? 0) > 0);
-    const culture = resolvedReligionCulture(person);
+    const selectedHolidays = getSelectedHolidays(person);
 
     // Children’s birthdays (within 21 days)
     for (const child of person.children ?? []) {
@@ -498,8 +473,23 @@ export function generateCareFeed(people: Person[], baseDate = new Date()): CareC
         continue;
       }
 
+      if (holiday.id === "christmas") {
+        if (!selectedHolidays.includes("christmas")) continue;
+        cards.push({
+          id: `care_holiday_christmas_${person.id}_${toIsoDate(holiday.date)}`,
+          type: "holiday",
+          personId: person.id,
+          date: toIsoDate(holiday.date),
+          title: `Christmas for ${who} · ${monthDayFormatter.format(holiday.date)}`,
+          message: "Reach out?",
+          sortDaysUntil: daysUntil,
+          sortPriority: 2,
+        });
+        continue;
+      }
+
       if (holiday.id === "easterOrthodox") {
-        if (!culture.includes("orthodox")) continue;
+        if (!selectedHolidays.includes("easterOrthodox")) continue;
         cards.push({
           id: `care_holiday_orthodoxEaster_${person.id}_${toIsoDate(holiday.date)}`,
           type: "holiday",
@@ -514,7 +504,7 @@ export function generateCareFeed(people: Person[], baseDate = new Date()): CareC
       }
 
       if (holiday.id === "easterWestern") {
-        if (!culture.includes("christian")) continue;
+        if (!selectedHolidays.includes("easterWestern")) continue;
         cards.push({
           id: `care_holiday_easter_${person.id}_${toIsoDate(holiday.date)}`,
           type: "holiday",
@@ -529,7 +519,7 @@ export function generateCareFeed(people: Person[], baseDate = new Date()): CareC
       }
 
       if (holiday.id === "hanukkah") {
-        if (!culture.includes("jewish")) continue;
+        if (!selectedHolidays.includes("hanukkah")) continue;
         cards.push({
           id: `care_holiday_hanukkah_${person.id}_${toIsoDate(holiday.date)}`,
           type: "holiday",
@@ -543,14 +533,14 @@ export function generateCareFeed(people: Person[], baseDate = new Date()): CareC
         continue;
       }
 
-      if (holiday.id === "ramadan") {
-        if (!culture.includes("muslim")) continue;
+      if (holiday.id === "eidAlFitr") {
+        if (!selectedHolidays.includes("eidAlFitr")) continue;
         cards.push({
-          id: `care_holiday_ramadan_${person.id}_${toIsoDate(holiday.date)}`,
+          id: `care_holiday_eid_${person.id}_${toIsoDate(holiday.date)}`,
           type: "holiday",
           personId: person.id,
           date: toIsoDate(holiday.date),
-          title: `Ramadan for ${who} · ${monthDayFormatter.format(holiday.date)}`,
+          title: `Eid for ${who} · ${monthDayFormatter.format(holiday.date)}`,
           message: "Reach out?",
           sortDaysUntil: daysUntil,
           sortPriority: 2,
@@ -558,14 +548,14 @@ export function generateCareFeed(people: Person[], baseDate = new Date()): CareC
         continue;
       }
 
-      if (holiday.id === "eidAlFitr") {
-        if (!culture.includes("muslim")) continue;
+      if (holiday.id === "diwali") {
+        if (!selectedHolidays.includes("diwali")) continue;
         cards.push({
-          id: `care_holiday_eid_${person.id}_${toIsoDate(holiday.date)}`,
+          id: `care_holiday_diwali_${person.id}_${toIsoDate(holiday.date)}`,
           type: "holiday",
           personId: person.id,
           date: toIsoDate(holiday.date),
-          title: `Eid for ${who} · ${monthDayFormatter.format(holiday.date)}`,
+          title: `Diwali for ${who} · ${monthDayFormatter.format(holiday.date)}`,
           message: "Reach out?",
           sortDaysUntil: daysUntil,
           sortPriority: 2,
@@ -676,7 +666,7 @@ export function generateCareSuggestions(people: Person[], baseDate = new Date())
 
   for (const person of people) {
     const children = person.children ?? [];
-    const personCulture = resolvedReligionCulture(person);
+    const selectedHolidays = getSelectedHolidays(person);
     let personQuestionAdded = false;
 
     const combinedMoments = (() => {
@@ -777,10 +767,12 @@ export function generateCareSuggestions(people: Person[], baseDate = new Date())
         (holiday.id === "fathersDay" &&
           hasKids &&
           person.holidayPrefs?.fathersDay === true) ||
-        (holiday.id === "easterOrthodox" && personCulture.includes("orthodox")) ||
-        (holiday.id === "easterWestern" && personCulture.includes("christian")) ||
-        (holiday.id === "hanukkah" && personCulture.includes("jewish")) ||
-        ((holiday.id === "ramadan" || holiday.id === "eidAlFitr") && personCulture.includes("muslim"));
+        (holiday.id === "christmas" && selectedHolidays.includes("christmas")) ||
+        (holiday.id === "easterOrthodox" && selectedHolidays.includes("easterOrthodox")) ||
+        (holiday.id === "easterWestern" && selectedHolidays.includes("easterWestern")) ||
+        (holiday.id === "hanukkah" && selectedHolidays.includes("hanukkah")) ||
+        (holiday.id === "eidAlFitr" && selectedHolidays.includes("eidAlFitr")) ||
+        (holiday.id === "diwali" && selectedHolidays.includes("diwali"));
 
       if (!personQuestionAdded) {
         // Questions trigger only when needed for a suggestion within the next 21 days.
@@ -856,36 +848,6 @@ export function generateCareSuggestions(people: Person[], baseDate = new Date())
           });
           personQuestionAdded = true;
           }
-        } else if (
-          (holiday.id === "easterOrthodox" ||
-            holiday.id === "easterWestern" ||
-            holiday.id === "hanukkah" ||
-            holiday.id === "ramadan" ||
-            holiday.id === "eidAlFitr") &&
-          personCulture.length === 0
-        ) {
-          suggestions.push({
-            id: `question_religionCulture_${person.id}_${toIsoDate(holiday.date)}`,
-            type: "question",
-            personId: person.id,
-            title: `Quick question about ${who}`,
-            message: "Choose any that apply.",
-            actionLabel: "",
-            action: { kind: "view", personId: person.id },
-            sortDaysUntil: daysUntil,
-            question: {
-              id: "religionCulture",
-              prompt: `Holidays to remember for ${who}`,
-              options: [
-                { id: "christian", label: "Christian", patch: { religionCulture: ["christian"] } },
-                { id: "orthodox", label: "Orthodox", patch: { religionCulture: ["orthodox"] } },
-                { id: "jewish", label: "Jewish", patch: { religionCulture: ["jewish"] } },
-                { id: "muslim", label: "Muslim", patch: { religionCulture: ["muslim"] } },
-                { id: "none", label: "None", patch: { religionCulture: ["none"] } },
-              ],
-            },
-          });
-          personQuestionAdded = true;
         } else if (holiday.id === "mothersDay" && hasKids && person.holidayPrefs?.mothersDay === undefined) {
           suggestions.push({
             id: `question_mothersDay_${person.id}_${toIsoDate(holiday.date)}`,
@@ -960,7 +922,7 @@ export function generateCareSuggestions(people: Person[], baseDate = new Date())
       const insight =
         holiday.id === "mothersDay" || holiday.id === "fathersDay"
           ? parentInsight(person)
-          : personCulture.length
+          : selectedHolidays.length
             ? `${holiday.label} is often meaningful — a thoughtful message goes a long way.`
             : null;
 

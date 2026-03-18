@@ -32,6 +32,14 @@ export type Child = {
   schoolEvents?: ChildSchoolEvent[];
 };
 
+export type PersonHolidayId =
+  | "christmas"
+  | "easterWestern"
+  | "easterOrthodox"
+  | "hanukkah"
+  | "eidAlFitr"
+  | "diwali";
+
 export type Person = {
   id: string;
   name: string;
@@ -44,8 +52,8 @@ export type Person = {
   anniversary?: string | null; // MM-DD
   hasKids?: boolean;
   parentRole?: "mother" | "father" | "parent";
-  // Holiday traditions to remember (multi-select).
-  // Back-compat note: older records stored this as a single string.
+  selectedHolidays?: PersonHolidayId[];
+  // Legacy fields kept for back-compat with existing local data.
   religionCulture?: Array<"christian" | "orthodox" | "jewish" | "muslim" | "none">;
   religionTag?: string; // legacy free-text
   holidayPrefs?: { mothersDay?: boolean; fathersDay?: boolean };

@@ -33,7 +33,6 @@ import {
   isNativeNotificationsSupported,
   requestReminderNotificationPermission,
   scheduleReminderNotifications,
-  scheduleTestReminderNotification,
 } from "../utils/notificationScheduler";
 
 const headerDateFormatter = new Intl.DateTimeFormat("en-US", {
@@ -1452,22 +1451,13 @@ export default function Home({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleTestNotification() {
-    if (!isNativeNotificationsSupported()) return;
-
-    await configureReminderNotifications();
-    const status = await requestReminderNotificationPermission();
-    if (status?.display !== "granted") return;
-    await scheduleTestReminderNotification();
-  }
-
   return (
     <div style={{ background: "var(--paper)", color: "var(--ink)" }}>
       <div
         style={{
           maxWidth: "920px",
           margin: "0 auto",
-          padding: "32px 16px calc(env(safe-area-inset-bottom, 0px) + 40px) 16px",
+          padding: "32px var(--space-16) calc(env(safe-area-inset-bottom, 0px) + 40px)",
           boxSizing: "border-box",
         }}
       >
@@ -1524,7 +1514,7 @@ export default function Home({
           />
         </header>
 
-        <div style={{ marginTop: "20px", display: "flex", gap: "1rem", alignItems: "baseline" }}>
+        <div style={{ marginTop: "24px", display: "flex", gap: "8px", alignItems: "baseline" }}>
           <button
             onClick={() => setActiveTab("home")}
             style={{
@@ -1577,32 +1567,6 @@ export default function Home({
             Settings
           </button>
         </div>
-
-        {isNativeNotificationsSupported() ? (
-          <div style={{ marginTop: "12px" }}>
-            <button
-              type="button"
-              onClick={() => {
-                void handleTestNotification();
-              }}
-              style={{
-                border: "1px solid var(--border-strong)",
-                background: "transparent",
-                color: "var(--muted)",
-                cursor: "pointer",
-                textAlign: "left",
-                fontWeight: 500,
-                letterSpacing: "0.01em",
-                borderRadius: "12px",
-                padding: "0.65rem 1rem",
-                fontSize: "0.95rem",
-                fontFamily: "var(--font-sans)",
-              }}
-            >
-              Test Notification
-            </button>
-          </div>
-        ) : null}
 
         <div style={{ marginTop: "16px" }}>
           <div className="search-label">Search your contacts</div>
@@ -1706,7 +1670,31 @@ export default function Home({
               </div>
             </div>
           ) : activeTab === "contacts" ? (
-            <section aria-label="Contacts" style={{ marginTop: "18px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
+            <section aria-label="Contacts" style={{ marginTop: "24px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
+              <div style={{ display: "grid", gap: "8px" }}>
+                <button
+                  onClick={() => navigate("/import")}
+                  style={{
+                    border: "1px solid var(--border-strong)",
+                    background: "transparent",
+                    color: "var(--ink)",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    fontWeight: 500,
+                    letterSpacing: "0.01em",
+                    borderRadius: "12px",
+                    padding: "0.65rem 1rem",
+                    fontSize: "0.95rem",
+                    fontFamily: "var(--font-sans)",
+                  }}
+                >
+                  Import Contacts
+                </button>
+                <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
+                  Pull in your phone contacts in seconds — no retyping
+                </div>
+              </div>
+
               {filteredPeople.length === 0 ? (
                 <div style={{ marginTop: "1.5rem" }}>
                   <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>No match found.</div>
@@ -1717,7 +1705,7 @@ export default function Home({
                 </div>
               )}
 
-              <div style={{ marginTop: "2.5rem", display: "grid", gap: "12px" }}>
+              <div style={{ marginTop: "32px", display: "grid", gap: "16px" }}>
                 <button
                   onClick={() => navigate("/add")}
                   style={{
@@ -1736,29 +1724,11 @@ export default function Home({
                 >
                   + Add someone important
                 </button>
-                <button
-                  onClick={() => navigate("/import")}
-                  style={{
-                    border: "1px solid var(--border-strong)",
-                    background: "transparent",
-                    color: "var(--ink)",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    fontWeight: 500,
-                    letterSpacing: "0.01em",
-                    borderRadius: "12px",
-                    padding: "0.65rem 1rem",
-                    fontSize: "0.95rem",
-                    fontFamily: "var(--font-sans)",
-                  }}
-                >
-                  Import from contacts
-                </button>
               </div>
             </section>
           ) : (
             <>
-              <section aria-label="Home" style={{ marginTop: "18px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
+              <section aria-label="Home" style={{ marginTop: "24px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
                 {showNiceStart && people.length === 1 ? (
                   <div
                     style={{
@@ -1800,11 +1770,11 @@ export default function Home({
                   void handleKidsBirthdayPromptYes;
                   void partnerLinkPrompt;
                   const renderPromptGrid = (children: React.ReactNode) => (
-                    <div style={{ display: "grid", gap: "12px", marginBottom: "6px" }}>{children}</div>
+                    <div style={{ display: "grid", gap: "16px" }}>{children}</div>
                   );
 
                   const renderReminderCards = (items: ReminderEvent[], section: "today" | "tomorrow") => (
-                    <div style={{ display: "grid", gap: "12px", marginBottom: "6px" }}>
+                    <div style={{ display: "grid", gap: "16px" }}>
                       {items.map((reminder) => {
                         const reminderId = getReminderId(reminder);
                         const display = buildReminderDisplay(reminder, section);
@@ -1827,12 +1797,12 @@ export default function Home({
                               background: "rgba(255,255,255,0.7)",
                               padding: "16px",
                               display: "grid",
-                              gap: "14px",
+                              gap: "16px",
                               backdropFilter: "blur(6px)",
                               opacity: isCompleted ? 0.72 : 1,
                             }}
                           >
-                            <div style={{ display: "grid", gap: "4px" }}>
+                            <div style={{ display: "grid", gap: "8px" }}>
                               <div style={{ color: "var(--ink)", fontSize: "16px", lineHeight: 1.5, fontWeight: 700 }}>
                                 {display.title}
                               </div>
@@ -1860,7 +1830,7 @@ export default function Home({
                             ) : null}
 
                             {primaryActions.length ? (
-                              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                                 {primaryActions.map((action) =>
                                   action.href ? (
                                     <a
@@ -2002,18 +1972,18 @@ export default function Home({
 
                       {tomorrowReminders.length > 0 ? (
                         <>
-                          <div style={{ ...headerStyle, marginTop: todayReminders.length > 0 ? "22px" : "6px" }}>Tomorrow</div>
+                          <div style={{ ...headerStyle, marginTop: todayReminders.length > 0 ? "24px" : "8px" }}>Tomorrow</div>
                           {renderReminderCards(tomorrowReminders, "tomorrow")}
                         </>
                       ) : null}
 
                       {horizonEntries.length > 0 ? (
                         <>
-                          <div style={{ ...headerStyle, marginTop: todayReminders.length > 0 || tomorrowReminders.length > 0 ? "14px" : "6px" }}>
+                          <div style={{ ...headerStyle, marginTop: todayReminders.length > 0 || tomorrowReminders.length > 0 ? "24px" : "8px" }}>
                             On the Horizon
                           </div>
                           <GoldenSunDivider />
-                          <div style={{ display: "grid", gap: "12px", marginTop: "10px" }}>
+                          <div style={{ display: "grid", gap: "16px", marginTop: "16px" }}>
                             {horizonEntries.map(({ moment, reminder }) => {
                               if (reminder) {
                                 const reminderId = getReminderId(reminder);
@@ -2030,11 +2000,11 @@ export default function Home({
                                       background: "rgba(255,255,255,0.7)",
                                       padding: "16px",
                                       display: "grid",
-                                      gap: "14px",
+                                      gap: "16px",
                                       backdropFilter: "blur(6px)",
                                     }}
                                   >
-                                    <div style={{ display: "grid", gap: "4px" }}>
+                                    <div style={{ display: "grid", gap: "8px" }}>
                                       <div style={{ color: "var(--ink)", fontSize: "16px", lineHeight: 1.5, fontWeight: 700 }}>
                                         {display.title}
                                       </div>
@@ -2062,7 +2032,7 @@ export default function Home({
                                     background: "rgba(255,255,255,0.7)",
                                     padding: "16px",
                                     display: "grid",
-                                    gap: "10px",
+                                    gap: "8px",
                                     backdropFilter: "blur(6px)",
                                   }}
                                 >
@@ -2080,7 +2050,7 @@ export default function Home({
                       ) : null}
 
                       {todayReminders.length === 0 ? (
-                        <div style={{ marginTop: "22px", color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>
+                        <div style={{ marginTop: "24px", color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>
                           You're all caught up today.
                         </div>
                       ) : null}
@@ -2091,8 +2061,8 @@ export default function Home({
 
               <div
                 style={{
-                  marginTop: "4.25rem",
-                  paddingTop: "1.75rem",
+                  marginTop: "32px",
+                  paddingTop: "24px",
                   borderTop: "1px solid var(--border)",
                   maxWidth: "560px",
                   marginLeft: "auto",
@@ -2116,6 +2086,23 @@ export default function Home({
                   }}
                 >
                   + Add someone important
+                </button>
+                <button
+                  onClick={() => navigate("/import")}
+                  style={{
+                    marginTop: "12px",
+                    padding: 0,
+                    border: "none",
+                    background: "none",
+                    color: "var(--muted)",
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                    textUnderlineOffset: "3px",
+                    fontSize: "0.92rem",
+                    fontFamily: "var(--font-sans)",
+                  }}
+                >
+                  Import from your contacts
                 </button>
               </div>
             </>

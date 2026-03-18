@@ -11,6 +11,7 @@ import { getNextBirthdayFromIso } from "../utils/birthdayUtils";
 import { parseLocalDate } from "../utils/date";
 import { filterContacts } from "../utils/contactSearch";
 import { normalizePhone } from "../utils/phone";
+import { getSelectedHolidays, holidayOptionLabel } from "../utils/personHolidays";
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -134,6 +135,8 @@ export default function PersonDetail({}: {}) {
   const { people, relationships, careEvents, updatePerson, upsertRelationship, deletePerson } = useAppState();
   const person = people.find((p) => p.id === id) ?? null;
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [initialChildId, setInitialChildId] = useState<string | null>(null);
+  const [startWithNewChild, setStartWithNewChild] = useState(false);
   const [isAddConnectionOpen, setIsAddConnectionOpen] = useState(false);
   const [connectionType, setConnectionType] = useState<"partner" | "child" | "grandchild" | "familyMember">("child");
   const [connectionName, setConnectionName] = useState("");
@@ -296,8 +299,13 @@ export default function PersonDetail({}: {}) {
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   }, [careEvents, person.id]);
 
-  const religionCulture = Array.isArray(person.religionCulture) ? person.religionCulture : [];
-  const celebratesOther = religionCulture.some((value) => !["christian", "jewish", "muslim"].includes(value));
+  const children = useMemo(() => {
+    return [...(person.children ?? [])].sort((a, b) =>
+      (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" })
+    );
+  }, [person.children]);
+
+  const selectedHolidays = getSelectedHolidays(person);
 
   function formatRelationshipType(type: Relationship["type"]) {
     if (type === "other") return "Family member";
@@ -456,13 +464,32 @@ export default function PersonDetail({}: {}) {
     resetConnectionDraft();
   }
 
+  function openPersonEditor() {
+    setInitialChildId(null);
+    setStartWithNewChild(false);
+    setIsEditOpen(true);
+  }
+
+  function openChildEditor(childId: string) {
+    setInitialChildId(childId);
+    setStartWithNewChild(false);
+    setIsEditOpen(true);
+  }
+
+  function openAddChildEditor() {
+    setInitialChildId(null);
+    setStartWithNewChild(true);
+    setIsAddConnectionOpen(false);
+    setIsEditOpen(true);
+  }
+
   return (
     <div style={{ background: "var(--paper)", color: "var(--ink)", minHeight: "100vh" }}>
       <div
         style={{
           maxWidth: "920px",
           margin: "0 auto",
-          padding: "env(safe-area-inset-top) 16px 16px 16px",
+          padding: "env(safe-area-inset-top) var(--space-16) var(--space-16)",
           boxSizing: "border-box",
           minHeight: "100vh",
         }}
@@ -482,7 +509,7 @@ export default function PersonDetail({}: {}) {
               ← Back
             </button>
             <button
-              onClick={() => setIsEditOpen(true)}
+              onClick={openPersonEditor}
               style={{
                 background: "none",
                 border: "none",
@@ -502,7 +529,7 @@ export default function PersonDetail({}: {}) {
                   width: "100%",
                   background: "var(--paper)",
                   borderRadius: "16px",
-                  padding: "22px",
+                  padding: "16px",
                   boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
                 }}
               >
@@ -525,10 +552,10 @@ export default function PersonDetail({}: {}) {
               </div>
             </section>
 
-            <section aria-label="Important dates" style={{ marginTop: "28px" }}>
+            <section aria-label="Important dates" style={{ marginTop: "32px" }}>
               <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>Important dates</div>
 
-              <div style={{ marginTop: "14px", display: "grid", gap: "16px" }}>
+              <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
                 <div>
                   <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Birthday</div>
                   <div style={{ marginTop: "4px", color: "var(--ink)", fontSize: "1rem" }}>
@@ -567,7 +594,7 @@ export default function PersonDetail({}: {}) {
                     </div>
                   ) : null}
                   <button
-                    onClick={() => setIsEditOpen(true)}
+                    onClick={openPersonEditor}
                     style={{
                       marginTop: "10px",
                       padding: 0,
@@ -586,19 +613,77 @@ export default function PersonDetail({}: {}) {
               </div>
             </section>
 
-            <section aria-label="Connections" style={{ marginTop: "28px" }}>
+            <section aria-label="Children" style={{ marginTop: "32px" }}>
+              <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>Children</div>
+
+              {children.length ? (
+                <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
+                  {children.map((child) => {
+                    const birthday = formatBirthday(
+                      child.birthday ?? child.birthdate ?? undefined,
+                      monthDayFormatter,
+                      fullDateFormatter
+                    );
+
+                    return (
+                      <button
+                        key={child.id}
+                        onClick={() => openChildEditor(child.id)}
+                        style={{
+                          border: "1px solid var(--border)",
+                          borderRadius: "14px",
+                          background: "rgba(255,255,255,0.6)",
+                          padding: "16px",
+                          textAlign: "left",
+                          cursor: "pointer",
+                          color: "var(--ink)",
+                        }}
+                      >
+                        <div style={{ fontWeight: 500 }}>{child.name?.trim() || "Unnamed child"}</div>
+                        <div style={{ marginTop: "4px", color: "var(--muted)", fontSize: "0.95rem" }}>
+                          {birthday || "Add date"}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ marginTop: "16px", color: "var(--muted)", lineHeight: 1.6 }}>
+                  No children added yet.
+                </div>
+              )}
+
+              <button
+                onClick={openAddChildEditor}
+                style={{
+                  marginTop: "16px",
+                  padding: 0,
+                  border: "none",
+                  background: "none",
+                  cursor: "pointer",
+                  color: "var(--ink)",
+                  textDecoration: "underline",
+                  textUnderlineOffset: "3px",
+                  fontSize: "0.95rem",
+                }}
+              >
+                + Add child
+              </button>
+            </section>
+
+            <section aria-label="Connections" style={{ marginTop: "32px" }}>
               <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>
                 Connections
               </div>
 
               {groupedRelatedPeople.length ? (
-                <div style={{ marginTop: "14px", display: "grid", gap: "14px" }}>
+                <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
                   {groupedRelatedPeople.map((group) => (
                     <div key={group.type}>
                       <div style={{ color: "var(--muted)", fontSize: "14px", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.02em" }}>
                         {formatRelationshipType(group.type)}
                       </div>
-                      <div style={{ display: "grid", gap: "10px" }}>
+                      <div style={{ display: "grid", gap: "12px" }}>
                         {group.items.map((item) => (
                           <button
                             key={item.person.id}
@@ -621,13 +706,13 @@ export default function PersonDetail({}: {}) {
                   ))}
                 </div>
               ) : (
-                <div style={{ marginTop: "14px", color: "var(--muted)", lineHeight: 1.6 }}>No connections yet.</div>
+                <div style={{ marginTop: "16px", color: "var(--muted)", lineHeight: 1.6 }}>No connections yet.</div>
               )}
 
               <button
                 onClick={openAddConnection}
                 style={{
-                  marginTop: "14px",
+                  marginTop: "16px",
                   width: "100%",
                   border: "1px solid var(--border-strong)",
                   background: "transparent",
@@ -645,18 +730,18 @@ export default function PersonDetail({}: {}) {
               </button>
             </section>
 
-            <section aria-label="Family timeline" style={{ marginTop: "28px" }}>
+            <section aria-label="Family timeline" style={{ marginTop: "32px" }}>
               <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>Family Timeline</div>
 
               {familyTimeline.length ? (
-                <div style={{ marginTop: "14px", display: "grid", gap: "12px" }}>
+                <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
                   {familyTimeline.map((event) => (
                     <div
                       key={event.id}
                       style={{
                         display: "grid",
-                        gap: "2px",
-                        padding: "12px 14px",
+                        gap: "4px",
+                        padding: "16px",
                         border: "1px solid var(--border)",
                         borderRadius: "14px",
                         background: "rgba(255,255,255,0.6)",
@@ -670,51 +755,48 @@ export default function PersonDetail({}: {}) {
                   ))}
                 </div>
               ) : (
-                <div style={{ marginTop: "14px", color: "var(--muted)", lineHeight: 1.6 }}>
+                <div style={{ marginTop: "16px", color: "var(--muted)", lineHeight: 1.6 }}>
                   No upcoming family moments.
                 </div>
               )}
             </section>
 
-            <section aria-label="Details" style={{ marginTop: "28px" }}>
+            <section aria-label="Details" style={{ marginTop: "32px" }}>
               <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>Details</div>
-              <div style={{ marginTop: "14px", display: "grid", gap: "18px" }}>
+              <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
                 <div>
-                  <div style={{ color: "var(--muted)", fontSize: "0.9rem", marginBottom: "8px" }}>Holidays they celebrate</div>
-                  <div style={{ display: "grid", gap: "0.6rem" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}>
-                      <input type="checkbox" checked={religionCulture.includes("christian")} readOnly />
-                      Christian
-                    </label>
-                    <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}>
-                      <input type="checkbox" checked={religionCulture.includes("jewish")} readOnly />
-                      Jewish
-                    </label>
-                    <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}>
-                      <input type="checkbox" checked={religionCulture.includes("muslim")} readOnly />
-                      Muslim
-                    </label>
-                    <label style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}>
-                      <input type="checkbox" checked={celebratesOther} readOnly />
-                      Other
-                    </label>
-                  </div>
+                  <div style={{ color: "var(--muted)", fontSize: "0.9rem", marginBottom: "8px" }}>Important Holidays</div>
+                  {selectedHolidays.length ? (
+                    <div style={{ display: "grid", gap: "0.6rem" }}>
+                      {selectedHolidays.map((holidayId) => (
+                        <label
+                          key={holidayId}
+                          style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}
+                        >
+                          <input type="checkbox" checked readOnly />
+                          {holidayOptionLabel(holidayId)}
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ color: "var(--muted)", lineHeight: 1.6 }}>No holidays selected.</div>
+                  )}
                 </div>
               </div>
             </section>
 
-            <section aria-label="Care history" style={{ marginTop: "28px" }}>
+            <section aria-label="Care history" style={{ marginTop: "32px" }}>
               <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>Care History</div>
 
               {careHistory.length ? (
-                <div style={{ marginTop: "14px", display: "grid", gap: "12px" }}>
+                <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
                   {careHistory.map((event) => (
                     <div
                       key={event.id}
                       style={{
                         display: "grid",
-                        gap: "2px",
-                        padding: "12px 14px",
+                        gap: "4px",
+                        padding: "16px",
                         border: "1px solid var(--border)",
                         borderRadius: "14px",
                         background: "rgba(255,255,255,0.6)",
@@ -727,7 +809,7 @@ export default function PersonDetail({}: {}) {
                   ))}
                 </div>
               ) : (
-                <div style={{ marginTop: "14px", color: "var(--muted)", lineHeight: 1.6 }}>
+                <div style={{ marginTop: "16px", color: "var(--muted)", lineHeight: 1.6 }}>
                   No interactions recorded yet.
                 </div>
               )}
@@ -942,6 +1024,25 @@ export default function PersonDetail({}: {}) {
                   </>
                 ) : (
                   <>
+                    {connectionType === "child" ? (
+                      <button
+                        onClick={openAddChildEditor}
+                        style={{
+                          padding: 0,
+                          border: "none",
+                          background: "none",
+                          cursor: "pointer",
+                          color: "var(--ink)",
+                          textDecoration: "underline",
+                          textUnderlineOffset: "3px",
+                          fontSize: "0.95rem",
+                          justifySelf: "start",
+                        }}
+                      >
+                        + Create new child
+                      </button>
+                    ) : null}
+
                     <div>
                       <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Choose a contact</div>
                       <input
@@ -1025,9 +1126,17 @@ export default function PersonDetail({}: {}) {
       <PersonEditDrawer
         isOpen={isEditOpen}
         person={person}
-        onClose={() => setIsEditOpen(false)}
+        initialChildId={initialChildId}
+        startWithNewChild={startWithNewChild}
+        onClose={() => {
+          setIsEditOpen(false);
+          setInitialChildId(null);
+          setStartWithNewChild(false);
+        }}
         onSave={(updated) => {
           updatePerson(updated);
+          setInitialChildId(null);
+          setStartWithNewChild(false);
         }}
       />
     </div>

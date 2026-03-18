@@ -6,6 +6,11 @@ import { useAppState } from "../appState";
 import { useLocation, useNavigate } from "../router";
 import { normalizePhone } from "../utils/phone";
 import { parseLocalDate } from "../utils/date";
+import {
+  getSelectedHolidays,
+  PERSON_HOLIDAY_OPTIONS,
+  toggleHolidaySelection,
+} from "../utils/personHolidays";
 
 export default function AddPerson() {
   const navigate = useNavigate();
@@ -37,7 +42,7 @@ export default function AddPerson() {
   const [phoneError, setPhoneError] = useState(false);
   const [hasKids, setHasKids] = useState(false);
   const [parentRole, setParentRole] = useState<Person["parentRole"]>("parent");
-  const [religionCulture, setReligionCulture] = useState<NonNullable<Person["religionCulture"]>>([]);
+  const [selectedHolidays, setSelectedHolidays] = useState<NonNullable<Person["selectedHolidays"]>>([]);
   const [children, setChildren] = useState<Child[]>([]);
   const [childEditingIndex, setChildEditingIndex] = useState<number | null>(null);
   const [childDraftMonthDay, setChildDraftMonthDay] = useState("");
@@ -100,7 +105,7 @@ export default function AddPerson() {
 
     setHasKids(Boolean(editingPerson.hasKids || (editingPerson.children?.length ?? 0) > 0));
     setParentRole(editingPerson.parentRole ?? "parent");
-    setReligionCulture(Array.isArray(editingPerson.religionCulture) ? editingPerson.religionCulture : []);
+    setSelectedHolidays(getSelectedHolidays(editingPerson));
     setChildren(editingPerson.children ?? []);
     setCustomMoments(
       (editingPerson.moments ?? [])
@@ -173,22 +178,8 @@ export default function AddPerson() {
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
-  const firstName = (name.trim().split(" ")[0] || "this person").trim();
-
-  function toggleReligionCulture(value: NonNullable<Person["religionCulture"]>[number]) {
-    setReligionCulture((prev) => {
-      const next = new Set(prev);
-      if (next.has(value)) next.delete(value);
-      else next.add(value);
-
-      if (value === "none") {
-        return next.has("none") ? ["none"] : [];
-      }
-
-      // Selecting anything else clears "none".
-      next.delete("none");
-      return Array.from(next);
-    });
+  function toggleSelectedHoliday(value: NonNullable<Person["selectedHolidays"]>[number]) {
+    setSelectedHolidays((prev) => toggleHolidaySelection(prev, value));
   }
 
   function toDraftFromIso(value: string) {
@@ -314,11 +305,12 @@ export default function AddPerson() {
       anniversary: anniversary || undefined,
       hasKids: hasKids || (children.length ? true : undefined),
       parentRole: hasKids ? parentRole : undefined,
-      religionCulture: religionCulture.length ? religionCulture : undefined,
+      selectedHolidays: selectedHolidays.length ? selectedHolidays : undefined,
       children: hasKids ? children : undefined,
       importantDates: moments.filter((m) => m.type === "custom"),
     };
 
+    console.log("Saved children:", person.children ?? []);
     savePerson({
       person,
       createdPeople,
@@ -1191,7 +1183,7 @@ export default function AddPerson() {
         >
           <div style={{ color: "var(--ink)" }}>Family</div>
           <div style={{ color: "var(--muted)", textAlign: "right" }}>
-            {hasKids ? (children.length ? `${children.length} ${children.length === 1 ? "child" : "children"}` : "Has kids") : "Optional"}
+            {hasKids ? (children.length ? `${children.length} ${children.length === 1 ? "child" : "children"}` : "Has children") : "Optional"}
           </div>
         </div>
 
@@ -1203,7 +1195,7 @@ export default function AddPerson() {
                 checked={hasKids}
                 onChange={(e) => setHasKids(e.target.checked)}
               />
-              Has kids
+              Has children
             </label>
 
             {hasKids ? (
@@ -1362,29 +1354,19 @@ export default function AddPerson() {
               ) : null}
 
             <div style={{ display: "grid", gap: "0.45rem" }}>
-              <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-                Holidays to remember for {firstName}
-              </div>
+              <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Important Holidays</div>
               <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Choose any that apply.</div>
 
               <div style={{ display: "grid", gap: "0.6rem", marginTop: "4px" }}>
-                {(
-                  [
-                    { id: "christian", label: "Christian" },
-                    { id: "orthodox", label: "Orthodox" },
-                    { id: "jewish", label: "Jewish" },
-                    { id: "muslim", label: "Muslim" },
-                    { id: "none", label: "None" },
-                  ] as const
-                ).map((opt) => (
+                {PERSON_HOLIDAY_OPTIONS.map((opt) => (
                   <label
                     key={opt.id}
                     style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}
                   >
                     <input
                       type="checkbox"
-                      checked={religionCulture.includes(opt.id)}
-                      onChange={() => toggleReligionCulture(opt.id)}
+                      checked={selectedHolidays.includes(opt.id)}
+                      onChange={() => toggleSelectedHoliday(opt.id)}
                     />
                     {opt.label}
                   </label>

@@ -1,5 +1,5 @@
 import { Contacts } from "@capacitor-community/contacts";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "../router";
 import { useAppState } from "../appState";
 import type { Person } from "../models/Person";
@@ -275,6 +275,28 @@ export default function ImportContacts() {
 
   const supported = typeof window !== "undefined" && Boolean(getCapacitorContactsPlugin());
 
+  useEffect(() => {
+    if (reviewImportedIds.length || !supported || picked.length || isLoading || mode === "select") return;
+
+    let cancelled = false;
+    setIsLoading(true);
+    void loadContacts()
+      .then((contacts) => {
+        if (cancelled) return;
+        setPicked(contacts);
+        setSelectedKeys(new Set());
+        setMode("select");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoading, mode, picked.length, reviewImportedIds.length, supported]);
+
   async function fetchContactsWithProjection(plugin: any) {
     const result: CapacitorContactsResult = plugin.getContacts
       ? await plugin.getContacts({ projection: CONTACT_PROJECTION })
@@ -335,7 +357,7 @@ export default function ImportContacts() {
         contactsPermission !== "granted" &&
         contactsPermission !== "limited"
       ) {
-        setError("Contacts permission was not granted.");
+        setError("Enable contacts access to import your contacts");
         return [];
       }
 
@@ -372,7 +394,7 @@ export default function ImportContacts() {
       return next;
     } catch (e: any) {
       // User cancelled or permission denied.
-      setError(e?.message ? String(e.message) : "Couldn’t access contacts.");
+      setError(e?.message ? String(e.message) : "Enable contacts access to import your contacts");
       return [];
     }
   }
@@ -817,7 +839,7 @@ export default function ImportContacts() {
             </>
           ) : !supported ? (
             <div style={{ marginTop: "14px", color: "var(--muted)", lineHeight: 1.6 }}>
-              Contacts import is available in the iOS app. You can still add people manually.
+              Contact import is not available on this device yet
             </div>
           ) : (
             <>
@@ -850,6 +872,12 @@ export default function ImportContacts() {
           {error && !reviewImportedIds.length ? (
             <div style={{ marginTop: "12px", color: "var(--muted)", fontSize: "0.95rem" }}>
               {error}
+            </div>
+          ) : null}
+
+          {!reviewImportedIds.length && supported && !isLoading && !error && mode === "select" && sortedPicked.length === 0 ? (
+            <div style={{ marginTop: "12px", color: "var(--muted)", fontSize: "0.95rem" }}>
+              No contacts available to import right now.
             </div>
           ) : null}
 

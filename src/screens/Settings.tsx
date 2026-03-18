@@ -59,7 +59,7 @@ export default function Settings() {
         style={{
           maxWidth: "560px",
           margin: "0 auto",
-          padding: "64px 16px 24px",
+          padding: "64px var(--space-16) var(--space-24)",
           boxSizing: "border-box",
         }}
       >
@@ -81,7 +81,7 @@ export default function Settings() {
 
         <h1
           style={{
-            margin: "18px 0 0",
+            margin: "16px 0 0",
             fontFamily: "var(--font-serif)",
             fontSize: "30px",
             fontWeight: 600,
@@ -97,7 +97,7 @@ export default function Settings() {
             border: "1px solid var(--border)",
             borderRadius: "16px",
             background: "var(--card)",
-            padding: "18px 16px",
+            padding: "16px",
           }}
         >
           <label
@@ -125,7 +125,7 @@ export default function Settings() {
           </div>
           <div
             style={{
-              marginTop: "14px",
+              marginTop: "16px",
               display: "flex",
               justifyContent: "center",
             }}
