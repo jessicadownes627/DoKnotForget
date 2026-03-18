@@ -27,8 +27,8 @@ import { filterContacts } from "../utils/contactSearch";
 import SmartMessageSuggestionsModal from "../components/SmartMessageSuggestionsModal";
 import { parseLocalDate } from "../utils/date";
 import { buildHomeSections } from "../utils/homeSections";
-import { isContactImportSupported } from "../utils/contactImport";
 import {
+  cancelScheduledReminderNotifications,
   cancelScheduledReminderNotificationByReminderId,
   configureReminderNotifications,
   isNativeNotificationsSupported,
@@ -277,7 +277,6 @@ export default function Home({
   const isSettings = location.pathname === "/settings";
   const activeTab: "home" | "contacts" = isContacts ? "contacts" : "home";
   const hasContacts = people.length > 0;
-  const contactImportSupported = isContactImportSupported();
 
   useEffect(() => {
     function refreshToday() {
@@ -552,6 +551,7 @@ export default function Home({
   useEffect(() => {
     if (!isNativeNotificationsSupported()) return;
     if (people.length === 0) return;
+    if (!userSettings.notificationsEnabled) return;
     if (notificationPermissionRequestedRef.current) return;
 
     let cancelled = false;
@@ -570,7 +570,7 @@ export default function Home({
     return () => {
       cancelled = true;
     };
-  }, [people.length]);
+  }, [people.length, userSettings.notificationsEnabled]);
 
   useEffect(() => {
     if (!isNativeNotificationsSupported()) return;
@@ -579,6 +579,10 @@ export default function Home({
 
     async function syncNativeReminderNotifications() {
       await configureReminderNotifications();
+      if (!userSettings.notificationsEnabled) {
+        await cancelScheduledReminderNotifications();
+        return;
+      }
       const permission = await LocalNotifications.checkPermissions();
       if (cancelled || permission.display !== "granted") return;
 
@@ -1593,52 +1597,6 @@ export default function Home({
           </div>
         ) : null}
 
-        {activeTab === "contacts" && contactImportSupported ? (
-          <div
-            style={{
-              marginTop: hasContacts ? "16px" : "64px",
-              display: "grid",
-              gap: "12px",
-              maxWidth: hasContacts ? undefined : "420px",
-              marginLeft: hasContacts ? undefined : "auto",
-              marginRight: hasContacts ? undefined : "auto",
-              justifyItems: hasContacts ? undefined : "center",
-              textAlign: hasContacts ? "left" : "center",
-            }}
-          >
-            <button
-              onClick={() => navigate("/import")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: hasContacts ? "flex-start" : "center",
-                gap: "10px",
-                width: hasContacts ? undefined : "100%",
-                border: "1px solid var(--border-strong)",
-                background: hasContacts ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.92)",
-                color: "var(--ink)",
-                cursor: "pointer",
-                textAlign: hasContacts ? "left" : "center",
-                fontWeight: 650,
-                letterSpacing: "0.01em",
-                borderRadius: "14px",
-                padding: "0.85rem 1rem",
-                fontSize: "0.98rem",
-                fontFamily: "var(--font-sans)",
-                boxShadow: "0 6px 18px rgba(27,42,65,0.08)",
-              }}
-            >
-              <span aria-hidden="true" style={{ fontSize: "1.05rem", lineHeight: 1 }}>
-                ↓
-              </span>
-              <span>Import from Phone Contacts</span>
-            </button>
-            <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
-              Pull in your phone contacts in seconds — no retyping
-            </div>
-          </div>
-        ) : null}
-
         {activeTab === "contacts" && isSearching ? (
           <div style={{ marginTop: "10px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
             <ContactsSearchResults
@@ -1687,26 +1645,6 @@ export default function Home({
 	                >
 	                  + Add someone
 	                </button>
-                  {contactImportSupported ? (
-	                <button
-	                  onClick={() => navigate("/import")}
-	                  style={{
-	                    border: "1px solid var(--border-strong)",
-	                    background: "transparent",
-	                    color: "var(--ink)",
-                    cursor: "pointer",
-                    textAlign: "center",
-                    fontWeight: 500,
-                    letterSpacing: "0.01em",
-                    borderRadius: "12px",
-                    padding: "0.75rem 1.15rem",
-	                    fontSize: "1rem",
-	                    fontFamily: "var(--font-sans)",
-	                  }}
-	                >
-	                  Import Contacts
-	                </button>
-                  ) : null}
                 {import.meta.env.DEV ? (
                   <button
                     onClick={seedDevData}
@@ -1832,6 +1770,7 @@ export default function Home({
                               borderRadius: "16px",
                               background: "rgba(255,255,255,0.7)",
                               padding: "16px",
+                              overflow: "hidden",
                               display: "grid",
                               gap: "16px",
                               backdropFilter: "blur(6px)",
@@ -1913,6 +1852,7 @@ export default function Home({
                                         boxShadow: "none",
                                         textDecoration: "none",
                                         width: section === "today" ? "100%" : undefined,
+                                        boxSizing: "border-box",
                                         opacity: "disabled" in action && action.disabled ? 0.5 : 1,
                                         pointerEvents: "disabled" in action && action.disabled ? "none" : undefined,
                                       }}
@@ -1931,6 +1871,7 @@ export default function Home({
                                         padding: "0.75rem 1rem",
                                         fontSize: "1rem",
                                         width: section === "today" ? "100%" : undefined,
+                                        boxSizing: "border-box",
                                       }}
                                     >
                                       {action.label}
@@ -2125,27 +2066,6 @@ export default function Home({
                 >
                   + Add someone important
                 </button>
-                {contactImportSupported ? (
-                  <button
-                    onClick={() => navigate("/import")}
-                    style={{
-                      marginTop: "16px",
-                      border: "1px solid var(--border-strong)",
-                      background: "transparent",
-                      color: "var(--ink)",
-                      cursor: "pointer",
-                      textAlign: "left",
-                      fontWeight: 500,
-                      letterSpacing: "0.01em",
-                      borderRadius: "12px",
-                      padding: "0.65rem 1rem",
-                      fontSize: "0.95rem",
-                      fontFamily: "var(--font-sans)",
-                    }}
-                  >
-                    Import Contacts
-                  </button>
-                ) : null}
               </div>
             </>
           )}

@@ -272,6 +272,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       updateUserSettings: (patch: Partial<UserSettings>) => {
         setUserSettings((prev) => {
           const next = normalizeUserSettings({
+            notificationsEnabled:
+              typeof patch.notificationsEnabled === "boolean" ? patch.notificationsEnabled : prev.notificationsEnabled,
             reminderHour:
               typeof patch.reminderHour === "number" ? patch.reminderHour : prev.reminderHour,
             reminderMinute:

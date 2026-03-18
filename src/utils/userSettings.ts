@@ -1,9 +1,11 @@
 export type UserSettings = {
+  notificationsEnabled: boolean;
   reminderHour: number;
   reminderMinute: number;
 };
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
+  notificationsEnabled: true,
   reminderHour: 9,
   reminderMinute: 0,
 };
@@ -15,6 +17,11 @@ function clamp(value: number, min: number, max: number) {
 }
 
 export function normalizeUserSettings(value: Partial<UserSettings> | null | undefined): UserSettings {
+  const notificationsEnabled =
+    typeof value?.notificationsEnabled === "boolean"
+      ? value.notificationsEnabled
+      : DEFAULT_USER_SETTINGS.notificationsEnabled;
+
   const reminderHour =
     typeof value?.reminderHour === "number" && Number.isFinite(value.reminderHour)
       ? clamp(Math.floor(value.reminderHour), 0, 23)
@@ -26,6 +33,7 @@ export function normalizeUserSettings(value: Partial<UserSettings> | null | unde
       : DEFAULT_USER_SETTINGS.reminderMinute;
 
   return {
+    notificationsEnabled,
     reminderHour,
     reminderMinute,
   };

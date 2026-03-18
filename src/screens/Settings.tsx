@@ -59,6 +59,7 @@ export default function Settings() {
     if (!Number.isInteger(nextHour) || !Number.isInteger(nextMinute)) return;
 
     const nextSettings = {
+      notificationsEnabled: userSettings.notificationsEnabled,
       reminderHour: nextHour,
       reminderMinute: nextMinute,
     };
@@ -75,6 +76,42 @@ export default function Settings() {
     const reminders = getUpcomingReminders(people, startOfToday());
     await cancelScheduledReminderNotifications();
     await scheduleReminderNotifications(reminders, new Date(), nextSettings);
+  }
+
+  async function handleNotificationsToggle(enabled: boolean) {
+    updateUserSettings({ notificationsEnabled: enabled });
+
+    if (!isNativeNotificationsSupported()) {
+      setNotificationStatus(enabled ? "on" : "off");
+      return;
+    }
+
+    await configureReminderNotifications();
+
+    if (!enabled) {
+      await cancelScheduledReminderNotifications();
+      setNotificationStatus("off");
+      return;
+    }
+
+    const permission = await LocalNotifications.checkPermissions();
+    if (permission.display !== "granted") {
+      const requested = await LocalNotifications.requestPermissions();
+      setNotificationStatus(requested.display === "granted" ? "on" : "off");
+      if (requested.display !== "granted") {
+        updateUserSettings({ notificationsEnabled: false });
+        return;
+      }
+    } else {
+      setNotificationStatus("on");
+    }
+
+    const reminders = getUpcomingReminders(people, startOfToday());
+    await cancelScheduledReminderNotifications();
+    await scheduleReminderNotifications(reminders, new Date(), {
+      ...userSettings,
+      notificationsEnabled: true,
+    });
   }
 
   return (
@@ -124,6 +161,73 @@ export default function Settings() {
             padding: "16px",
           }}
         >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "16px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "1rem",
+                fontWeight: 600,
+                color: "var(--ink)",
+                fontFamily: "var(--font-sans)",
+              }}
+            >
+              Notifications
+            </div>
+            <label
+              style={{
+                position: "relative",
+                display: "inline-flex",
+                alignItems: "center",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={userSettings.notificationsEnabled}
+                onChange={(event) => {
+                  void handleNotificationsToggle(event.target.checked);
+                }}
+                style={{
+                  position: "absolute",
+                  opacity: 0,
+                  width: 0,
+                  height: 0,
+                }}
+              />
+              <span
+                aria-hidden="true"
+                style={{
+                  width: "48px",
+                  height: "30px",
+                  borderRadius: "999px",
+                  background: userSettings.notificationsEnabled ? "var(--ink)" : "rgba(27,42,65,0.18)",
+                  position: "relative",
+                  transition: "background 160ms ease",
+                  boxShadow: "inset 0 1px 2px rgba(0,0,0,0.08)",
+                }}
+              >
+                <span
+                  style={{
+                    position: "absolute",
+                    top: "3px",
+                    left: userSettings.notificationsEnabled ? "21px" : "3px",
+                    width: "24px",
+                    height: "24px",
+                    borderRadius: "999px",
+                    background: "#fff",
+                    transition: "left 160ms ease",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
+                  }}
+                />
+              </span>
+            </label>
+          </div>
           <label
             htmlFor="reminder-time"
             style={{
@@ -132,6 +236,7 @@ export default function Settings() {
               fontWeight: 600,
               color: "var(--ink)",
               fontFamily: "var(--font-sans)",
+              marginTop: "16px",
             }}
           >
             Reminder Time
@@ -169,6 +274,7 @@ export default function Settings() {
               id="reminder-time"
               type="time"
               value={reminderTimeValue}
+              disabled={!userSettings.notificationsEnabled}
               onChange={(event) => {
                 void handleReminderTimeChange(event.target.value);
               }}
@@ -185,6 +291,8 @@ export default function Settings() {
                 textAlign: "center",
                 boxSizing: "border-box",
                 boxShadow: "inset 0 1px 0 rgba(255,255,255,0.55)",
+                opacity: userSettings.notificationsEnabled ? 1 : 0.5,
+                cursor: userSettings.notificationsEnabled ? "pointer" : "not-allowed",
               }}
             />
           </div>
