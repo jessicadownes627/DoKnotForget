@@ -28,12 +28,8 @@ import SmartMessageSuggestionsModal from "../components/SmartMessageSuggestionsM
 import { parseLocalDate } from "../utils/date";
 import { buildHomeSections } from "../utils/homeSections";
 import {
-  cancelScheduledReminderNotifications,
   cancelScheduledReminderNotificationByReminderId,
-  configureReminderNotifications,
   isNativeNotificationsSupported,
-  requestReminderNotificationPermission,
-  scheduleReminderNotifications,
 } from "../utils/notificationScheduler";
 
 const headerDateFormatter = new Intl.DateTimeFormat("en-US", {
@@ -234,7 +230,7 @@ export default function Home({
 }: {}) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { people, updatePerson, updatePersonFields, createPerson, recordCareEvent, userSettings } = useAppState();
+  const { people, updatePerson, updatePersonFields, createPerson, recordCareEvent } = useAppState();
   const [searchTerm, setSearchTerm] = useState("");
   const [questionTick, setQuestionTick] = useState(0);
   const [shouldPulseBow, setShouldPulseBow] = useState(false);
@@ -269,8 +265,6 @@ export default function Home({
     onAfterSend?: () => void;
   }>(null);
   const previousPeopleCountRef = useRef<number>(people.length);
-  const notificationPermissionRequestedRef = useRef(false);
-
   const [today, setToday] = useState(() => startOfToday());
   const isHome = location.pathname === "/" || location.pathname === "/home";
   const isContacts = location.pathname === "/contacts";
@@ -547,54 +541,6 @@ export default function Home({
       cancelled = true;
     };
   }, [activeTab, people, today]);
-
-  useEffect(() => {
-    if (!isNativeNotificationsSupported()) return;
-    if (people.length === 0) return;
-    if (!userSettings.notificationsEnabled) return;
-    if (notificationPermissionRequestedRef.current) return;
-
-    let cancelled = false;
-
-    async function ensureNotificationPermission() {
-      await configureReminderNotifications();
-      const status = await requestReminderNotificationPermission();
-      if (cancelled || !status) return;
-      if (status.display === "granted" || status.display === "denied") {
-        notificationPermissionRequestedRef.current = true;
-      }
-    }
-
-    void ensureNotificationPermission();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [people.length, userSettings.notificationsEnabled]);
-
-  useEffect(() => {
-    if (!isNativeNotificationsSupported()) return;
-
-    let cancelled = false;
-
-    async function syncNativeReminderNotifications() {
-      await configureReminderNotifications();
-      if (!userSettings.notificationsEnabled) {
-        await cancelScheduledReminderNotifications();
-        return;
-      }
-      const permission = await LocalNotifications.checkPermissions();
-      if (cancelled || permission.display !== "granted") return;
-
-      await scheduleReminderNotifications(reminders, new Date(), userSettings);
-    }
-
-    void syncNativeReminderNotifications();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [reminders, people, today, userSettings]);
 
   useEffect(() => {
     if (!isNativeNotificationsSupported()) return;

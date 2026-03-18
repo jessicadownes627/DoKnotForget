@@ -57,6 +57,7 @@ export default function Settings() {
     const nextMinute = Number(minuteValue);
 
     if (!Number.isInteger(nextHour) || !Number.isInteger(nextMinute)) return;
+    if (nextHour === userSettings.reminderHour && nextMinute === userSettings.reminderMinute) return;
 
     const nextSettings = {
       notificationsEnabled: userSettings.notificationsEnabled,
@@ -74,7 +75,6 @@ export default function Settings() {
     if (permission.display !== "granted") return;
 
     const reminders = getUpcomingReminders(people, startOfToday());
-    await cancelScheduledReminderNotifications();
     await scheduleReminderNotifications(reminders, new Date(), nextSettings);
   }
 
@@ -107,7 +107,6 @@ export default function Settings() {
     }
 
     const reminders = getUpcomingReminders(people, startOfToday());
-    await cancelScheduledReminderNotifications();
     await scheduleReminderNotifications(reminders, new Date(), {
       ...userSettings,
       notificationsEnabled: true,

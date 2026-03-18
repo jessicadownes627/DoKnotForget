@@ -14,6 +14,7 @@ import { DEFAULT_USER_SETTINGS, type UserSettings } from "./userSettings";
 const REMINDER_NOTIFICATION_SOURCE = "dkf-reminder";
 const TEST_NOTIFICATION_SOURCE = "dkf-test-reminder";
 const HANDLED_REMINDER_ACTIONS_STORAGE_KEY = "doknotforget_handled_reminder_actions_v1";
+const SCHEDULED_REMINDER_SIGNATURE_STORAGE_KEY = "doknotforget_scheduled_reminder_signature_v1";
 export const REMINDER_NOTIFICATION_CATEGORY = "reminder";
 const REMINDER_NOTIFICATION_CHANNEL: Channel = {
   id: REMINDER_NOTIFICATION_CATEGORY,
@@ -202,6 +203,11 @@ export async function cancelScheduledReminderNotifications(reminders?: ReminderE
 
   if (!notifications.length) return;
   await LocalNotifications.cancel({ notifications });
+  try {
+    window.localStorage.removeItem(SCHEDULED_REMINDER_SIGNATURE_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
 }
 
 export async function cancelScheduledReminderNotificationByReminderId(reminderId: string) {
@@ -221,19 +227,40 @@ export async function scheduleReminderNotifications(
 ) {
   if (!isNativeNotificationsSupported()) return;
 
-  const pending = await LocalNotifications.getPending();
-  const existingIds = new Set(pending.notifications.map((notification) => notification.id));
-
   const notifications = reminders
     .flatMap((reminder) => [
       buildReminderNotification(reminder, now, userSettings),
       buildReminderNudgeNotification(reminder, userSettings),
     ])
-    .filter((notification): notification is LocalNotificationSchema => Boolean(notification));
-  const unscheduledNotifications = notifications.filter((notification) => !existingIds.has(notification.id));
+    .filter((notification): notification is LocalNotificationSchema => Boolean(notification))
+    .sort((left, right) => {
+      const leftAt = left.schedule?.at instanceof Date ? left.schedule.at.getTime() : Number.MAX_SAFE_INTEGER;
+      const rightAt = right.schedule?.at instanceof Date ? right.schedule.at.getTime() : Number.MAX_SAFE_INTEGER;
+      return leftAt - rightAt;
+    });
 
-  if (!unscheduledNotifications.length) return;
-  await LocalNotifications.schedule({ notifications: unscheduledNotifications });
+  const nextNotification = notifications[0] ?? null;
+  if (!nextNotification) {
+    await cancelScheduledReminderNotifications();
+    return;
+  }
+
+  const scheduledAt = nextNotification.schedule?.at instanceof Date ? nextNotification.schedule.at.toISOString() : "";
+  const signature = `${nextNotification.id}:${scheduledAt}`;
+  try {
+    const existingSignature = window.localStorage.getItem(SCHEDULED_REMINDER_SIGNATURE_STORAGE_KEY);
+    if (existingSignature === signature) return;
+  } catch {
+    // ignore
+  }
+
+  await cancelScheduledReminderNotifications();
+  await LocalNotifications.schedule({ notifications: [nextNotification] });
+  try {
+    window.localStorage.setItem(SCHEDULED_REMINDER_SIGNATURE_STORAGE_KEY, signature);
+  } catch {
+    // ignore
+  }
 }
 
 export async function scheduleTestReminderNotification() {
