@@ -8,7 +8,7 @@ import {
 } from "@capacitor/local-notifications";
 import type { ReminderEvent } from "../engine/reminderEngine";
 import { getReminderId, hasReminderFired } from "../engine/reminderRegistry";
-import { parseLocalDate } from "./date";
+import { formatLocalYmd, parseLocalDate } from "./date";
 import { DEFAULT_USER_SETTINGS, type UserSettings } from "./userSettings";
 
 const REMINDER_NOTIFICATION_SOURCE = "dkf-reminder";
@@ -93,6 +93,16 @@ export function buildReminderNotification(
   );
 
   const effectiveAt = scheduledAt <= now ? new Date(now.getTime() + 5000) : scheduledAt;
+  // eslint-disable-next-line no-console
+  console.log("[DKF DEBUG] Build reminder notification", {
+    todayLocal: formatLocalYmd(now),
+    personId: reminder.personId,
+    personName: reminder.personName,
+    birthdayEventDateLocal: reminder.eventDate,
+    reminderTriggerDateLocal: reminder.triggerDate || reminder.date,
+    handledKey: getReminderId(reminder),
+    scheduledForLocal: formatLocalYmd(effectiveAt),
+  });
   return {
     id: getReminderNotificationId(reminder),
     title: reminder.label,
@@ -255,6 +265,16 @@ export async function scheduleReminderNotifications(
   }
 
   await cancelScheduledReminderNotifications();
+  // eslint-disable-next-line no-console
+  console.log("[DKF DEBUG] Schedule reminder notification", {
+    todayLocal: formatLocalYmd(now),
+    notificationId: nextNotification.id,
+    scheduledForLocal:
+      nextNotification.schedule?.at instanceof Date ? formatLocalYmd(nextNotification.schedule.at) : "",
+    reminderId: nextNotification.extra?.reminderId ?? "",
+    eventDateLocal: nextNotification.extra?.eventDate ?? "",
+    triggerDateLocal: nextNotification.extra?.triggerDate ?? "",
+  });
   await LocalNotifications.schedule({ notifications: [nextNotification] });
   try {
     window.localStorage.setItem(SCHEDULED_REMINDER_SIGNATURE_STORAGE_KEY, signature);

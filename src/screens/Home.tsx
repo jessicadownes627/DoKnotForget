@@ -25,7 +25,7 @@ import GoldenSunDivider from "../components/GoldenSunDivider";
 import ContactsSearchResults from "../components/ContactsSearchResults";
 import { filterContacts } from "../utils/contactSearch";
 import SmartMessageSuggestionsModal from "../components/SmartMessageSuggestionsModal";
-import { parseLocalDate } from "../utils/date";
+import { formatLocalYmd, parseLocalDate } from "../utils/date";
 import { buildHomeSections } from "../utils/homeSections";
 import {
   cancelScheduledReminderNotificationByReminderId,
@@ -370,11 +370,6 @@ export default function Home({
     }
   }
 
-  function seedDevData() {
-    if (!import.meta.env.DEV) return;
-    seedDemoData();
-  }
-
   useEffect(() => {
     if (!window.location.search.includes("demo=true")) return;
     if (people.length > 0) return;
@@ -476,6 +471,28 @@ export default function Home({
       }),
     [activeReminders, dismissedHorizonKeys, handledReminderActions, reminders, today, upcomingMoments]
   );
+
+  useEffect(() => {
+    if (activeTab !== "home") return;
+
+    const todayLocal = formatLocalYmd(today);
+    reminders
+      .filter((reminder) => reminder.momentType === "birthday" || reminder.momentType === "childBirthday")
+      .forEach((reminder) => {
+        const handledKey = getReminderId(reminder);
+        // eslint-disable-next-line no-console
+        console.log("[DKF DEBUG] Reminder date audit", {
+          todayLocal,
+          reminderType: reminder.reminderType,
+          personId: reminder.personId,
+          personName: reminder.personName,
+          birthdayEventDateLocal: reminder.eventDate,
+          reminderTriggerDateLocal: reminder.date,
+          handledKey,
+          isHandled: handledReminderActions[handledKey] === true,
+        });
+      });
+  }, [activeTab, handledReminderActions, reminders, today]);
 
   useEffect(() => {
     if (activeTab !== "home") return;
@@ -676,8 +693,10 @@ export default function Home({
     let title = display.label;
     if (section === "today" && reminder.reminderType === "oneDay") {
       title = `Tomorrow: ${stripRelativeSuffix(display.label, "tomorrow")}`;
+    } else if (section === "today" && reminder.reminderType === "sevenDay") {
+      title = `Coming up: ${display.label.replace(/ in 7 days$/, "")}`;
     } else if (section === "tomorrow" && reminder.reminderType === "dayOf") {
-      title = stripRelativeSuffix(display.label, "today");
+      title = `Today: ${stripRelativeSuffix(display.label, "today")}${reminder.momentType === "birthday" ? " 🎂" : ""}`;
     } else if (section === "horizon") {
       title =
         reminder.momentType === "childBirthday"
@@ -703,8 +722,24 @@ export default function Home({
     };
   }
 
+  function completedReminderMessage(reminder: ReminderEvent) {
+    if (reminder.reminderType === "dayOf") return "✓ You reached out today";
+    if (reminder.reminderType === "oneDay") return "✓ You're all set for tomorrow";
+    return "✓ You're all set ahead of time";
+  }
+
   function markReminderHandled(reminder: ReminderEvent) {
     const reminderId = getReminderId(reminder);
+    // eslint-disable-next-line no-console
+    console.log("[DKF DEBUG] Mark reminder handled", {
+      todayLocal: formatLocalYmd(today),
+      reminderType: reminder.reminderType,
+      personId: reminder.personId,
+      personName: reminder.personName,
+      birthdayEventDateLocal: reminder.eventDate,
+      reminderTriggerDateLocal: reminder.date,
+      handledKey: reminderId,
+    });
     markReminderFired(reminderId);
     void cancelScheduledReminderNotificationByReminderId(reminderId);
     setHandledReminderActions((prev) => {
@@ -730,7 +765,7 @@ export default function Home({
         ...(person.giftHistory ?? []),
         {
           type,
-          date: timestamp.slice(0, 10),
+          date: formatLocalYmd(new Date()),
           timestamp,
         },
       ],
@@ -1561,18 +1596,49 @@ export default function Home({
 	                marginLeft: "auto",
 	                marginRight: "auto",
 	                display: "grid",
-	                gap: "16px",
+	                gap: "20px",
 	                justifyItems: "center",
 	                textAlign: "center",
 	              }}
 	            >
-	              <div style={{ fontSize: "28px", fontWeight: 600, color: "var(--ink)", letterSpacing: "-0.02em" }}>
-	                Start by adding someone important
+	              <div
+	                className="dkf-onboard-headline"
+	                style={{
+	                  maxWidth: "500px",
+	                  fontSize: "34px",
+	                  lineHeight: 1.15,
+	                  fontWeight: 600,
+	                  color: "var(--ink)",
+	                  letterSpacing: "-0.03em",
+	                  fontFamily: "var(--font-serif)",
+	                }}
+	              >
+	                For the people you never want to forget
 	              </div>
-	              <div style={{ maxWidth: "460px", color: "var(--muted)", lineHeight: 1.6, fontSize: "1rem" }}>
-	                We’ll remind you about birthdays, anniversaries, and the moments that matter.
+	              <div
+	                className="dkf-onboard-copy dkf-onboard-copy-delay-1"
+	                style={{
+	                  maxWidth: "460px",
+	                  color: "var(--ink)",
+	                  lineHeight: 1.55,
+	                  fontSize: "1.2rem",
+	                  fontWeight: 500,
+	                }}
+	              >
+	                Because the people you love deserve to feel remembered.
 	              </div>
-	              <div style={{ marginTop: "1.5rem", display: "grid", gap: "12px" }}>
+	              <div
+	                className="dkf-onboard-copy dkf-onboard-copy-delay-2"
+	                style={{
+	                  maxWidth: "440px",
+	                  color: "var(--muted)",
+	                  lineHeight: 1.6,
+	                  fontSize: "1rem",
+	                }}
+	              >
+	                We’ll remind you about birthdays, holidays, and the moments that matter.
+	              </div>
+	              <div className="dkf-onboard-cta" style={{ marginTop: "1.75rem", display: "grid", gap: "12px" }}>
 	                <button
 	                  onClick={() => navigate("/add")}
 	                  style={{
@@ -1589,30 +1655,10 @@ export default function Home({
 	                    fontFamily: "var(--font-sans)",
 	                  }}
 	                >
-	                  + Add someone
+	                  + Add someone important
 	                </button>
-                {import.meta.env.DEV ? (
-                  <button
-                    onClick={seedDevData}
-                    style={{
-                      border: "1px solid var(--border-strong)",
-                      background: "transparent",
-                      color: "var(--muted)",
-                      cursor: "pointer",
-                      textAlign: "left",
-                      fontWeight: 500,
-                      letterSpacing: "0.01em",
-                      borderRadius: "12px",
-                      padding: "0.75rem 1.15rem",
-                      fontSize: "1rem",
-                      fontFamily: "var(--font-sans)",
-                    }}
-                  >
-                    Seed demo data
-                  </button>
-                ) : null}
-              </div>
-            </div>
+	              </div>
+	            </div>
           ) : activeTab === "contacts" ? (
             <section aria-label="Contacts" style={{ marginTop: "24px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
               {filteredPeople.length === 0 ? (
@@ -1746,7 +1792,7 @@ export default function Home({
                                   fontWeight: 600,
                                 }}
                               >
-                                ✓ You took care of this
+                                {completedReminderMessage(reminder)}
                               </div>
                             ) : null}
 

@@ -377,6 +377,74 @@ select {
   transform-origin: bottom center;
 }
 
+.dkf-onboard-headline,
+.dkf-onboard-copy,
+.dkf-onboard-cta {
+  opacity: 0;
+  animation-fill-mode: both;
+  animation-iteration-count: 1;
+}
+
+.dkf-onboard-headline {
+  animation-name: dkfOnboardHeadline;
+  animation-duration: 620ms;
+  animation-timing-function: ease-out;
+}
+
+.dkf-onboard-copy {
+  animation-name: dkfOnboardCopy;
+  animation-duration: 560ms;
+  animation-timing-function: ease-out;
+}
+
+.dkf-onboard-copy-delay-1 {
+  animation-delay: 120ms;
+}
+
+.dkf-onboard-copy-delay-2 {
+  animation-delay: 240ms;
+}
+
+.dkf-onboard-cta {
+  animation-name: dkfOnboardCta;
+  animation-duration: 560ms;
+  animation-delay: 340ms;
+  animation-timing-function: ease-out;
+}
+
+@keyframes dkfOnboardHeadline {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dkfOnboardCopy {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dkfOnboardCta {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .search-label {
   font-size: 14px;
   font-weight: 500;
