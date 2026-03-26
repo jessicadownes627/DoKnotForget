@@ -8,6 +8,7 @@ import { useLocation, useNavigate } from "../router";
 import { normalizePhone } from "../utils/phone";
 import { parseLocalDate } from "../utils/date";
 import { getSelectedHolidays } from "../utils/personHolidays";
+import { wouldExceedFreePeopleLimit } from "../utils/freeLimit";
 
 export default function AddPerson() {
   const navigate = useNavigate();
@@ -238,6 +239,17 @@ export default function AddPerson() {
       children: editingPerson?.children,
       importantDates: moments.filter((m) => m.type === "custom"),
     };
+
+    if (!editingPerson && wouldExceedFreePeopleLimit(people, [person])) {
+      navigate("/paywall", {
+        state: {
+          fallbackPath: "/home",
+          source: "people-limit",
+        },
+      });
+      return;
+    }
+
     savePerson({
       person,
       createdPeople,

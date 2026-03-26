@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "../router";
 export default function Paywall() {
   const navigate = useNavigate();
   const location = useLocation();
+  const isPeopleLimitPaywall = location.state?.source === "people-limit";
 
   function continueFree() {
     const fallbackPath =
@@ -72,17 +73,29 @@ export default function Paywall() {
                 letterSpacing: "-0.03em",
               }}
             >
-              Show up for everyone who matters
+              {isPeopleLimitPaywall ? "Keep this going" : "Show up for everyone who matters"}
             </h1>
             <div style={{ color: "var(--muted)", fontSize: "1rem", lineHeight: 1.6 }}>
-              Keep everything in one place. Never miss a moment.
+              {isPeopleLimitPaywall
+                ? "We’ll help you stay on top of the people who matter — without having to think about it."
+                : "Keep everything in one place. Never miss a moment."}
             </div>
           </div>
 
           <div style={{ display: "grid", gap: "10px", color: "var(--ink)", fontSize: "0.98rem", lineHeight: 1.55 }}>
-            <div>• Import your contacts in seconds</div>
-            <div>• Keep track of everyone who matters</div>
-            <div>• Always know the right moment to reach out</div>
+            {isPeopleLimitPaywall ? (
+              <>
+                <div>• Never miss important dates</div>
+                <div>• Keep track of the people in your life</div>
+                <div>• Stay one step ahead, quietly</div>
+              </>
+            ) : (
+              <>
+                <div>• Import your contacts in seconds</div>
+                <div>• Keep track of everyone who matters</div>
+                <div>• Always know the right moment to reach out</div>
+              </>
+            )}
           </div>
 
           <div
@@ -109,7 +122,7 @@ export default function Paywall() {
                 fontSize: "1rem",
               }}
             >
-              Upgrade
+              {isPeopleLimitPaywall ? "Unlock your full list" : "Upgrade"}
             </button>
             <button
               type="button"
@@ -121,7 +134,7 @@ export default function Paywall() {
                 background: "transparent",
               }}
             >
-              Continue free
+              {isPeopleLimitPaywall ? "Not now" : "Continue free"}
             </button>
           </div>
 

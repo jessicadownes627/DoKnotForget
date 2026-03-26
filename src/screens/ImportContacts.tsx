@@ -8,6 +8,7 @@ import {
   loadImportableContacts,
   type ImportableContact,
 } from "../utils/contactImport";
+import { wouldExceedFreePeopleLimit } from "../utils/freeLimit";
 
 const INITIAL_VISIBLE_CONTACTS = 80;
 const VISIBLE_CONTACTS_STEP = 80;
@@ -31,7 +32,7 @@ function firstName(value: string) {
 
 export default function ImportContacts() {
   const navigate = useNavigate();
-  const { createPeople, markOnboardingComplete } = useAppState();
+  const { people, createPeople, markOnboardingComplete } = useAppState();
 
   const [step, setStep] = useState<"entry" | "select" | "done">("entry");
   const [contacts, setContacts] = useState<ImportableContact[]>([]);
@@ -114,6 +115,16 @@ export default function ImportContacts() {
 
   function finishImport(items: ImportableContact[]) {
     const importedPeople = items.map(importableContactToPerson);
+    if (wouldExceedFreePeopleLimit(people, importedPeople)) {
+      navigate("/paywall", {
+        state: {
+          fallbackPath: "/import",
+          source: "people-limit",
+        },
+      });
+      return;
+    }
+
     createPeople(importedPeople);
     markOnboardingComplete();
     setImportedIds(importedPeople.map((person) => person.id));
