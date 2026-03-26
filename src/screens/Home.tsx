@@ -1877,11 +1877,11 @@ export default function Home({
 	              >
 	                We’ll remind you about birthdays, holidays, and the moments that matter.
 	              </div>
-	              <div className="dkf-onboard-cta" style={{ marginTop: "1.75rem", display: "grid", gap: "12px" }}>
-	                <button
-	                  onClick={() => navigate("/add")}
-	                  style={{
-	                    border: "1px solid var(--border-strong)",
+		              <div className="dkf-onboard-cta" style={{ marginTop: "1.75rem", display: "grid", gap: "12px" }}>
+		                <button
+		                  onClick={() => navigate("/add")}
+		                  style={{
+		                    border: "1px solid var(--border-strong)",
 	                    background: "transparent",
 	                    color: "var(--ink)",
                     cursor: "pointer",
@@ -1893,11 +1893,29 @@ export default function Home({
 	                    fontSize: "1rem",
 	                    fontFamily: "var(--font-sans)",
 	                  }}
-	                >
-	                  + Add someone important
-	                </button>
-	              </div>
-	            </div>
+		                >
+		                  + Add someone important
+		                </button>
+		                <button
+		                  onClick={() => navigate("/import")}
+		                  style={{
+		                    border: "1px solid var(--border)",
+		                    background: "transparent",
+		                    color: "var(--muted)",
+                    cursor: "pointer",
+                    textAlign: "center",
+                    fontWeight: 400,
+                    letterSpacing: "0.01em",
+                    borderRadius: "12px",
+                    padding: "0.75rem 1.15rem",
+		                    fontSize: "1rem",
+		                    fontFamily: "var(--font-sans)",
+		                  }}
+		                >
+		                  Import from contacts
+		                </button>
+		              </div>
+		            </div>
           ) : activeTab === "contacts" ? (
             <section aria-label="Contacts" style={{ marginTop: "24px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
               {filteredPeople.length === 0 ? (
