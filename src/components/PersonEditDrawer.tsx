@@ -7,6 +7,7 @@ import {
   PERSON_HOLIDAY_OPTIONS,
   toggleHolidaySelection,
 } from "../utils/personHolidays";
+import { getSuggestedChildNameFromPersonName } from "../utils/personNameSuggestions";
 
 type Props = {
   isOpen: boolean;
@@ -192,6 +193,20 @@ export default function PersonEditDrawer({
   const [openSensitivePicker, setOpenSensitivePicker] = useState(false);
   const [showAdditionalDates, setShowAdditionalDates] = useState(false);
   const [showImportantHolidays, setShowImportantHolidays] = useState(false);
+  const [dismissedSuggestedChildName, setDismissedSuggestedChildName] = useState<string | null>(null);
+
+  const suggestedChildName = useMemo(() => {
+    const detectedName = getSuggestedChildNameFromPersonName(name);
+    if (!detectedName) return null;
+
+    const alreadyAdded = children.some(
+      (child) => (child.name ?? "").trim().toLowerCase() === detectedName.trim().toLowerCase()
+    );
+    if (alreadyAdded) return null;
+    if (dismissedSuggestedChildName?.toLowerCase() === detectedName.toLowerCase()) return null;
+
+    return detectedName;
+  }, [children, dismissedSuggestedChildName, name]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -221,6 +236,7 @@ export default function PersonEditDrawer({
     setMomentPulseTick(0);
     setShowAdditionalDates(Boolean(sensitiveMoments.length));
     setShowImportantHolidays(Boolean(getSelectedHolidays(person).length));
+    setDismissedSuggestedChildName(null);
   }, [isOpen, person]);
 
   useEffect(() => {
@@ -234,20 +250,24 @@ export default function PersonEditDrawer({
 
   useEffect(() => {
     if (!isOpen || !startWithNewChild) return;
-    const childId = makeId();
-    setHasKids(true);
-    setChildren((prev) => [...prev, { id: childId, name: "", birthday: "" }]);
-    requestAnimationFrame(() => {
-      const element = document.getElementById(`person-child-${childId}`);
-      if (!element) return;
-      element.scrollIntoView({ block: "center", behavior: "smooth" });
-    });
+    addChildEntry();
   }, [isOpen, startWithNewChild]);
 
   if (!isOpen) return null;
 
   function toggleSelectedHoliday(value: NonNullable<Person["selectedHolidays"]>[number]) {
     setSelectedHolidays((prev) => toggleHolidaySelection(prev, value));
+  }
+
+  function addChildEntry(childName = "") {
+    const childId = makeId();
+    setHasKids(true);
+    setChildren((prev) => [...prev, { id: childId, name: childName, birthday: "" }]);
+    requestAnimationFrame(() => {
+      const element = document.getElementById(`person-child-${childId}`);
+      if (!element) return;
+      element.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
   }
 
   function buildDraftPerson(momentsOverride?: Moment[]) {
@@ -391,6 +411,55 @@ export default function PersonEditDrawer({
                   fontSize: "1rem",
                 }}
               />
+              {suggestedChildName ? (
+                <div
+                  style={{
+                    marginTop: "10px",
+                    padding: "12px",
+                    borderRadius: "12px",
+                    border: "1px solid var(--border)",
+                    background: "var(--paper)",
+                    display: "grid",
+                    gap: "10px",
+                  }}
+                >
+                  <div style={{ color: "var(--ink)", fontSize: "0.95rem" }}>Add {suggestedChildName} as a child?</div>
+                  <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => addChildEntry(suggestedChildName)}
+                      style={{
+                        padding: 0,
+                        border: "none",
+                        background: "none",
+                        cursor: "pointer",
+                        color: "var(--ink)",
+                        textDecoration: "underline",
+                        textUnderlineOffset: "3px",
+                        fontSize: "0.92rem",
+                      }}
+                    >
+                      Add
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDismissedSuggestedChildName(suggestedChildName)}
+                      style={{
+                        padding: 0,
+                        border: "none",
+                        background: "none",
+                        cursor: "pointer",
+                        color: "var(--muted)",
+                        textDecoration: "underline",
+                        textUnderlineOffset: "3px",
+                        fontSize: "0.92rem",
+                      }}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div>
@@ -804,7 +873,7 @@ export default function PersonEditDrawer({
                     ))}
 
                     <button
-                      onClick={() => setChildren((prev) => [...prev, { id: makeId(), name: "", birthday: "" }])}
+                      onClick={() => addChildEntry()}
                       style={{
                         border: "1px solid var(--border-strong)",
                         background: "transparent",

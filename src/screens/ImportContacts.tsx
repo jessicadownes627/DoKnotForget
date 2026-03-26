@@ -335,7 +335,7 @@ export default function ImportContacts() {
 
             <div style={{ display: "grid", gap: "10px", marginTop: "8px" }}>
               <button type="button" onClick={importSelectedContacts} disabled={selectedIds.length === 0}>
-                {selectedIds.length > 0 ? `Import ${selectedIds.length} people` : "Import selected"}
+                {selectedIds.length > 0 ? `Add ${selectedIds.length} people to your list` : "Import selected"}
               </button>
               <button
                 type="button"
@@ -359,9 +359,7 @@ export default function ImportContacts() {
               {importedIds.length > 1 ? `Added ${importedIds.length} people` : "Added someone important"}
             </div>
             <div style={{ color: "var(--muted)", lineHeight: 1.6 }}>
-              {firstImportedId
-                ? `Want to add more detail? We can start with ${firstName(primaryImportedName || "them")}.`
-                : "Want to add more detail?"}
+              {firstImportedId ? `Start with ${firstName(primaryImportedName || "them")}` : "Start with them"}
             </div>
 
             <div style={{ display: "grid", gap: "10px", marginTop: "8px" }}>
