@@ -3,8 +3,10 @@ import AddPerson from "./screens/AddPerson";
 import PersonDetail from "./screens/PersonDetail";
 import ImportContacts from "./screens/ImportContacts";
 import Settings from "./screens/Settings";
+import Paywall from "./screens/Paywall";
 import { Route, Routes } from "./router";
 import { AppStateProvider, useAppState } from "./appState";
+import { isPremium } from "./utils/premium";
 
 function AppRoutes() {
   const { hasHydrated } = useAppState();
@@ -17,7 +19,8 @@ function AppRoutes() {
       <Route path="/home" element={<Home />} />
       <Route path="/contacts" element={<Home />} />
       <Route path="/add" element={<AddPerson />} />
-      <Route path="/import" element={<ImportContacts />} />
+      <Route path="/import" element={isPremium ? <ImportContacts /> : <Paywall />} />
+      <Route path="/paywall" element={<Paywall />} />
       <Route path="/person/:id" element={<PersonDetail />} />
       <Route path="/settings" element={<Settings />} />
     </Routes>

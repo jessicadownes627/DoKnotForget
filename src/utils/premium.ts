@@ -1,0 +1,1 @@
+export const isPremium = true;

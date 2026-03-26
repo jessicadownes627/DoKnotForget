@@ -163,6 +163,10 @@ export default function PersonDetail({}: {}) {
       )
     : [];
   const returnToImportReview = location.state?.returnToImportReview === true && reviewImportedIds.length > 0;
+  const startConnectionType =
+    location.state?.startConnectionType === "child" || location.state?.startConnectionType === "partner"
+      ? location.state.startConnectionType
+      : null;
 
   function navigateBack() {
     if (returnToImportReview) {
@@ -171,6 +175,14 @@ export default function PersonDetail({}: {}) {
     }
     navigate("/home", { state: { defaultTab: "contacts" } });
   }
+
+  useEffect(() => {
+    if (!startConnectionType) return;
+    resetConnectionDraft();
+    setConnectionType(startConnectionType);
+    setIsAddConnectionOpen(true);
+    navigate(location.pathname, { replace: true });
+  }, [location.pathname, navigate, startConnectionType]);
 
   const monthDayFormatter = useMemo(
     () => new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" }),

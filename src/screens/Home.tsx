@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Person } from "../models/Person";
+import type { ChildParentContact, Person } from "../models/Person";
 import { openSmsComposer } from "../components/SoonReminderCard";
 import Brand from "../components/Brand";
 import BowIcon from "../components/BowIcon";
@@ -31,6 +31,10 @@ import {
   cancelScheduledReminderNotificationByReminderId,
   isNativeNotificationsSupported,
 } from "../utils/notificationScheduler";
+import {
+  fetchRecommendationsFromSheet,
+  type SheetRecommendation,
+} from "../utils/fetchRecommendationsFromSheet.js";
 
 const headerDateFormatter = new Intl.DateTimeFormat("en-US", {
   weekday: "long",
@@ -46,12 +50,13 @@ const homeHeaderDateFormatter = new Intl.DateTimeFormat("en-US", {
 });
 
 const CHILD_QUICK_IDEAS = [
-  "Send a silly GIF",
-  "Drop off balloons",
-  "Bring a cupcake",
+  "Bring balloons",
   "Drop off a birthday card",
-  "Bring a small toy or gift card",
+  "Bring a cupcake",
+  "Send a small gift card (Roblox, toy store, or ice cream)",
+  "Bring a small toy",
   "Draw them a funny picture",
+  "Leave a birthday surprise at the door",
 ];
 
 const TEEN_QUICK_IDEAS = [
@@ -95,6 +100,8 @@ const ADULT_QUICK_IDEAS = [
   "Send a voice message",
   "Stop by with ice cream",
 ];
+
+const RECOMMENDATIONS_SHEET_URL = (import.meta.env.VITE_RECOMMENDATIONS_SHEET_URL ?? "").trim();
 
 function startOfToday() {
   const now = new Date();
@@ -226,6 +233,85 @@ function calculateAge(birthday: string | undefined, referenceDate = new Date()) 
   return age >= 0 ? age : undefined;
 }
 
+function getChildBirthdayContext(reminder: ReminderEvent, people: Person[], today: Date) {
+  if (reminder.momentType !== "childBirthday") return null;
+
+  const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
+  if (!person) return null;
+
+  const eventDate = reminderEventDate(reminder);
+  const child =
+    person.children?.find((candidate) => {
+      const birthdayValue = (candidate.birthday ?? candidate.birthdate ?? "").trim();
+      if (!birthdayValue) return false;
+      const nextBirthday = getNextBirthdayFromIso(birthdayValue, today);
+      if (!nextBirthday || !eventDate) return false;
+      return nextBirthday.target.getTime() === eventDate.getTime();
+    }) ?? null;
+
+  if (!child) return null;
+
+  const childName = (child.name ?? "").trim() || "Your child";
+  const birthday = (child.birthday ?? child.birthdate ?? "").trim() || undefined;
+  const age = birthday && eventDate ? calculateAge(birthday, eventDate) : undefined;
+  const parentContacts = resolveChildParentContacts(person, people, child.parents);
+  return {
+    parent: person,
+    child,
+    childName,
+    birthday,
+    age,
+    parentContacts,
+  };
+}
+
+function resolveChildParentContacts(person: Person, people: Person[], parents?: ChildParentContact[]) {
+  const contacts = (parents ?? [])
+    .map((parentContact) => {
+      const linkedPerson = parentContact.id ? people.find((candidate) => candidate.id === parentContact.id) ?? null : null;
+      const name = (linkedPerson?.name ?? parentContact.name ?? "").trim();
+      const phone = (linkedPerson?.phone ?? parentContact.phone ?? "").trim();
+      if (!name) return null;
+      return {
+        id: linkedPerson?.id ?? parentContact.id ?? `${name}:${phone}`,
+        name,
+        phone,
+      };
+    })
+    .filter((contact): contact is { id: string; name: string; phone: string } => Boolean(contact));
+
+  if (contacts.length > 0) return contacts;
+
+  const fallbackName = person.name.trim();
+  return fallbackName
+    ? [
+        {
+          id: person.id,
+          name: fallbackName,
+          phone: (person.phone ?? "").trim(),
+        },
+      ]
+    : [];
+}
+
+function contactFirstName(name: string) {
+  const trimmed = name.trim();
+  return trimmed.split(" ")[0] || trimmed;
+}
+
+function pickRandomRecommendations(recommendations: SheetRecommendation[]) {
+  if (recommendations.length <= 2) return recommendations;
+
+  const pool = [...recommendations];
+  for (let i = pool.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+
+  const count = Math.random() < 0.5 ? 1 : 2;
+  return pool.slice(0, count);
+}
+
 export default function Home({
 }: {}) {
   const navigate = useNavigate();
@@ -247,6 +333,7 @@ export default function Home({
     }
   });
   const [dismissedReminderKeys, setDismissedReminderKeys] = useState<Record<string, true>>({});
+  const [sheetRecommendations, setSheetRecommendations] = useState<SheetRecommendation[]>([]);
   const [dismissedHorizonKeys] = useState<Record<string, true>>(() => {
     try {
       const raw = window.localStorage.getItem("doknotforget_dismissed_horizon_v1");
@@ -297,6 +384,27 @@ export default function Home({
         delete (window as typeof window & { __dkfTodayInterval?: number }).__dkfTodayInterval;
       }
       document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!RECOMMENDATIONS_SHEET_URL) {
+      setSheetRecommendations([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void fetchRecommendationsFromSheet(RECOMMENDATIONS_SHEET_URL)
+      .then((items) => {
+        if (cancelled) return;
+        setSheetRecommendations(items);
+      });
+
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -617,29 +725,20 @@ export default function Home({
     }
 
     if (reminder.momentType === "childBirthday") {
-      const eventDate = reminderEventDate(reminder);
-      const matchingChild =
-        person?.children?.find((child) => {
-          const birthdayValue = (child.birthday ?? child.birthdate ?? "").trim();
-          if (!birthdayValue) return false;
-          const nextBirthday = getNextBirthdayFromIso(birthdayValue, today);
-          if (!nextBirthday || !eventDate) return false;
-          return nextBirthday.target.getTime() === eventDate.getTime();
-        }) ?? null;
-
-      if (!matchingChild) {
+      const childContext = getChildBirthdayContext(reminder, people, today);
+      if (!childContext) {
         return {
-          title: `${possessive(personName)} child`,
+          title: "Child birthday",
           label: reminder.label,
         };
       }
 
-      const childName = (matchingChild.name ?? "").trim() || "Your child";
-      const sourceYear = Number((matchingChild.birthday ?? matchingChild.birthdate ?? "").split("-")[0] ?? 0);
-      const age = eventDate && sourceYear > 0 ? eventDate.getFullYear() - sourceYear : null;
       return {
-        title: `${possessive(personName)} child`,
-        label: age && age > 0 ? `${childName} turns ${age} ${relative}` : `${childName}'s birthday ${relative}`,
+        title: childContext.childName,
+        label:
+          childContext.age !== undefined && childContext.age > 0
+            ? `${childContext.childName} turns ${childContext.age} ${relative}`
+            : `${childContext.childName}'s birthday ${relative}`,
       };
     }
 
@@ -657,24 +756,17 @@ export default function Home({
   function buildReminderDisplay(reminder: ReminderEvent, section: "today" | "tomorrow" | "horizon") {
     const display = formatReminderCard(reminder);
     const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
+    const childContext = getChildBirthdayContext(reminder, people, today);
     const latestGift = person?.giftHistory?.length ? person.giftHistory[person.giftHistory.length - 1] : null;
     const personName = (person?.name ?? reminder.personName).trim();
     const firstName = personName.split(" ")[0] || reminder.personName || "them";
+    const childName = childContext?.childName ?? "";
     const eventDate = reminderEventDate(reminder);
 
     let reminderAge: number | undefined;
     let birthdayForAge: string | undefined;
     if (reminder.momentType === "childBirthday") {
-      const matchingChild =
-        person?.children?.find((child) => {
-          const birthdayValue = (child.birthday ?? child.birthdate ?? "").trim();
-          if (!birthdayValue) return false;
-          const nextBirthday = getNextBirthdayFromIso(birthdayValue, today);
-          if (!nextBirthday || !eventDate) return false;
-          return nextBirthday.target.getTime() === eventDate.getTime();
-        }) ?? null;
-
-      birthdayForAge = (matchingChild?.birthday ?? matchingChild?.birthdate ?? "").trim() || undefined;
+      birthdayForAge = childContext?.birthday;
     } else {
       const birthdayMoment = (person?.moments ?? []).find((moment) => moment.type === "birthday") ?? null;
       birthdayForAge = (birthdayMoment?.date ?? "").trim() || undefined;
@@ -705,6 +797,14 @@ export default function Home({
     } else if (
       section === "today" &&
       reminder.reminderType === "dayOf" &&
+      reminder.momentType === "childBirthday" &&
+      reminderAge !== undefined &&
+      childName
+    ) {
+      title = `${childName} turns ${reminderAge} today`;
+    } else if (
+      section === "today" &&
+      reminder.reminderType === "dayOf" &&
       reminder.momentType === "birthday" &&
       reminderAge !== undefined &&
       MILESTONE_AGES.has(reminderAge)
@@ -716,9 +816,20 @@ export default function Home({
       title,
       date: formatReminderDate(eventDate ? formatYmd(eventDate) : reminder.date),
       giftLine: latestGift ? formatGiftHistoryLine(latestGift, new Date()) : null,
+      actionHeading:
+        reminder.momentType === "childBirthday" && childContext && childContext.parentContacts.length > 0
+          ? `Reach out to ${childName}'s parent`
+          : null,
       ideaHeading:
-        reminder.reminderType === "dayOf" && section === "today" ? `A small way to brighten ${possessive(firstName)} day` : null,
-      ideas: reminder.reminderType === "dayOf" && section === "today" ? pickQuickIdeas(getReminderId(reminder), ideaPool) : [],
+        reminder.reminderType === "dayOf" && section === "today"
+          ? reminder.momentType === "childBirthday" && childName
+            ? `A simple way to show up for ${childName} today`
+            : `A simple way to show up for ${firstName} today`
+          : null,
+      ideas:
+        reminder.reminderType === "dayOf" && section === "today"
+          ? pickQuickIdeas(getReminderId(reminder), ideaPool).slice(0, 1)
+          : [],
     };
   }
 
@@ -757,6 +868,7 @@ export default function Home({
   function recordGiftHistoryAction(reminder: ReminderEvent, type: "coffee" | "ecard" | "gift") {
     const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
     if (!person) return;
+    const childContext = getChildBirthdayContext(reminder, people, today);
 
     const timestamp = new Date().toISOString();
     updatePerson({
@@ -772,18 +884,28 @@ export default function Home({
     });
 
     const note =
-      type === "coffee"
-        ? `Bought ${person.name} a coffee`
-        : type === "ecard"
-          ? `Sent ${person.name} an eCard`
-          : `Sent ${person.name} a gift`;
+      reminder.momentType === "childBirthday" && childContext
+        ? type === "coffee"
+          ? `Treated ${person.name} to a coffee while celebrating ${childContext.childName}`
+          : type === "ecard"
+            ? `Sent ${person.name} an eCard for ${childContext.childName}`
+            : `Sent a gift for ${childContext.childName}`
+        : type === "coffee"
+          ? `Bought ${person.name} a coffee`
+          : type === "ecard"
+            ? `Sent ${person.name} an eCard`
+            : `Sent ${person.name} a gift`;
     recordCareEvent(person.id, type, note);
   }
 
-  function careEventNoteForReminderText(reminder: ReminderEvent) {
-    const personName = careEventDisplayName(reminder.personName);
+  function careEventNoteForReminderText(reminder: ReminderEvent, contactName?: string) {
+    const personName = careEventDisplayName(contactName ?? reminder.personName);
+    const childContext = reminder.momentType === "childBirthday" ? getChildBirthdayContext(reminder, people, today) : null;
     if (reminder.momentType === "birthday") return `Texted ${personName} for their birthday`;
-    if (reminder.momentType === "childBirthday") return `Texted ${personName} about their child's birthday`;
+    if (reminder.momentType === "childBirthday") {
+      const childName = childContext?.childName ?? "their child";
+      return `Texted ${personName} about ${childName}'s birthday`;
+    }
     if (reminder.momentType === "anniversary") return `Texted ${personName} for their anniversary`;
     return `Texted ${personName}`;
   }
@@ -792,17 +914,93 @@ export default function Home({
     const first = ((person?.name ?? reminder.personName).trim().split(" ")[0] || reminder.personName || "them").trim();
 
     if (reminder.momentType === "childBirthday") {
-      const childLine = formatReminderCard(reminder).label;
-      const childName = childLine.split(" turns ")[0]?.split("'s birthday")[0]?.trim() || "child";
-      return `Text ${first} (${childName}'s parent)`;
+      const childContext = getChildBirthdayContext(reminder, people, today);
+      const childName = childContext?.childName ?? "their child";
+      return `Text ${first} about ${childName}`;
     }
 
     return `Text ${first}`;
   }
 
+  function openChildBirthdayMessageSuggestions(
+    reminder: ReminderEvent,
+    contact: { name: string; phone: string },
+    mode: "celebrate" | "ask"
+  ) {
+    if (!contact.phone) {
+      window.alert("Add a phone number to text them.");
+      return;
+    }
+
+    const childContext = getChildBirthdayContext(reminder, people, today);
+    const childName = childContext?.childName ?? "your child";
+    const toName = contactFirstName(contact.name);
+
+    const suggestions =
+      mode === "ask"
+        ? [
+            {
+              id: "quick" as const,
+              label: "Quick",
+              message: `What would ${childName} love for their birthday?`,
+            },
+            {
+              id: "friendly" as const,
+              label: "Friendly",
+              message: `I’d love to celebrate ${childName}. What would make them feel special today?`,
+            },
+            {
+              id: "thoughtful" as const,
+              label: "Thoughtful",
+              message: `I was thinking about ${childName}'s birthday and wanted to ask what they’d really enjoy.`,
+            },
+            {
+              id: "simple" as const,
+              label: "Simple",
+              message: `What would ${childName} be excited about for their birthday?`,
+            },
+            { id: "custom" as const, label: "Write my own", message: "" },
+          ]
+        : [
+            {
+              id: "quick" as const,
+              label: "Quick",
+              message: `Happy birthday to ${childName}! Hope they have the best day.`,
+            },
+            {
+              id: "friendly" as const,
+              label: "Friendly",
+              message: `Thinking of ${childName} today. Hope their birthday feels really special.`,
+            },
+            {
+              id: "thoughtful" as const,
+              label: "Thoughtful",
+              message: `Sending birthday love for ${childName}. Hope they’re having such a fun day.`,
+            },
+            {
+              id: "simple" as const,
+              label: "Simple",
+              message: `Happy birthday, ${childName}!`,
+            },
+            { id: "custom" as const, label: "Write my own", message: "" },
+          ];
+
+    openSmartMessageSuggestions({
+      personName: toName,
+      phone: contact.phone,
+      suggestions,
+      onAfterSend: () => {
+        recordCareEvent(reminder.personId, "text", careEventNoteForReminderText(reminder, contact.name));
+        markReminderHandled(reminder);
+      },
+    });
+  }
+
   function buildReminderActions(reminder: ReminderEvent) {
     const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
     const first = ((person?.name ?? reminder.personName).trim().split(" ")[0] || reminder.personName || "them").trim();
+    const childContext = getChildBirthdayContext(reminder, people, today);
+    const childName = childContext?.childName ?? "their child";
 
     if (reminder.reminderType === "sevenDay") {
       return [
@@ -810,6 +1008,42 @@ export default function Home({
           label: "Send gift",
           href: "https://www.starbucks.com/gift",
           onClick: () => recordGiftHistoryAction(reminder, "gift"),
+        },
+      ];
+    }
+
+    if (reminder.momentType === "childBirthday") {
+      const parentContacts = childContext?.parentContacts ?? [];
+      const contactActions = parentContacts.flatMap((contact) => {
+        const contactFirst = contactFirstName(contact.name);
+        return [
+          {
+            label: `Text ${contactFirst}`,
+            title: !contact.phone ? "Add a phone number to text them." : undefined,
+            onClick: () => openChildBirthdayMessageSuggestions(reminder, contact, "celebrate"),
+          },
+          {
+            label: `Ask ${contactFirst} what ${childName} would love`,
+            title: !contact.phone ? "Add a phone number to text them." : undefined,
+            onClick: () => openChildBirthdayMessageSuggestions(reminder, contact, "ask"),
+          },
+        ];
+      });
+
+      return [
+        ...contactActions,
+        ...(parentContacts.length === 1
+          ? [
+              {
+                label: `Treat ${contactFirstName(parentContacts[0]?.name ?? first)} to a coffee`,
+                href: "https://www.starbucks.com/gift",
+                onClick: () => recordGiftHistoryAction(reminder, "coffee"),
+              },
+            ]
+          : []),
+        {
+          label: "✓ Mark as done",
+          onClick: () => dismissReminderCard(reminder),
         },
       ];
     }
@@ -1222,6 +1456,11 @@ export default function Home({
       return s.id === firstEligibleQuestion.id;
     });
   }, [unsnoozedCareSuggestions]);
+
+  const horizonRecommendations = useMemo(
+    () => pickRandomRecommendations(sheetRecommendations),
+    [sheetRecommendations]
+  );
 
   const activeQuestion = useMemo(() => {
     return visibleCareSuggestions.find((s) => s.type === "question" && s.question) ?? null;
@@ -1818,8 +2057,13 @@ export default function Home({
 
                             {primaryActions.length ? (
                               <div style={{ display: "grid", gap: section === "today" ? "10px" : "8px" }}>
+                                {display.actionHeading ? (
+                                  <div style={{ color: "var(--muted)", fontSize: "0.95rem", fontWeight: 600 }}>
+                                    {display.actionHeading}
+                                  </div>
+                                ) : null}
                                 {primaryActions.map((action) =>
-                                  action.href ? (
+                                  "href" in action && action.href ? (
                                     <a
                                       key={action.label}
                                       href={action.href}
@@ -1827,7 +2071,7 @@ export default function Home({
                                       rel="noopener noreferrer"
                                       onClick={action.onClick}
                                       aria-disabled={"disabled" in action && action.disabled ? "true" : undefined}
-                                      title={action.title}
+                                      title={"title" in action && typeof action.title === "string" ? action.title : undefined}
                                       style={{
                                         display: "inline-flex",
                                         alignItems: "center",
@@ -1857,7 +2101,7 @@ export default function Home({
                                       type="button"
                                       onClick={action.onClick}
                                       disabled={Boolean("disabled" in action && action.disabled)}
-                                      title={action.title}
+                                      title={"title" in action && typeof action.title === "string" ? action.title : undefined}
                                       style={{
                                         borderRadius: "12px",
                                         padding: "0.75rem 1rem",
@@ -1915,12 +2159,60 @@ export default function Home({
                     </div>
                   );
 
-                  if (!hasPendingReminders) {
-                    return renderEmpty();
-                  }
+                  const renderRecommendationsSection = (marginTop: string) => {
+                    const data = horizonRecommendations;
+                    if (!data || data.length === 0) {
+                      console.warn("Recommendations component received no data");
+                      return null;
+                    }
+
+                    const nextEvent = horizonEntries?.[0] ?? null;
+                    const targetName = nextEvent?.moment.personName?.trim() || "them";
+                    if (!nextEvent) return null;
+
+                    return (
+                      <div
+                        style={{
+                          marginTop,
+                          padding: 12,
+                          border: "1px solid #ccc",
+                          borderRadius: "12px",
+                          background: "rgba(255,255,255,0.72)",
+                        }}
+                      >
+                        <h4 style={{ margin: 0, color: "var(--ink)", fontSize: "1rem", fontWeight: 600 }}>
+                          {`Plan something a little more thoughtful for ${targetName}`}
+                        </h4>
+                        <p style={{ margin: "8px 0 0", color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
+                          You've got time this week - make it a little more personal.
+                        </p>
+
+                        <div style={{ marginTop: "12px", display: "grid", gap: "10px" }}>
+                          {data.map((item, index) => (
+                            <div key={`${item.url}-${index}`} style={{ color: "var(--ink)", fontSize: "0.96rem" }}>
+                              <a
+                                href={item.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{
+                                  color: "inherit",
+                                  textDecoration: "underline",
+                                  textUnderlineOffset: "3px",
+                                }}
+                              >
+                                {item.title}
+                              </a>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  };
 
                   return (
                     <>
+                      {!hasPendingReminders ? renderEmpty() : null}
+
                       {todayReminders.length > 0 ? (
                         <>
                           <div style={{ ...headerStyle, display: "flex", alignItems: "center" }}>
@@ -2017,31 +2309,28 @@ export default function Home({
                               );
                             })}
                           </div>
+                          {renderRecommendationsSection("16px")}
                         </>
-                      ) : null}
-
-                      {todayReminders.length === 0 ? (
-                        <div style={{ marginTop: "24px", color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>
-                          You're all caught up today.
-                        </div>
                       ) : null}
                     </>
                   );
                 })()}
               </section>
 
-              <div
-                style={{
-                  marginTop: "32px",
-                  paddingTop: "24px",
-                  borderTop: "1px solid var(--border)",
-                  maxWidth: "560px",
-                  marginLeft: "auto",
-                  marginRight: "auto",
-                }}
-              >
-                <button
-                  onClick={() => navigate("/add")}
+	              <div
+	                style={{
+	                  marginTop: "32px",
+	                  paddingTop: "24px",
+	                  borderTop: "1px solid var(--border)",
+	                  maxWidth: "560px",
+	                  marginLeft: "auto",
+	                  marginRight: "auto",
+	                  display: "grid",
+	                  gap: "10px",
+	                }}
+	              >
+	                <button
+	                  onClick={() => navigate("/add")}
                   style={{
                     border: "1px solid var(--border-strong)",
                     background: "transparent",
@@ -2055,10 +2344,28 @@ export default function Home({
                     fontSize: "0.95rem",
                     fontFamily: "var(--font-sans)",
                   }}
-                >
-                  + Add someone important
-                </button>
-              </div>
+	                >
+	                  + Add someone important
+	                </button>
+	                <button
+	                  onClick={() => navigate("/import")}
+	                  style={{
+	                    border: "1px solid var(--border)",
+	                    background: "transparent",
+	                    color: "var(--muted)",
+	                    cursor: "pointer",
+	                    textAlign: "left",
+	                    fontWeight: 400,
+	                    letterSpacing: "0.01em",
+	                    borderRadius: "12px",
+	                    padding: "0.65rem 1rem",
+	                    fontSize: "0.95rem",
+	                    fontFamily: "var(--font-sans)",
+	                  }}
+	                >
+	                  Import from contacts
+	                </button>
+	              </div>
             </>
           )}
         </main>

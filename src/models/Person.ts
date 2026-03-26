@@ -25,12 +25,19 @@ export type ChildSchoolEvent = {
   label?: string;
 };
 
+export type ChildParentContact = {
+  id?: string;
+  name?: string;
+  phone?: string;
+};
+
 export type Child = {
   id: string;
   name?: string;
   birthday?: string | null; // YYYY-MM-DD (use 0000-MM-DD if year unknown)
   // Back-compat: older records used `birthdate`.
   birthdate?: string | null;
+  parents?: ChildParentContact[];
   schoolEvents?: ChildSchoolEvent[];
 };
 

@@ -106,7 +106,10 @@ export function buildHomeSections({
 
   const horizonMoments = upcomingMoments.filter((moment) => {
     if (dismissedHorizonKeys[moment.id]) return false;
-    return true;
+    const eventDate = parseLocalDate(moment.eventDate);
+    if (!eventDate) return false;
+    const daysAway = dayDifference(eventDate, today);
+    return daysAway >= 3 && daysAway <= 10;
   });
 
   const cardsByEvent = new Map<string, { moment: UpcomingMomentEvent; reminder: ReminderEvent | null }>();
