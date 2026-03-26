@@ -1882,16 +1882,16 @@ export default function Home({
 		                  onClick={() => navigate("/add")}
 		                  style={{
 		                    border: "1px solid var(--border-strong)",
-	                    background: "transparent",
-	                    color: "var(--ink)",
-                    cursor: "pointer",
-                    textAlign: "center",
-                    fontWeight: 500,
-                    letterSpacing: "0.01em",
-                    borderRadius: "12px",
-                    padding: "0.75rem 1.15rem",
-	                    fontSize: "1rem",
-	                    fontFamily: "var(--font-sans)",
+		                    background: "transparent",
+		                    color: "var(--ink)",
+	                    cursor: "pointer",
+	                    textAlign: "center",
+	                    fontWeight: 500,
+	                    letterSpacing: "0.01em",
+	                    borderRadius: "12px",
+	                    padding: "0.75rem 1.15rem",
+		                    fontSize: "1rem",
+		                    fontFamily: "var(--font-sans)",
 	                  }}
 		                >
 		                  + Add someone important
@@ -1899,12 +1899,12 @@ export default function Home({
 		                <button
 		                  onClick={() => navigate("/import")}
 		                  style={{
-		                    border: "1px solid var(--border)",
+		                    border: "1px solid var(--border-strong)",
 		                    background: "transparent",
-		                    color: "var(--muted)",
+		                    color: "var(--ink)",
                     cursor: "pointer",
                     textAlign: "center",
-                    fontWeight: 400,
+	                    fontWeight: 500,
                     letterSpacing: "0.01em",
                     borderRadius: "12px",
                     padding: "0.75rem 1.15rem",
