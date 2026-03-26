@@ -8,7 +8,11 @@ import {
   loadImportableContacts,
   type ImportableContact,
 } from "../utils/contactImport";
-import { wouldExceedFreePeopleLimit } from "../utils/freeLimit";
+import {
+  FREE_PEOPLE_LIMIT,
+  countNetNewPeople,
+  wouldExceedFreePeopleLimit,
+} from "../utils/freeLimit";
 
 const INITIAL_VISIBLE_CONTACTS = 80;
 const VISIBLE_CONTACTS_STEP = 80;
@@ -62,6 +66,9 @@ export default function ImportContacts() {
     () => contacts.filter((contact) => selectedIds.includes(contact.contactId)),
     [contacts, selectedIds]
   );
+  const remainingFreeSlots = Math.max(0, FREE_PEOPLE_LIMIT - people.length);
+  const importAllWouldExceedLimit = countNetNewPeople(people, contacts) > remainingFreeSlots;
+  const selectedImportWouldExceedLimit = countNetNewPeople(people, selectedContacts) > remainingFreeSlots;
 
   const firstImportedId = importedIds[0] ?? null;
 
@@ -230,6 +237,11 @@ export default function ImportContacts() {
               >
                 Import all contacts
               </button>
+              {contacts.length > 0 && importAllWouldExceedLimit ? (
+                <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
+                  You can add up to 3 people for free
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -348,6 +360,11 @@ export default function ImportContacts() {
               <button type="button" onClick={importSelectedContacts} disabled={selectedIds.length === 0}>
                 {selectedIds.length > 0 ? `Add ${selectedIds.length} people to your list` : "Import selected"}
               </button>
+              {selectedIds.length > 0 && selectedImportWouldExceedLimit ? (
+                <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
+                  You can add up to 3 people for free
+                </div>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setStep("entry")}

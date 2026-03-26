@@ -98,17 +98,6 @@ export default function Paywall() {
             )}
           </div>
 
-          <div
-            style={{
-              minHeight: "24px",
-              color: "var(--muted)",
-              fontSize: "0.92rem",
-              lineHeight: 1.4,
-            }}
-          >
-            Pricing will appear here.
-          </div>
-
           <div style={{ display: "grid", gap: "10px" }}>
             <button
               type="button"
