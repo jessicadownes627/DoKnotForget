@@ -13,6 +13,8 @@ import {
   countNetNewPeople,
   wouldExceedFreePeopleLimit,
 } from "../utils/freeLimit";
+import { getNextBirthdayFromIso } from "../utils/birthdayUtils";
+import type { Person } from "../models/Person";
 
 const INITIAL_VISIBLE_CONTACTS = 80;
 const VISIBLE_CONTACTS_STEP = 80;
@@ -34,6 +36,26 @@ function firstName(value: string) {
   return trimmed.split(" ")[0] || trimmed;
 }
 
+function looksLikePhoneNumber(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 7 && digits.length === value.replace(/[^\d()+\-\s.]/g, "").replace(/\D/g, "").length;
+}
+
+function contactPrimaryLabel(contact: ImportableContact) {
+  const name = contact.name.trim();
+  if (!name) return "No name saved";
+  if (contact.phone && name === contact.phone) return "No name saved";
+  if (looksLikePhoneNumber(name)) return "No name saved";
+  return name;
+}
+
+function formatUpcomingTiming(daysUntilBirthday: number) {
+  if (daysUntilBirthday <= 0) return "today";
+  if (daysUntilBirthday === 1) return "tomorrow";
+  if (daysUntilBirthday >= 7 && daysUntilBirthday <= 13) return "next week";
+  return `in ${daysUntilBirthday} days`;
+}
+
 export default function ImportContacts() {
   const navigate = useNavigate();
   const { people, createPeople, markOnboardingComplete } = useAppState();
@@ -46,6 +68,7 @@ export default function ImportContacts() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [importedIds, setImportedIds] = useState<string[]>([]);
+  const [recentlyImportedPeople, setRecentlyImportedPeople] = useState<Person[]>([]);
   const [primaryImportedName, setPrimaryImportedName] = useState("");
 
   const filteredContacts = useMemo(() => {
@@ -69,11 +92,33 @@ export default function ImportContacts() {
   const remainingFreeSlots = Math.max(0, FREE_PEOPLE_LIMIT - people.length);
   const importAllWouldExceedLimit = countNetNewPeople(people, contacts) > remainingFreeSlots;
   const selectedImportWouldExceedLimit = countNetNewPeople(people, selectedContacts) > remainingFreeSlots;
+  const upcomingBirthdayPeople = useMemo(() => {
+    const today = new Date();
+
+    return recentlyImportedPeople
+      .map((person) => {
+        const birthdayMoment = (person.moments ?? []).find((moment) => moment.type === "birthday") ?? null;
+        if (!birthdayMoment?.date) return null;
+
+        const nextBirthday = getNextBirthdayFromIso(birthdayMoment.date, today);
+        if (!nextBirthday || nextBirthday.daysUntilBirthday > 30) return null;
+
+        return {
+          id: person.id,
+          name: person.name,
+          timingLabel: formatUpcomingTiming(nextBirthday.daysUntilBirthday),
+          daysUntilBirthday: nextBirthday.daysUntilBirthday,
+        };
+      })
+      .filter((person): person is { id: string; name: string; timingLabel: string; daysUntilBirthday: number } => Boolean(person))
+      .sort((a, b) => a.daysUntilBirthday - b.daysUntilBirthday)
+      .slice(0, 3);
+  }, [recentlyImportedPeople]);
 
   const firstImportedId = importedIds[0] ?? null;
 
   async function prepareContacts() {
-    if (!isContactImportSupported()) {
+    if (!import.meta.env.DEV && !isContactImportSupported()) {
       setError("Contact import works on the iPhone app. You can still add people manually.");
       return [];
     }
@@ -92,8 +137,16 @@ export default function ImportContacts() {
       setVisibleCount(INITIAL_VISIBLE_CONTACTS);
       return loaded;
     } catch {
-      setError("We couldn't load your contacts right now.");
-      return [];
+      if (!import.meta.env.DEV) {
+        setError("We couldn't load your contacts right now.");
+        return [];
+      }
+
+      const loaded = await loadImportableContacts();
+      setContacts(loaded);
+      setVisibleCount(INITIAL_VISIBLE_CONTACTS);
+      setError("");
+      return loaded;
     } finally {
       setIsLoading(false);
     }
@@ -135,6 +188,7 @@ export default function ImportContacts() {
     createPeople(importedPeople);
     markOnboardingComplete();
     setImportedIds(importedPeople.map((person) => person.id));
+    setRecentlyImportedPeople(importedPeople);
     setPrimaryImportedName(importedPeople[0]?.name ?? "");
     setSelectedIds([]);
     setQuery("");
@@ -165,6 +219,10 @@ export default function ImportContacts() {
     }
 
     navigate(`/person/${firstImportedId}`, { state: { startConnectionType: type } });
+  }
+
+  function openPersonSetup(personId: string) {
+    navigate(`/person/${personId}`);
   }
 
   return (
@@ -318,7 +376,7 @@ export default function ImportContacts() {
                       />
                       <div style={{ display: "grid", gap: "4px" }}>
                         <div style={{ color: "var(--ink)", fontSize: "1rem", fontWeight: 600 }}>
-                          {contact.name}
+                          {contactPrimaryLabel(contact)}
                         </div>
                         {contact.phone ? (
                           <div style={{ color: "var(--muted)", fontSize: "0.9rem", lineHeight: 1.4 }}>
@@ -389,6 +447,57 @@ export default function ImportContacts() {
             <div style={{ color: "var(--muted)", lineHeight: 1.6 }}>
               {firstImportedId ? `Start with ${firstName(primaryImportedName || "them")}` : "Start with them"}
             </div>
+
+            {upcomingBirthdayPeople.length > 0 ? (
+              <div
+                style={{
+                  marginTop: "6px",
+                  display: "grid",
+                  gap: "10px",
+                  border: "1px solid var(--border)",
+                  borderRadius: "16px",
+                  padding: "14px",
+                  background: "rgba(255,255,255,0.7)",
+                }}
+              >
+                <div style={{ display: "grid", gap: "4px" }}>
+                  <div style={{ color: "var(--ink)", fontSize: "1rem", fontWeight: 600 }}>
+                    Start with what’s coming up
+                  </div>
+                  <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
+                    We’ll remind you before these dates.
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gap: "8px" }}>
+                  {upcomingBirthdayPeople.map((person) => (
+                    <button
+                      key={person.id}
+                      type="button"
+                      onClick={() => openPersonSetup(person.id)}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: "1rem",
+                        alignItems: "center",
+                        width: "100%",
+                        padding: "0.85rem 0.95rem",
+                        borderRadius: "12px",
+                        border: "1px solid var(--border)",
+                        background: "var(--card)",
+                        color: "var(--ink)",
+                        textAlign: "left",
+                        fontSize: "0.98rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span style={{ fontWeight: 500 }}>{person.name}</span>
+                      <span style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{person.timingLabel}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <div style={{ display: "grid", gap: "10px", marginTop: "8px" }}>
               <button type="button" onClick={() => openDetailWithConnection("child")}>
