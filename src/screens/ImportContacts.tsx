@@ -2,8 +2,13 @@ import { useMemo, useState } from "react";
 import { useAppState } from "../appState";
 import { useNavigate } from "../router";
 import {
+  compareImportableContacts,
+  compareImportableContactsAlphabetically,
   ensureContactPermission,
+  hasEmojiInName,
+  hasUpcomingBirthday,
   importableContactToPerson,
+  isPriorityContactName,
   isContactImportSupported,
   loadImportableContacts,
   type ImportableContact,
@@ -18,6 +23,7 @@ import type { Person } from "../models/Person";
 
 const INITIAL_VISIBLE_CONTACTS = 80;
 const VISIBLE_CONTACTS_STEP = 80;
+const STARTER_CONTACT_LIMIT = 8;
 
 function formatBirthday(value: string | undefined) {
   if (!value) return "";
@@ -59,6 +65,91 @@ function mapImportableContactsToPeople(items: ImportableContact[]) {
   return items.map(importableContactToPerson);
 }
 
+function shouldSuggestStarterContact(contact: ImportableContact, today: Date) {
+  return isPriorityContactName(contact.name) || hasEmojiInName(contact.name) || hasUpcomingBirthday(contact, today);
+}
+
+function renderContactRow(
+  contact: ImportableContact,
+  checked: boolean,
+  toggleSelection: (contactId: string) => void
+) {
+  return (
+    <label
+      key={contact.contactId}
+      style={{
+        display: "grid",
+        gridTemplateColumns: "32px 1fr",
+        gap: "12px",
+        alignItems: "center",
+        padding: "10px 8px",
+        borderRadius: "12px",
+        background: checked ? "rgba(27,42,65,0.06)" : "transparent",
+        cursor: "pointer",
+        position: "relative",
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => toggleSelection(contact.contactId)}
+        style={{
+          position: "absolute",
+          opacity: 0,
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          margin: 0,
+          cursor: "pointer",
+        }}
+      />
+      <span
+        aria-hidden="true"
+        style={{
+          width: "24px",
+          height: "24px",
+          borderRadius: "999px",
+          border: checked ? "1px solid var(--dkf-gold)" : "1px solid rgba(216, 180, 106, 0.72)",
+          background: checked ? "var(--dkf-gold)" : "transparent",
+          color: checked ? "#fff" : "transparent",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxSizing: "border-box",
+          transition: "background-color 160ms ease, border-color 160ms ease, color 160ms ease",
+        }}
+      >
+        <span
+          style={{
+            fontSize: "0.78rem",
+            fontWeight: 700,
+            lineHeight: 1,
+            transform: checked ? "scale(1)" : "scale(0.75)",
+            transition: "transform 160ms ease",
+          }}
+        >
+          ✓
+        </span>
+      </span>
+      <div style={{ display: "grid", gap: "4px" }}>
+        <div style={{ color: "var(--ink)", fontSize: "1rem", fontWeight: 600 }}>
+          {contactPrimaryLabel(contact)}
+        </div>
+        {contact.phone ? (
+          <div style={{ color: "var(--muted)", fontSize: "0.9rem", lineHeight: 1.4 }}>
+            {contact.phone}
+          </div>
+        ) : null}
+        {contact.birthday ? (
+          <div style={{ color: "var(--muted)", fontSize: "0.88rem", lineHeight: 1.4 }}>
+            Birthday: {formatBirthday(contact.birthday)}
+          </div>
+        ) : null}
+      </div>
+    </label>
+  );
+}
+
 export default function ImportContacts() {
   const navigate = useNavigate();
   const { people, createPeople, markOnboardingComplete } = useAppState();
@@ -83,9 +174,24 @@ export default function ImportContacts() {
     });
   }, [contacts, query]);
 
-  const visibleContacts = useMemo(
-    () => filteredContacts.slice(0, visibleCount),
-    [filteredContacts, visibleCount]
+  const starterContacts = useMemo(() => {
+    const today = new Date();
+    return [...filteredContacts]
+      .filter((contact) => shouldSuggestStarterContact(contact, today))
+      .sort((a, b) => compareImportableContacts(a, b, today))
+      .slice(0, STARTER_CONTACT_LIMIT);
+  }, [filteredContacts]);
+
+  const allContacts = useMemo(() => {
+    const starterIds = new Set(starterContacts.map((contact) => contact.contactId));
+    return filteredContacts
+      .filter((contact) => !starterIds.has(contact.contactId))
+      .sort(compareImportableContactsAlphabetically);
+  }, [filteredContacts, starterContacts]);
+
+  const visibleAllContacts = useMemo(
+    () => allContacts.slice(0, Math.max(0, visibleCount - starterContacts.length)),
+    [allContacts, starterContacts.length, visibleCount]
   );
 
   const selectedContacts = useMemo(
@@ -348,47 +454,58 @@ export default function ImportContacts() {
                 background: "rgba(255,255,255,0.7)",
               }}
             >
-              {visibleContacts.length > 0 ? (
-                visibleContacts.map((contact) => {
-                  const checked = selectedIds.includes(contact.contactId);
-                  return (
-                    <label
-                      key={contact.contactId}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "24px 1fr",
-                        gap: "12px",
-                        alignItems: "start",
-                        padding: "10px 8px",
-                        borderRadius: "12px",
-                        background: checked ? "rgba(27,42,65,0.06)" : "transparent",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleSelection(contact.contactId)}
-                        style={{ marginTop: "3px" }}
-                      />
-                      <div style={{ display: "grid", gap: "4px" }}>
-                        <div style={{ color: "var(--ink)", fontSize: "1rem", fontWeight: 600 }}>
-                          {contactPrimaryLabel(contact)}
-                        </div>
-                        {contact.phone ? (
-                          <div style={{ color: "var(--muted)", fontSize: "0.9rem", lineHeight: 1.4 }}>
-                            {contact.phone}
-                          </div>
-                        ) : null}
-                        {contact.birthday ? (
-                          <div style={{ color: "var(--muted)", fontSize: "0.88rem", lineHeight: 1.4 }}>
-                            Birthday: {formatBirthday(contact.birthday)}
-                          </div>
-                        ) : null}
+              {starterContacts.length > 0 || visibleAllContacts.length > 0 ? (
+                <>
+                  {starterContacts.length > 0 ? (
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      <div
+                        style={{
+                          padding: "4px 8px 0",
+                          color: "var(--muted)",
+                          fontSize: "0.82rem",
+                          letterSpacing: "0.04em",
+                          textTransform: "uppercase",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Try starting with these
                       </div>
-                    </label>
-                  );
-                })
+                      {starterContacts.map((contact) =>
+                        renderContactRow(contact, selectedIds.includes(contact.contactId), toggleSelection)
+                      )}
+                    </div>
+                  ) : null}
+
+                  {starterContacts.length > 0 && visibleAllContacts.length > 0 ? (
+                    <div
+                      style={{
+                        margin: "2px 8px",
+                        borderTop: "1px solid rgba(27,42,65,0.1)",
+                        paddingTop: "12px",
+                      }}
+                    />
+                  ) : null}
+
+                  {visibleAllContacts.length > 0 ? (
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      <div
+                        style={{
+                          padding: "0 8px",
+                          color: "var(--muted)",
+                          fontSize: "0.82rem",
+                          letterSpacing: "0.04em",
+                          textTransform: "uppercase",
+                          fontWeight: 600,
+                        }}
+                      >
+                        All contacts
+                      </div>
+                      {visibleAllContacts.map((contact) =>
+                        renderContactRow(contact, selectedIds.includes(contact.contactId), toggleSelection)
+                      )}
+                    </div>
+                  ) : null}
+                </>
               ) : (
                 <div style={{ padding: "12px 8px", color: "var(--muted)", lineHeight: 1.5 }}>
                   {contacts.length === 0 ? "No contacts found." : "No matches yet. Try a different search."}
@@ -396,7 +513,7 @@ export default function ImportContacts() {
               )}
             </div>
 
-            {visibleCount < filteredContacts.length ? (
+            {starterContacts.length + visibleAllContacts.length < filteredContacts.length ? (
               <button
                 type="button"
                 onClick={() => setVisibleCount((prev) => prev + VISIBLE_CONTACTS_STEP)}

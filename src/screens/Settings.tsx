@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppState } from "../appState";
 import { getUpcomingReminders } from "../engine/reminderEngine";
 import { useNavigate } from "../router";
-import { appVersionLabel } from "../utils/appVersion";
+import { getAppVersion } from "../utils/appVersion";
 import {
   cancelScheduledReminderNotifications,
   configureReminderNotifications,
@@ -24,6 +24,7 @@ export default function Settings() {
   const navigate = useNavigate();
   const { people, userSettings, updateUserSettings } = useAppState();
   const [notificationStatus, setNotificationStatus] = useState<"on" | "off">("off");
+  const [appVersionLabel, setAppVersionLabel] = useState<string>("");
 
   const reminderTimeValue = useMemo(
     () => formatTimeValue(userSettings.reminderHour, userSettings.reminderMinute),
@@ -46,6 +47,23 @@ export default function Settings() {
     }
 
     void refreshNotificationStatus();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadAppVersion() {
+      const info = await getAppVersion();
+      if (isMounted) {
+        setAppVersionLabel(`Version ${info.version} (${info.build})`);
+      }
+    }
+
+    void loadAppVersion();
 
     return () => {
       isMounted = false;
@@ -310,7 +328,7 @@ export default function Settings() {
           }}
         >
           <div>Your people. On time.</div>
-          <div style={{ fontSize: "0.92rem", color: "var(--ink)", fontWeight: 500 }}>{appVersionLabel()}</div>
+          <div style={{ fontSize: "0.92rem", color: "var(--ink)", fontWeight: 500 }}>{appVersionLabel}</div>
         </div>
       </div>
     </div>

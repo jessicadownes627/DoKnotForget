@@ -122,6 +122,65 @@ function careEventDisplayName(name: string) {
   return trimmed || "them";
 }
 
+function CircleEmptyStateGraphic() {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        position: "relative",
+        width: "104px",
+        height: "104px",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: "14px",
+          borderRadius: "999px",
+          border: "1px solid rgba(216, 180, 106, 0.42)",
+          background: "rgba(255,255,255,0.38)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          top: "8px",
+          left: "41px",
+          width: "22px",
+          height: "22px",
+          borderRadius: "999px",
+          border: "1px solid rgba(216, 180, 106, 0.68)",
+          background: "rgba(255,255,255,0.78)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          right: "8px",
+          top: "42px",
+          width: "18px",
+          height: "18px",
+          borderRadius: "999px",
+          border: "1px solid rgba(216, 180, 106, 0.52)",
+          background: "rgba(255,255,255,0.68)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          bottom: "10px",
+          left: "18px",
+          width: "16px",
+          height: "16px",
+          borderRadius: "999px",
+          border: "1px solid rgba(216, 180, 106, 0.52)",
+          background: "rgba(255,255,255,0.68)",
+        }}
+      />
+    </div>
+  );
+}
+
 function careEventReminderNote(reminder: ReminderEvent) {
   const personName = careEventDisplayName(reminder.personName);
 
@@ -2161,21 +2220,60 @@ export default function Home({
                     </div>
                   );
 
-                  const renderEmpty = () => (
-                    <div style={{ marginTop: "1.5rem", padding: "2.25rem 0", textAlign: "center" }}>
-                      {searchTerm.trim() && filteredPeople.length === 0 ? (
-                        <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>No match found.</div>
-                      ) : people.length > 0 ? (
-                        <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>
-                          You're all caught up today.
+                  const renderEmpty = () => {
+                    if (searchTerm.trim() && filteredPeople.length === 0) {
+                      return (
+                        <div style={{ marginTop: "1.5rem", padding: "2.25rem 0", textAlign: "center" }}>
+                          <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>No match found.</div>
                         </div>
-                      ) : (
-                        <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>
-                          When you add people, important dates will appear here.
+                      );
+                    }
+
+                    const firstPersonName = people[0]?.name?.trim() || "Someone";
+
+                    return (
+                      <div
+                        style={{
+                          marginTop: "1.5rem",
+                          padding: "2.5rem 1.5rem",
+                          display: "grid",
+                          gap: "14px",
+                          justifyItems: "center",
+                          textAlign: "center",
+                          border: "1px solid var(--border)",
+                          borderRadius: "18px",
+                          background: "rgba(255,255,255,0.58)",
+                        }}
+                      >
+                        <CircleEmptyStateGraphic />
+                        <div
+                          style={{
+                            color: "var(--ink)",
+                            fontSize: "1.35rem",
+                            fontWeight: 600,
+                            letterSpacing: "-0.02em",
+                            fontFamily: "var(--font-serif)",
+                          }}
+                        >
+                          You're all set.
                         </div>
-                      )}
-                    </div>
-                  );
+                        {people.length > 0 ? (
+                          <>
+                            <div style={{ color: "var(--ink)", fontSize: "1rem", lineHeight: 1.5 }}>
+                              {`${firstPersonName} is in your circle.`}
+                            </div>
+                            <div style={{ color: "var(--muted)", fontSize: "0.98rem", lineHeight: 1.55 }}>
+                              We&apos;ll remind you when it matters.
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ color: "var(--muted)", fontSize: "0.98rem", lineHeight: 1.55 }}>
+                            We&apos;ll remind you when something&apos;s coming up.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  };
 
                   const renderRecommendationsSection = (marginTop: string) => {
                     const data = horizonRecommendations;

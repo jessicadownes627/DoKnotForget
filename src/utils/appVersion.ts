@@ -1,9 +1,9 @@
-declare const __APP_VERSION__: string;
-declare const __APP_BUILD__: string;
+import { App } from "@capacitor/app";
 
-export const APP_VERSION = __APP_VERSION__;
-export const APP_BUILD = __APP_BUILD__;
-
-export function appVersionLabel() {
-  return `Version ${APP_VERSION} (${APP_BUILD})`;
+export async function getAppVersion() {
+  const info = await App.getInfo();
+  return {
+    version: info.version,
+    build: info.build,
+  };
 }
