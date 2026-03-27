@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Moment, Person } from "../models/Person";
 import { parseLocalDate } from "../utils/date";
+import { displayNameOrFallback } from "../utils/displayName";
 
 type NextMomentSummary = {
   label: string;
@@ -79,7 +80,7 @@ export default function PersonArchiveCard({
   onClick,
   children,
 }: Props) {
-  const name = (displayName ?? person.name).trim();
+  const name = displayNameOrFallback(displayName ?? person.name);
   const initials = name
     ? name
         .split(" ")
@@ -152,7 +153,6 @@ export default function PersonArchiveCard({
 
             <div style={{ marginTop: "10px" }}>
               <div style={{ height: 1, background: "var(--border)" }} />
-              <div style={{ height: 1, background: "var(--border)", marginTop: 4, opacity: 0.75 }} />
             </div>
 
             <div style={{ marginTop: "12px", color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.4 }}>

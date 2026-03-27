@@ -1,4 +1,5 @@
 import type { Person } from "../models/Person";
+import { stripEmojiFromDisplayName } from "./displayName";
 
 export function filterContacts(people: Person[], query: string) {
   const q = query.trim().toLowerCase();
@@ -7,7 +8,7 @@ export function filterContacts(people: Person[], query: string) {
 }
 
 export function initialsFromName(name: string) {
-  const trimmed = name.trim();
+  const trimmed = stripEmojiFromDisplayName(name);
   if (!trimmed) return "?";
   return trimmed
     .split(" ")
@@ -16,4 +17,3 @@ export function initialsFromName(name: string) {
     .map((part) => part[0]?.toUpperCase())
     .join("");
 }
-

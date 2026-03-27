@@ -18,7 +18,7 @@ import {
   countNetNewPeople,
   wouldExceedFreePeopleLimit,
 } from "../utils/freeLimit";
-import { getNextBirthdayFromIso } from "../utils/birthdayUtils";
+import { displayNameOrFallback } from "../utils/displayName";
 import type { Person } from "../models/Person";
 
 const INITIAL_VISIBLE_CONTACTS = 80;
@@ -38,38 +38,21 @@ function formatBirthday(value: string | undefined) {
   return new Intl.DateTimeFormat("en-US", year > 0 ? { month: "long", day: "numeric", year: "numeric" } : { month: "long", day: "numeric" }).format(parsed);
 }
 
-function firstName(value: string) {
-  const trimmed = value.trim();
-  return trimmed.split(" ")[0] || trimmed;
-}
-
 function looksLikePhoneNumber(value: string) {
   const digits = value.replace(/\D/g, "");
   return digits.length >= 7 && digits.length === value.replace(/[^\d()+\-\s.]/g, "").replace(/\D/g, "").length;
 }
 
 function contactPrimaryLabel(contact: ImportableContact) {
-  const name = contact.name.trim();
+  const name = displayNameOrFallback(contact.name, "").trim();
   if (!name) return "No name saved";
   if (contact.phone && name === contact.phone) return "No name saved";
   if (looksLikePhoneNumber(name)) return "No name saved";
   return name;
 }
 
-function formatUpcomingTiming(daysUntilBirthday: number) {
-  if (daysUntilBirthday <= 0) return "today";
-  if (daysUntilBirthday === 1) return "tomorrow";
-  return `in ${daysUntilBirthday} days`;
-}
-
 function mapImportableContactsToPeople(items: ImportableContact[]) {
   return items.map(importableContactToPerson);
-}
-
-function personHasImportantDate(person: Person) {
-  const moments = person.moments ?? [];
-  if (moments.length > 0) return true;
-  return Boolean(person.anniversary?.trim());
 }
 
 function takeImportableContactsWithinLimit(
@@ -276,7 +259,6 @@ export default function ImportContacts() {
   const [error, setError] = useState("");
   const [importedIds, setImportedIds] = useState<string[]>([]);
   const [recentlyImportedPeople, setRecentlyImportedPeople] = useState<Person[]>([]);
-  const [primaryImportedName, setPrimaryImportedName] = useState("");
 
   const filteredContacts = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -304,42 +286,28 @@ export default function ImportContacts() {
     [allContacts, starterContacts.length, visibleCount]
   );
 
-  const selectedContacts = useMemo(
-    () => contacts.filter((contact) => selectedIds.includes(contact.contactId)),
-    [contacts, selectedIds]
-  );
-  const selectedContactPeople = useMemo(() => mapImportableContactsToPeople(selectedContacts), [selectedContacts]);
   const remainingFreeSlots = Math.max(0, FREE_PEOPLE_LIMIT - people.length);
-  const selectedImportWouldExceedLimit = countNetNewPeople(people, selectedContactPeople) > remainingFreeSlots;
-  const upcomingBirthdayPeople = useMemo(() => {
+  const prioritizedSelectedContacts = useMemo(() => {
     const today = new Date();
-
-    return recentlyImportedPeople
-      .map((person) => {
-        const birthdayMoment = (person.moments ?? []).find((moment) => moment.type === "birthday") ?? null;
-        if (!birthdayMoment?.date) return null;
-
-        const nextBirthday = getNextBirthdayFromIso(birthdayMoment.date, today);
-        if (!nextBirthday || nextBirthday.daysUntilBirthday > 30) return null;
-
-        return {
-          id: person.id,
-          name: person.name,
-          timingLabel: formatUpcomingTiming(nextBirthday.daysUntilBirthday),
-          daysUntilBirthday: nextBirthday.daysUntilBirthday,
-        };
-      })
-      .filter((person): person is { id: string; name: string; timingLabel: string; daysUntilBirthday: number } => Boolean(person))
-      .sort((a, b) => a.daysUntilBirthday - b.daysUntilBirthday)
-      .slice(0, 5);
-  }, [recentlyImportedPeople]);
-  const importedPeopleMissingDates = useMemo(
-    () => recentlyImportedPeople.filter((person) => !personHasImportantDate(person)).slice(0, 3),
-    [recentlyImportedPeople]
+    return contacts
+      .filter((contact) => selectedIds.includes(contact.contactId))
+      .sort((a, b) => compareImportableContacts(a, b, today));
+  }, [contacts, selectedIds]);
+  const effectiveSelectedContacts = useMemo(
+    () => prioritizedSelectedContacts.slice(0, remainingFreeSlots),
+    [prioritizedSelectedContacts, remainingFreeSlots]
   );
-
-  const firstImportedId = importedIds[0] ?? null;
-  const selectedCountLabel = selectedIds.length === 1 ? "Add 1 person to your circle" : `Add ${selectedIds.length} people to your circle`;
+  const effectiveSelectedIdSet = useMemo(
+    () => new Set(effectiveSelectedContacts.map((contact) => contact.contactId)),
+    [effectiveSelectedContacts]
+  );
+  const selectionWasTrimmed = prioritizedSelectedContacts.length > effectiveSelectedContacts.length;
+  const selectedContactPeople = useMemo(() => mapImportableContactsToPeople(effectiveSelectedContacts), [effectiveSelectedContacts]);
+  const selectedImportWouldExceedLimit = countNetNewPeople(people, selectedContactPeople) > remainingFreeSlots;
+  const selectedCountLabel =
+    effectiveSelectedContacts.length === 1
+      ? "Add 1 person to your circle"
+      : `Add ${effectiveSelectedContacts.length} people to your circle`;
 
   async function prepareContacts() {
     if (!isContactImportSupported()) {
@@ -405,7 +373,6 @@ export default function ImportContacts() {
     markOnboardingComplete();
     setImportedIds(importedPeople.map((person) => person.id));
     setRecentlyImportedPeople(importedPeople);
-    setPrimaryImportedName(importedPeople[0]?.name ?? "");
     setSelectedIds([]);
     setQuery("");
     setStep("done");
@@ -430,23 +397,29 @@ export default function ImportContacts() {
   }
 
   function importSelectedContacts() {
-    if (!selectedContacts.length) return;
-    finishImport(selectedContacts);
-  }
-
-  function toggleSelection(contactId: string) {
-    setSelectedIds((prev) =>
-      prev.includes(contactId) ? prev.filter((id) => id !== contactId) : [...prev, contactId]
-    );
-  }
-
-  function openDetailWithConnection(type: "child" | "partner") {
-    if (!firstImportedId) {
-      navigate("/home", { state: { defaultTab: "contacts" } });
+    if (!effectiveSelectedContacts.length) {
+      navigate("/paywall", {
+        state: {
+          fallbackPath: "/import",
+          source: "people-limit",
+        },
+      });
       return;
     }
 
-    navigate(`/person/${firstImportedId}`, { state: { startConnectionType: type } });
+    finishImport(effectiveSelectedContacts);
+  }
+
+  function toggleSelection(contactId: string) {
+    setSelectedIds((prev) => {
+      const next = prev.includes(contactId) ? prev.filter((id) => id !== contactId) : [...prev, contactId];
+      const today = new Date();
+      return contacts
+        .filter((contact) => next.includes(contact.contactId))
+        .sort((a, b) => compareImportableContacts(a, b, today))
+        .slice(0, remainingFreeSlots)
+        .map((contact) => contact.contactId);
+    });
   }
 
   function openPersonSetup(personId: string) {
@@ -454,7 +427,14 @@ export default function ImportContacts() {
   }
 
   return (
-    <div style={{ background: "var(--paper)", color: "var(--ink)", minHeight: "100vh" }}>
+    <div
+      style={{
+        background: "var(--paper)",
+        color: "var(--ink)",
+        minHeight: "100vh",
+        paddingBottom: step === "select" ? "120px" : undefined,
+      }}
+    >
       <div
         style={{
           maxWidth: "560px",
@@ -559,8 +539,8 @@ export default function ImportContacts() {
             />
 
             <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
-              {selectedIds.length > 0
-                ? `${selectedIds.length} selected`
+              {effectiveSelectedContacts.length > 0
+                ? `${effectiveSelectedContacts.length} selected`
                 : `${filteredContacts.length} contacts available`}
             </div>
 
@@ -591,7 +571,7 @@ export default function ImportContacts() {
                         Try starting with these
                       </div>
                       {starterContacts.map((contact) =>
-                        renderContactRow(contact, selectedIds.includes(contact.contactId), toggleSelection)
+                        renderContactRow(contact, effectiveSelectedIdSet.has(contact.contactId), toggleSelection)
                       )}
                     </div>
                   ) : null}
@@ -621,7 +601,7 @@ export default function ImportContacts() {
                         All contacts
                       </div>
                       {visibleAllContacts.map((contact) =>
-                        renderContactRow(contact, selectedIds.includes(contact.contactId), toggleSelection)
+                        renderContactRow(contact, effectiveSelectedIdSet.has(contact.contactId), toggleSelection)
                       )}
                     </div>
                   ) : null}
@@ -649,184 +629,118 @@ export default function ImportContacts() {
             ) : null}
 
             <div style={{ display: "grid", gap: "10px", marginTop: "8px" }}>
-              {selectedIds.length > 0 && selectedImportWouldExceedLimit ? (
+              {selectionWasTrimmed ? (
+                <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
+                  {`Only ${remainingFreeSlots} ${remainingFreeSlots === 1 ? "person is" : "people are"} selected right now.`}
+                </div>
+              ) : null}
+              {effectiveSelectedContacts.length > 0 && selectedImportWouldExceedLimit ? (
                 <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
                   Add up to 3 people for free.
                 </div>
               ) : null}
             </div>
-
-            <div
-              style={{
-                position: "sticky",
-                bottom: "calc(env(safe-area-inset-bottom) + 12px)",
-                zIndex: 2,
-                marginTop: "8px",
-                paddingTop: "8px",
-              }}
-            >
-              <button
-                type="button"
-                onClick={importSelectedContacts}
-                disabled={selectedIds.length === 0}
-                style={{
-                  width: "100%",
-                  borderRadius: "14px",
-                  padding: "0.95rem 1rem",
-                  fontSize: "1rem",
-                  background: "rgba(255,255,255,0.96)",
-                  backdropFilter: "blur(10px)",
-                }}
-              >
-                {selectedIds.length > 0 ? selectedCountLabel : "Add 1 person to your circle"}
-              </button>
-            </div>
           </div>
         ) : null}
 
         {step === "done" ? (
-          <div style={{ marginTop: "24px", display: "grid", gap: "14px" }}>
-            <div style={{ fontFamily: "var(--font-serif)", fontSize: "28px", fontWeight: 600 }}>
-              {importedIds.length > 1 ? `Added ${importedIds.length} people` : "Added someone important"}
-            </div>
-            <div style={{ color: "var(--muted)", lineHeight: 1.6 }}>
-              {firstImportedId ? `Start with ${firstName(primaryImportedName || "them")}` : "Start with them"}
+          <div style={{ marginTop: "24px", display: "grid", gap: "16px" }}>
+            <div style={{ display: "grid", gap: "8px" }}>
+              <div style={{ fontFamily: "var(--font-serif)", fontSize: "28px", fontWeight: 600 }}>
+                {`You added ${importedIds.length} ${importedIds.length === 1 ? "person" : "people"} to your circle`}
+              </div>
+              <div style={{ color: "var(--muted)", lineHeight: 1.6 }}>
+                Review each person and finish setting them up.
+              </div>
             </div>
 
-            {upcomingBirthdayPeople.length > 0 ? (
-              <div
-                style={{
-                  marginTop: "6px",
-                  display: "grid",
-                  gap: "10px",
-                  border: "1px solid var(--border)",
-                  borderRadius: "16px",
-                  padding: "14px",
-                  background: "rgba(255,255,255,0.7)",
-                }}
-              >
-                <div style={{ display: "grid", gap: "4px" }}>
-                  <div style={{ color: "var(--ink)", fontSize: "1rem", fontWeight: 600 }}>
-                    What’s coming up
-                  </div>
-                  <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
-                    We’ll remind you before these dates.
-                  </div>
-                </div>
-
-                <div style={{ display: "grid", gap: "8px" }}>
-                  {upcomingBirthdayPeople.map((person) => (
+            <div
+              style={{
+                display: "grid",
+                gap: "10px",
+                border: "1px solid var(--border)",
+                borderRadius: "16px",
+                padding: "14px",
+                background: "rgba(255,255,255,0.7)",
+              }}
+            >
+              {recentlyImportedPeople.map((person) => {
+                const displayName = displayNameOrFallback(person.name);
+                return (
+                  <div
+                    key={person.id}
+                    style={{
+                      display: "grid",
+                      gap: "10px",
+                      border: "1px solid var(--border)",
+                      borderRadius: "12px",
+                      padding: "14px",
+                      background: "var(--card)",
+                    }}
+                  >
+                    <div style={{ color: "var(--ink)", fontSize: "1rem", fontWeight: 600 }}>{displayName}</div>
                     <button
-                      key={person.id}
                       type="button"
                       onClick={() => openPersonSetup(person.id)}
                       style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "1rem",
-                        alignItems: "center",
-                        width: "100%",
-                        padding: "0.85rem 0.95rem",
                         borderRadius: "12px",
-                        border: "1px solid var(--border)",
-                        background: "var(--card)",
-                        color: "var(--ink)",
-                        textAlign: "left",
+                        padding: "0.85rem 1rem",
                         fontSize: "0.98rem",
-                        cursor: "pointer",
+                        background: "transparent",
+                        textAlign: "left",
                       }}
                     >
-                      <span style={{ fontWeight: 500 }}>{person.name}</span>
-                      <span style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{person.timingLabel}</span>
+                      {`Finish setting up ${displayName}`}
                     </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {importedPeopleMissingDates.length > 0 ? (
-              <div
-                style={{
-                  marginTop: "6px",
-                  display: "grid",
-                  gap: "10px",
-                  border: "1px solid var(--border)",
-                  borderRadius: "16px",
-                  padding: "14px",
-                  background: "rgba(255,255,255,0.7)",
-                }}
-              >
-                <div style={{ display: "grid", gap: "4px" }}>
-                  <div style={{ color: "var(--ink)", fontSize: "1rem", fontWeight: 600 }}>
-                    Want to add a date?
                   </div>
-                  <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
-                    So we can remind you when it matters.
-                  </div>
-                </div>
-
-                <div style={{ display: "grid", gap: "8px" }}>
-                  {importedPeopleMissingDates.map((person) => (
-                    <button
-                      key={person.id}
-                      type="button"
-                      onClick={() => openPersonSetup(person.id)}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "1rem",
-                        alignItems: "center",
-                        width: "100%",
-                        padding: "0.85rem 0.95rem",
-                        borderRadius: "12px",
-                        border: "1px solid var(--border)",
-                        background: "var(--card)",
-                        color: "var(--ink)",
-                        textAlign: "left",
-                        fontSize: "0.98rem",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <span style={{ fontWeight: 500 }}>{`Add a date for ${person.name}`}</span>
-                      <span style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>No dates yet</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            <div style={{ display: "grid", gap: "10px", marginTop: "8px" }}>
-              <button type="button" onClick={() => openDetailWithConnection("child")}>
-                Add child
-              </button>
-              <button
-                type="button"
-                onClick={() => openDetailWithConnection("partner")}
-                style={{
-                  borderRadius: "12px",
-                  padding: "0.85rem 1rem",
-                  fontSize: "1rem",
-                  background: "transparent",
-                }}
-              >
-                Add partner
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("/home", { state: { defaultTab: "contacts" } })}
-                style={{
-                  borderRadius: "12px",
-                  padding: "0.85rem 1rem",
-                  fontSize: "1rem",
-                  background: "transparent",
-                }}
-              >
-                Skip
-              </button>
+                );
+              })}
             </div>
+
+            <button
+              type="button"
+              onClick={() => navigate("/home", { state: { defaultTab: "contacts" } })}
+              style={{
+                borderRadius: "12px",
+                padding: "0.85rem 1rem",
+                fontSize: "1rem",
+                background: "transparent",
+              }}
+            >
+              Done
+            </button>
           </div>
         ) : null}
       </div>
+      {step === "select" ? (
+        <div
+          style={{
+            position: "fixed",
+            left: "50%",
+            bottom: "calc(env(safe-area-inset-bottom) + 12px)",
+            transform: "translateX(-50%)",
+            width: "min(560px, calc(100vw - 32px))",
+            zIndex: 20,
+          }}
+        >
+          <button
+            type="button"
+            onClick={importSelectedContacts}
+            disabled={effectiveSelectedContacts.length === 0}
+            style={{
+              width: "100%",
+              borderRadius: "14px",
+              padding: "0.95rem 1rem",
+              fontSize: "1rem",
+              background: "rgba(255,255,255,0.96)",
+              backdropFilter: "blur(10px)",
+              boxSizing: "border-box",
+            }}
+          >
+            {effectiveSelectedContacts.length > 0 ? selectedCountLabel : "Add 1 person to your circle"}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

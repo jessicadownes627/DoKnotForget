@@ -107,6 +107,11 @@ function normalizeContactName(name: string) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+function isExactMatch(name: string, terms: string[]) {
+  const normalizedName = normalizeContactName(name);
+  return terms.some((term) => normalizedName === term);
+}
+
 export function isPriorityContactName(name: string) {
   const normalizedName = normalizeContactName(name);
   if (!normalizedName) return false;
@@ -124,6 +129,14 @@ export function hasUpcomingBirthday(contact: ImportableContact, today = new Date
 }
 
 export function compareImportableContacts(a: ImportableContact, b: ImportableContact, today = new Date()) {
+  const aIsExactParent = isExactMatch(a.name, ["mom", "mother", "dad", "father"]);
+  const bIsExactParent = isExactMatch(b.name, ["mom", "mother", "dad", "father"]);
+  if (aIsExactParent !== bIsExactParent) return aIsExactParent ? -1 : 1;
+
+  const aIsExactPartner = isExactMatch(a.name, ["boyfriend", "girlfriend", "fiance", "fiancee", "husband", "wife", "bae", "bf", "gf"]);
+  const bIsExactPartner = isExactMatch(b.name, ["boyfriend", "girlfriend", "fiance", "fiancee", "husband", "wife", "bae", "bf", "gf"]);
+  if (aIsExactPartner !== bIsExactPartner) return aIsExactPartner ? -1 : 1;
+
   const aIsPriority = isPriorityContactName(a.name);
   const bIsPriority = isPriorityContactName(b.name);
   if (aIsPriority !== bIsPriority) return aIsPriority ? -1 : 1;

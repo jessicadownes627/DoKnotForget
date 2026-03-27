@@ -6,9 +6,10 @@ import { SoftGoldDot } from "../components/common/GoldBullets";
 import { useAppState } from "../appState";
 import { useNavigate } from "../router";
 import { filterContacts, initialsFromName } from "../utils/contactSearch";
+import { displayNameOrFallback } from "../utils/displayName";
 
 function groupKeyFromName(name: string) {
-  const trimmed = name.trim();
+  const trimmed = displayNameOrFallback(name, "").trim();
   const first = trimmed.charAt(0).toUpperCase();
   if (first >= "A" && first <= "Z") return first;
   return "#";
@@ -68,7 +69,7 @@ export default function Contacts() {
   const filtered = useMemo(() => {
     const matched = filterContacts(people, query);
     return [...matched].sort((a, b) =>
-      a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+      displayNameOrFallback(a.name).localeCompare(displayNameOrFallback(b.name), undefined, { sensitivity: "base" })
     );
   }, [people, query]);
 
@@ -206,7 +207,7 @@ export default function Contacts() {
                             {initialsFromName(p.name)}
                           </div>
                         </div>
-                        <div className="contact-name">{p.name}</div>
+                        <div className="contact-name">{displayNameOrFallback(p.name)}</div>
                       </button>
                     ))}
                   </div>

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { Person } from "../models/Person";
 import PersonArchiveCard from "../components/PersonArchiveCard";
+import { displayNameOrFallback } from "../utils/displayName";
 
 type Props = {
   people: Person[];
@@ -9,7 +10,7 @@ type Props = {
 };
 
 function groupKey(person: Person) {
-  const firstName = person.name.trim().split(/\s+/)[0] ?? "";
+  const firstName = displayNameOrFallback(person.name, "").split(/\s+/)[0] ?? "";
   const ch = firstName.trim().charAt(0).toUpperCase();
   if (ch >= "A" && ch <= "Z") return ch;
   return "#";
@@ -35,7 +36,7 @@ export default function PeopleIndex({ people, today, onSelectPerson }: Props) {
       .map((key) => ({
         key,
         people: (map.get(key) ?? []).sort((a, b) =>
-          a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+          displayNameOrFallback(a.name).localeCompare(displayNameOrFallback(b.name), undefined, { sensitivity: "base" })
         ),
       }))
       .filter((g) => g.people.length > 0);

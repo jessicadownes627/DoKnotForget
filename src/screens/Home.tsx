@@ -25,6 +25,7 @@ import GoldenSunDivider from "../components/GoldenSunDivider";
 import ContactsSearchResults from "../components/ContactsSearchResults";
 import { filterContacts } from "../utils/contactSearch";
 import SmartMessageSuggestionsModal from "../components/SmartMessageSuggestionsModal";
+import { displayNameOrFallback } from "../utils/displayName";
 import { formatLocalYmd, parseLocalDate } from "../utils/date";
 import { buildHomeSections } from "../utils/homeSections";
 import {
@@ -118,8 +119,7 @@ function possessive(name: string) {
 }
 
 function careEventDisplayName(name: string) {
-  const trimmed = name.trim();
-  return trimmed || "them";
+  return displayNameOrFallback(name);
 }
 
 function CircleEmptyStateGraphic() {

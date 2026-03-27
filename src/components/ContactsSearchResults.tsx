@@ -1,5 +1,6 @@
 import type { Person } from "../models/Person";
 import { initialsFromName } from "../utils/contactSearch";
+import { displayNameOrFallback } from "../utils/displayName";
 import { SoftGoldDot } from "./common/GoldBullets";
 
 type Props = {
@@ -26,7 +27,7 @@ export default function ContactsSearchResults({ results, onSelect }: Props) {
                 {initialsFromName(person.name)}
               </div>
             </div>
-            <div className="contact-name">{person.name}</div>
+            <div className="contact-name">{displayNameOrFallback(person.name)}</div>
           </button>
         ))
       )}
