@@ -302,7 +302,7 @@ export default function Settings() {
           style={{
             marginTop: "48px",
             display: "grid",
-            gap: "6px",
+            gap: "8px",
             textAlign: "center",
             color: "rgba(27, 42, 65, 0.58)",
             fontSize: "0.9rem",
@@ -310,7 +310,7 @@ export default function Settings() {
           }}
         >
           <div>Your people. On time.</div>
-          <div style={{ fontSize: "0.78rem", color: "rgba(27, 42, 65, 0.48)" }}>{appVersionLabel()}</div>
+          <div style={{ fontSize: "0.92rem", color: "var(--ink)", fontWeight: 500 }}>{appVersionLabel()}</div>
         </div>
       </div>
     </div>
