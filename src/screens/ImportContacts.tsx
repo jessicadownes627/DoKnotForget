@@ -24,6 +24,7 @@ import type { Person } from "../models/Person";
 const INITIAL_VISIBLE_CONTACTS = 80;
 const VISIBLE_CONTACTS_STEP = 80;
 const STARTER_CONTACT_LIMIT = 8;
+const STARTER_GROUP_CAP = 2;
 
 function formatBirthday(value: string | undefined) {
   if (!value) return "";
@@ -65,8 +66,113 @@ function mapImportableContactsToPeople(items: ImportableContact[]) {
   return items.map(importableContactToPerson);
 }
 
+function personHasImportantDate(person: Person) {
+  const moments = person.moments ?? [];
+  if (moments.length > 0) return true;
+  return Boolean(person.anniversary?.trim());
+}
+
+function takeImportableContactsWithinLimit(
+  existingPeople: Person[],
+  items: ImportableContact[],
+  limit: number
+) {
+  if (limit <= 0) return [];
+
+  const existingIds = new Set(existingPeople.map((person) => person.id));
+  const nextItems: ImportableContact[] = [];
+
+  for (const item of items) {
+    const person = importableContactToPerson(item);
+    if (existingIds.has(person.id)) continue;
+    existingIds.add(person.id);
+    nextItems.push(item);
+    if (nextItems.length >= limit) break;
+  }
+
+  return nextItems;
+}
+
 function shouldSuggestStarterContact(contact: ImportableContact, today: Date) {
   return isPriorityContactName(contact.name) || hasEmojiInName(contact.name) || hasUpcomingBirthday(contact, today);
+}
+
+function normalizeStarterName(name: string) {
+  return name
+    .trim()
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function matchesAnyTerm(name: string, terms: string[]) {
+  return terms.some((term) => name.includes(term));
+}
+
+function starterBucketKey(contact: ImportableContact) {
+  const normalized = normalizeStarterName(contact.name);
+
+  if (matchesAnyTerm(normalized, ["mom", "mother"])) return "mom";
+  if (matchesAnyTerm(normalized, ["dad", "father"])) return "dad";
+  if (
+    matchesAnyTerm(normalized, [
+      "boyfriend",
+      "girlfriend",
+      "fiance",
+      "fiancee",
+      "husband",
+      "wife",
+      "bae",
+      "bf",
+      "gf",
+    ])
+  ) {
+    return "partner";
+  }
+  if (matchesAnyTerm(normalized, ["aunt"])) return "aunt";
+  if (matchesAnyTerm(normalized, ["uncle"])) return "uncle";
+  if (matchesAnyTerm(normalized, ["cousin", "cous", "cuz"])) return "cousin";
+  if (matchesAnyTerm(normalized, ["grandma", "grandpa", "nana", "papa", "mimi", "oma", "opa"])) return "grand";
+  if (matchesAnyTerm(normalized, ["ice"])) return "ice";
+  if (matchesAnyTerm(normalized, ["work", "office", "boss"])) return "work";
+  if (hasEmojiInName(contact.name)) return "emoji";
+  if (hasUpcomingBirthday(contact)) return "birthday";
+  return "other";
+}
+
+function buildStarterContacts(contacts: ImportableContact[], today: Date) {
+  const sortedCandidates = contacts
+    .filter((contact) => shouldSuggestStarterContact(contact, today))
+    .sort((a, b) => compareImportableContacts(a, b, today));
+
+  const selected: ImportableContact[] = [];
+  const selectedIds = new Set<string>();
+  const bucketCounts = new Map<string, number>();
+
+  function tryAdd(contact: ImportableContact, force = false) {
+    if (selected.length >= STARTER_CONTACT_LIMIT) return false;
+    if (selectedIds.has(contact.contactId)) return false;
+
+    const bucket = starterBucketKey(contact);
+    const nextCount = bucketCounts.get(bucket) ?? 0;
+    if (!force && nextCount >= STARTER_GROUP_CAP) return false;
+
+    selected.push(contact);
+    selectedIds.add(contact.contactId);
+    bucketCounts.set(bucket, nextCount + 1);
+    return true;
+  }
+
+  for (const mustIncludeBucket of ["mom", "dad", "partner"]) {
+    const contact = sortedCandidates.find((candidate) => starterBucketKey(candidate) === mustIncludeBucket);
+    if (contact) tryAdd(contact, true);
+  }
+
+  for (const contact of sortedCandidates) {
+    tryAdd(contact);
+  }
+
+  return selected;
 }
 
 function renderContactRow(
@@ -94,12 +200,19 @@ function renderContactRow(
         checked={checked}
         onChange={() => toggleSelection(contact.contactId)}
         style={{
+          appearance: "none",
+          WebkitAppearance: "none",
           position: "absolute",
           opacity: 0,
           inset: 0,
           width: "100%",
           height: "100%",
           margin: 0,
+          padding: 0,
+          border: "none",
+          outline: "none",
+          background: "transparent",
+          boxShadow: "none",
           cursor: "pointer",
         }}
       />
@@ -176,10 +289,7 @@ export default function ImportContacts() {
 
   const starterContacts = useMemo(() => {
     const today = new Date();
-    return [...filteredContacts]
-      .filter((contact) => shouldSuggestStarterContact(contact, today))
-      .sort((a, b) => compareImportableContacts(a, b, today))
-      .slice(0, STARTER_CONTACT_LIMIT);
+    return buildStarterContacts(filteredContacts, today);
   }, [filteredContacts]);
 
   const allContacts = useMemo(() => {
@@ -198,10 +308,8 @@ export default function ImportContacts() {
     () => contacts.filter((contact) => selectedIds.includes(contact.contactId)),
     [contacts, selectedIds]
   );
-  const contactPeople = useMemo(() => mapImportableContactsToPeople(contacts), [contacts]);
   const selectedContactPeople = useMemo(() => mapImportableContactsToPeople(selectedContacts), [selectedContacts]);
   const remainingFreeSlots = Math.max(0, FREE_PEOPLE_LIMIT - people.length);
-  const importAllWouldExceedLimit = countNetNewPeople(people, contactPeople) > remainingFreeSlots;
   const selectedImportWouldExceedLimit = countNetNewPeople(people, selectedContactPeople) > remainingFreeSlots;
   const upcomingBirthdayPeople = useMemo(() => {
     const today = new Date();
@@ -225,8 +333,13 @@ export default function ImportContacts() {
       .sort((a, b) => a.daysUntilBirthday - b.daysUntilBirthday)
       .slice(0, 5);
   }, [recentlyImportedPeople]);
+  const importedPeopleMissingDates = useMemo(
+    () => recentlyImportedPeople.filter((person) => !personHasImportantDate(person)).slice(0, 3),
+    [recentlyImportedPeople]
+  );
 
   const firstImportedId = importedIds[0] ?? null;
+  const selectedCountLabel = selectedIds.length === 1 ? "Add 1 person to your circle" : `Add ${selectedIds.length} people to your circle`;
 
   async function prepareContacts() {
     if (!isContactImportSupported()) {
@@ -301,7 +414,19 @@ export default function ImportContacts() {
   async function importAllContacts() {
     const loaded = contacts.length ? contacts : await prepareContacts();
     if (!loaded.length) return;
-    finishImport(loaded);
+
+    const importableNow = takeImportableContactsWithinLimit(people, loaded, remainingFreeSlots);
+    if (!importableNow.length) {
+      navigate("/paywall", {
+        state: {
+          fallbackPath: "/import",
+          source: "people-limit",
+        },
+      });
+      return;
+    }
+
+    finishImport(importableNow);
   }
 
   function importSelectedContacts() {
@@ -359,7 +484,7 @@ export default function ImportContacts() {
         {step === "entry" ? (
             <div style={{ marginTop: "24px", textAlign: "center", display: "grid", gap: "14px" }}>
               <div style={{ fontFamily: "var(--font-serif)", fontSize: "28px", fontWeight: 600 }}>
-              Who should we keep track of?
+              Who’s in your circle?
               </div>
               <div style={{ color: "var(--muted)", lineHeight: 1.6 }}>
               Start with a few people you don’t want to forget.
@@ -398,11 +523,6 @@ export default function ImportContacts() {
               >
                 Import all contacts
               </button>
-              {contacts.length > 0 && importAllWouldExceedLimit ? (
-                <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
-                  Add up to 3 people for free.
-                </div>
-              ) : null}
             </div>
           </div>
         ) : null}
@@ -529,25 +649,36 @@ export default function ImportContacts() {
             ) : null}
 
             <div style={{ display: "grid", gap: "10px", marginTop: "8px" }}>
-              <button type="button" onClick={importSelectedContacts} disabled={selectedIds.length === 0}>
-                {selectedIds.length > 0 ? `Add ${selectedIds.length} people to your list` : "Import selected"}
-              </button>
               {selectedIds.length > 0 && selectedImportWouldExceedLimit ? (
                 <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
                   Add up to 3 people for free.
                 </div>
               ) : null}
+            </div>
+
+            <div
+              style={{
+                position: "sticky",
+                bottom: "calc(env(safe-area-inset-bottom) + 12px)",
+                zIndex: 2,
+                marginTop: "8px",
+                paddingTop: "8px",
+              }}
+            >
               <button
                 type="button"
-                onClick={() => setStep("entry")}
+                onClick={importSelectedContacts}
+                disabled={selectedIds.length === 0}
                 style={{
-                  borderRadius: "12px",
-                  padding: "0.85rem 1rem",
+                  width: "100%",
+                  borderRadius: "14px",
+                  padding: "0.95rem 1rem",
                   fontSize: "1rem",
-                  background: "transparent",
+                  background: "rgba(255,255,255,0.96)",
+                  backdropFilter: "blur(10px)",
                 }}
               >
-                Back to choices
+                {selectedIds.length > 0 ? selectedCountLabel : "Add 1 person to your circle"}
               </button>
             </div>
           </div>
@@ -607,6 +738,57 @@ export default function ImportContacts() {
                     >
                       <span style={{ fontWeight: 500 }}>{person.name}</span>
                       <span style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{person.timingLabel}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {importedPeopleMissingDates.length > 0 ? (
+              <div
+                style={{
+                  marginTop: "6px",
+                  display: "grid",
+                  gap: "10px",
+                  border: "1px solid var(--border)",
+                  borderRadius: "16px",
+                  padding: "14px",
+                  background: "rgba(255,255,255,0.7)",
+                }}
+              >
+                <div style={{ display: "grid", gap: "4px" }}>
+                  <div style={{ color: "var(--ink)", fontSize: "1rem", fontWeight: 600 }}>
+                    Want to add a date?
+                  </div>
+                  <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
+                    So we can remind you when it matters.
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gap: "8px" }}>
+                  {importedPeopleMissingDates.map((person) => (
+                    <button
+                      key={person.id}
+                      type="button"
+                      onClick={() => openPersonSetup(person.id)}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: "1rem",
+                        alignItems: "center",
+                        width: "100%",
+                        padding: "0.85rem 0.95rem",
+                        borderRadius: "12px",
+                        border: "1px solid var(--border)",
+                        background: "var(--card)",
+                        color: "var(--ink)",
+                        textAlign: "left",
+                        fontSize: "0.98rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span style={{ fontWeight: 500 }}>{`Add a date for ${person.name}`}</span>
+                      <span style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>No dates yet</span>
                     </button>
                   ))}
                 </div>

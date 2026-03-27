@@ -219,6 +219,7 @@ export default function PersonDetail({}: {}) {
       .filter((moment) => moment.type === "custom")
       .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
   }, [person.moments]);
+  const hasAnyImportantDates = Boolean(birthdayInfo || anniversaryDisplay || otherMoments.length > 0);
 
   const relationshipsForPerson = (relationships ?? []).filter(
     (rel) => rel.fromId === person.id || rel.toId === person.id
@@ -630,6 +631,45 @@ export default function PersonDetail({}: {}) {
             <section aria-label="Important dates" style={{ marginTop: "32px" }}>
               <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>Important dates</div>
 
+              {!hasAnyImportantDates ? (
+                <div
+                  style={{
+                    marginTop: "16px",
+                    border: "1px solid var(--border)",
+                    borderRadius: "14px",
+                    background: "rgba(255,255,255,0.6)",
+                    padding: "14px 16px",
+                    display: "grid",
+                    gap: "6px",
+                  }}
+                >
+                  <div style={{ color: "var(--ink)", fontSize: "1rem", fontWeight: 600 }}>
+                    {`Want to add a date for ${person.name.trim() || "them"}?`}
+                  </div>
+                  <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
+                    So we can remind you when it matters.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={openPersonEditor}
+                    style={{
+                      marginTop: "4px",
+                      padding: 0,
+                      border: "none",
+                      background: "none",
+                      cursor: "pointer",
+                      color: "var(--ink)",
+                      textDecoration: "underline",
+                      textUnderlineOffset: "3px",
+                      fontSize: "0.95rem",
+                      justifySelf: "start",
+                    }}
+                  >
+                    Add date
+                  </button>
+                </div>
+              ) : null}
+
               <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
                 <div>
                   <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Birthday</div>
@@ -667,7 +707,11 @@ export default function PersonDetail({}: {}) {
                         </div>
                       ))}
                     </div>
-                  ) : null}
+                  ) : (
+                    <div style={{ marginTop: "8px", color: "var(--muted)", fontSize: "0.95rem" }}>
+                      No dates yet
+                    </div>
+                  )}
                   <button
                     onClick={openPersonEditor}
                     style={{
