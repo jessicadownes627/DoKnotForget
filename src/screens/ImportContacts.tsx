@@ -52,7 +52,6 @@ function contactPrimaryLabel(contact: ImportableContact) {
 function formatUpcomingTiming(daysUntilBirthday: number) {
   if (daysUntilBirthday <= 0) return "today";
   if (daysUntilBirthday === 1) return "tomorrow";
-  if (daysUntilBirthday >= 7 && daysUntilBirthday <= 13) return "next week";
   return `in ${daysUntilBirthday} days`;
 }
 
@@ -118,13 +117,13 @@ export default function ImportContacts() {
       })
       .filter((person): person is { id: string; name: string; timingLabel: string; daysUntilBirthday: number } => Boolean(person))
       .sort((a, b) => a.daysUntilBirthday - b.daysUntilBirthday)
-      .slice(0, 3);
+      .slice(0, 5);
   }, [recentlyImportedPeople]);
 
   const firstImportedId = importedIds[0] ?? null;
 
   async function prepareContacts() {
-    if (!import.meta.env.DEV && !isContactImportSupported()) {
+    if (!isContactImportSupported()) {
       setError("Contact import works on the iPhone app. You can still add people manually.");
       return [];
     }
@@ -143,16 +142,8 @@ export default function ImportContacts() {
       setVisibleCount(INITIAL_VISIBLE_CONTACTS);
       return loaded;
     } catch {
-      if (!import.meta.env.DEV) {
-        setError("We couldn't load your contacts right now.");
-        return [];
-      }
-
-      const loaded = await loadImportableContacts();
-      setContacts(loaded);
-      setVisibleCount(INITIAL_VISIBLE_CONTACTS);
-      setError("");
-      return loaded;
+      setError("We couldn't load your contacts right now.");
+      return [];
     } finally {
       setIsLoading(false);
     }
@@ -303,7 +294,7 @@ export default function ImportContacts() {
               </button>
               {contacts.length > 0 && importAllWouldExceedLimit ? (
                 <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
-                  You can add up to 3 people for free
+                  Add up to 3 people for free.
                 </div>
               ) : null}
             </div>
@@ -426,7 +417,7 @@ export default function ImportContacts() {
               </button>
               {selectedIds.length > 0 && selectedImportWouldExceedLimit ? (
                 <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
-                  You can add up to 3 people for free
+                  Add up to 3 people for free.
                 </div>
               ) : null}
               <button
@@ -468,7 +459,7 @@ export default function ImportContacts() {
               >
                 <div style={{ display: "grid", gap: "4px" }}>
                   <div style={{ color: "var(--ink)", fontSize: "1rem", fontWeight: 600 }}>
-                    Start with what’s coming up
+                    What’s coming up
                   </div>
                   <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
                     We’ll remind you before these dates.

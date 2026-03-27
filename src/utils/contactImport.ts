@@ -22,27 +22,6 @@ export type ImportableContact = {
   birthday?: string;
 };
 
-function addDays(baseDate: Date, days: number) {
-  return new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + days);
-}
-
-function formatBirthdayFromNow(daysFromNow: number) {
-  const target = addDays(new Date(), daysFromNow);
-  const month = String(target.getMonth() + 1).padStart(2, "0");
-  const day = String(target.getDate()).padStart(2, "0");
-  return `0000-${month}-${day}`;
-}
-
-function getDevMockContacts(): ImportableContact[] {
-  return [
-    { contactId: "dev-audra", name: "Audra", birthday: formatBirthdayFromNow(5) },
-    { contactId: "dev-mike", name: "Mike", birthday: formatBirthdayFromNow(10) },
-    { contactId: "dev-sarah", name: "Sarah", birthday: formatBirthdayFromNow(20) },
-    { contactId: "dev-chris", name: "Chris" },
-    { contactId: "dev-no-name", name: "No name saved" },
-  ];
-}
-
 function getContactDisplayName(contact: ContactPayload) {
   const display = (contact.name?.display ?? "").trim();
   if (display) return display;
@@ -86,60 +65,45 @@ function getBirthdayIso(contact: ContactPayload) {
 }
 
 export async function ensureContactPermission() {
-  if (import.meta.env.DEV && !getCapacitorContactsPlugin()) return true;
-
   const plugin = getCapacitorContactsPlugin();
   if (!plugin) return false;
 
-  try {
-    const checked = (await plugin.checkPermissions()) as PermissionStatus;
-    if (checked.contacts === "granted" || checked.contacts === "limited") return true;
+  const checked = (await plugin.checkPermissions()) as PermissionStatus;
+  if (checked.contacts === "granted" || checked.contacts === "limited") return true;
 
-    const requested = (await plugin.requestPermissions()) as PermissionStatus;
-    return requested.contacts === "granted" || requested.contacts === "limited";
-  } catch {
-    if (import.meta.env.DEV) return true;
-    return false;
-  }
+  const requested = (await plugin.requestPermissions()) as PermissionStatus;
+  return requested.contacts === "granted" || requested.contacts === "limited";
 }
 
 export async function loadImportableContacts() {
   const plugin = getCapacitorContactsPlugin();
-  if (!plugin) return import.meta.env.DEV ? getDevMockContacts() : [];
+  if (!plugin) return [];
 
-  try {
-    const result = await plugin.getContacts({
-      projection: {
-        name: true,
-        phones: true,
-        birthday: true,
-      },
-    });
+  const result = await plugin.getContacts({
+    projection: {
+      name: true,
+      phones: true,
+      birthday: true,
+    },
+  });
 
-    const contacts = ((result?.contacts ?? []) as ContactPayload[])
-      .map((contact) => {
-        const name = getContactDisplayName(contact);
-        if (!name) return null;
+  return ((result?.contacts ?? []) as ContactPayload[])
+    .map((contact) => {
+      const name = getContactDisplayName(contact);
+      if (!name) return null;
 
-        const mapped: ImportableContact = {
-          contactId: contact.contactId,
-          name,
-        };
-        const phone = getPrimaryPhone(contact);
-        const birthday = getBirthdayIso(contact);
-        if (phone) mapped.phone = phone;
-        if (birthday) mapped.birthday = birthday;
-        return mapped;
-      })
-      .filter((contact): contact is ImportableContact => Boolean(contact))
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-
-    if (import.meta.env.DEV && contacts.length === 0) return getDevMockContacts();
-    return contacts;
-  } catch {
-    if (import.meta.env.DEV) return getDevMockContacts();
-    throw new Error("Failed to load contacts");
-  }
+      const mapped: ImportableContact = {
+        contactId: contact.contactId,
+        name,
+      };
+      const phone = getPrimaryPhone(contact);
+      const birthday = getBirthdayIso(contact);
+      if (phone) mapped.phone = phone;
+      if (birthday) mapped.birthday = birthday;
+      return mapped;
+    })
+    .filter((contact): contact is ImportableContact => Boolean(contact))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
 }
 
 export function importableContactToPerson(contact: ImportableContact): Person {

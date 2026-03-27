@@ -2368,12 +2368,12 @@ export default function Home({
 	                <button
 	                  onClick={() => navigate("/import")}
 	                  style={{
-	                    border: "1px solid var(--border)",
+	                    border: "1px solid var(--border-strong)",
 	                    background: "transparent",
-	                    color: "var(--muted)",
+	                    color: "var(--ink)",
 	                    cursor: "pointer",
 	                    textAlign: "left",
-	                    fontWeight: 400,
+	                    fontWeight: 500,
 	                    letterSpacing: "0.01em",
 	                    borderRadius: "12px",
 	                    padding: "0.65rem 1rem",

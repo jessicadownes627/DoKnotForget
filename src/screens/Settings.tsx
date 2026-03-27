@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppState } from "../appState";
 import { getUpcomingReminders } from "../engine/reminderEngine";
 import { useNavigate } from "../router";
+import { appVersionLabel } from "../utils/appVersion";
 import {
   cancelScheduledReminderNotifications,
   configureReminderNotifications,
@@ -300,13 +301,16 @@ export default function Settings() {
         <div
           style={{
             marginTop: "48px",
+            display: "grid",
+            gap: "6px",
             textAlign: "center",
             color: "rgba(27, 42, 65, 0.58)",
             fontSize: "0.9rem",
             fontFamily: "var(--font-sans)",
           }}
         >
-          Your people. On time.
+          <div>Your people. On time.</div>
+          <div style={{ fontSize: "0.78rem", color: "rgba(27, 42, 65, 0.48)" }}>{appVersionLabel()}</div>
         </div>
       </div>
     </div>
