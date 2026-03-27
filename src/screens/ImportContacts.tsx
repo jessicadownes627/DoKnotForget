@@ -56,6 +56,10 @@ function formatUpcomingTiming(daysUntilBirthday: number) {
   return `in ${daysUntilBirthday} days`;
 }
 
+function mapImportableContactsToPeople(items: ImportableContact[]) {
+  return items.map(importableContactToPerson);
+}
+
 export default function ImportContacts() {
   const navigate = useNavigate();
   const { people, createPeople, markOnboardingComplete } = useAppState();
@@ -89,9 +93,11 @@ export default function ImportContacts() {
     () => contacts.filter((contact) => selectedIds.includes(contact.contactId)),
     [contacts, selectedIds]
   );
+  const contactPeople = useMemo(() => mapImportableContactsToPeople(contacts), [contacts]);
+  const selectedContactPeople = useMemo(() => mapImportableContactsToPeople(selectedContacts), [selectedContacts]);
   const remainingFreeSlots = Math.max(0, FREE_PEOPLE_LIMIT - people.length);
-  const importAllWouldExceedLimit = countNetNewPeople(people, contacts) > remainingFreeSlots;
-  const selectedImportWouldExceedLimit = countNetNewPeople(people, selectedContacts) > remainingFreeSlots;
+  const importAllWouldExceedLimit = countNetNewPeople(people, contactPeople) > remainingFreeSlots;
+  const selectedImportWouldExceedLimit = countNetNewPeople(people, selectedContactPeople) > remainingFreeSlots;
   const upcomingBirthdayPeople = useMemo(() => {
     const today = new Date();
 
@@ -174,7 +180,7 @@ export default function ImportContacts() {
   }
 
   function finishImport(items: ImportableContact[]) {
-    const importedPeople = items.map(importableContactToPerson);
+    const importedPeople = mapImportableContactsToPeople(items);
     if (wouldExceedFreePeopleLimit(people, importedPeople)) {
       navigate("/paywall", {
         state: {
