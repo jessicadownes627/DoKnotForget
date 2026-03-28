@@ -1,16 +1,15 @@
+import { Contacts, type ContactPayload, type PermissionStatus, PhoneType } from "@capacitor-community/contacts";
+import { Capacitor } from "@capacitor/core";
 import { useMemo, useState } from "react";
 import { useAppState } from "../appState";
 import { useNavigate } from "../router";
 import {
   compareImportableContacts,
   compareImportableContactsAlphabetically,
-  ensureContactPermission,
   hasEmojiInName,
   hasUpcomingBirthday,
   importableContactToPerson,
   isPriorityContactName,
-  isContactImportSupported,
-  loadImportableContacts,
   type ImportableContact,
 } from "../utils/contactImport";
 import {
@@ -20,6 +19,7 @@ import {
 } from "../utils/freeLimit";
 import { displayNameOrFallback } from "../utils/displayName";
 import type { Person } from "../models/Person";
+import { normalizePhone } from "../utils/phone";
 
 const INITIAL_VISIBLE_CONTACTS = 80;
 const VISIBLE_CONTACTS_STEP = 80;
@@ -53,6 +53,101 @@ function contactPrimaryLabel(contact: ImportableContact) {
 
 function mapImportableContactsToPeople(items: ImportableContact[]) {
   return items.map(importableContactToPerson);
+}
+
+function isContactImportSupported() {
+  return typeof window !== "undefined" && Capacitor.getPlatform() !== "web" && Boolean(Contacts);
+}
+
+function getContactDisplayName(contact: ContactPayload) {
+  const display = (contact.name?.display ?? "").trim();
+  if (display) return display;
+
+  const parts = [
+    (contact.name?.given ?? "").trim(),
+    (contact.name?.middle ?? "").trim(),
+    (contact.name?.family ?? "").trim(),
+  ].filter(Boolean);
+  return parts.join(" ").trim();
+}
+
+function getPrimaryPhone(contact: ContactPayload) {
+  const phones = contact.phones ?? [];
+  const normalized = phones
+    .map((phone) => ({
+      type: phone.type,
+      isPrimary: phone.isPrimary === true,
+      number: normalizePhone((phone.number ?? "").trim()) ?? (phone.number ?? "").trim(),
+    }))
+    .filter((phone) => phone.number);
+
+  if (!normalized.length) return undefined;
+
+  const primary =
+    normalized.find((phone) => phone.isPrimary) ??
+    normalized.find((phone) => phone.type === PhoneType.Mobile) ??
+    normalized[0];
+
+  return primary?.number || undefined;
+}
+
+function getBirthdayIso(contact: ContactPayload) {
+  const birthday = contact.birthday;
+  if (!birthday?.month || !birthday?.day) return undefined;
+
+  const month = String(birthday.month).padStart(2, "0");
+  const day = String(birthday.day).padStart(2, "0");
+  const year = birthday.year && birthday.year > 0 ? String(birthday.year).padStart(4, "0") : "0000";
+  return `${year}-${month}-${day}`;
+}
+
+async function requestContactsPermission(reason: "select" | "import-all") {
+  const checked = (await Contacts.checkPermissions()) as PermissionStatus;
+  console.log("[ImportContacts] Contacts permission check", { reason, checked });
+  if (checked.contacts === "granted" || checked.contacts === "limited") return true;
+
+  const requested = (await Contacts.requestPermissions()) as PermissionStatus;
+  console.log("[ImportContacts] Contacts permission request", { reason, requested });
+  return requested.contacts === "granted" || requested.contacts === "limited";
+}
+
+async function loadImportableContactsFromPlugin(reason: "select" | "import-all") {
+  const result = await Contacts.getContacts({
+    projection: {
+      name: true,
+      phones: true,
+      birthday: true,
+    },
+  });
+  console.log("[ImportContacts] Raw contact results", {
+    reason,
+    count: (result?.contacts ?? []).length,
+  });
+
+  const today = new Date();
+  const mapped = ((result?.contacts ?? []) as ContactPayload[])
+    .map((contact) => {
+      const name = getContactDisplayName(contact);
+      if (!name) return null;
+
+      const nextContact: ImportableContact = {
+        contactId: contact.contactId,
+        name,
+      };
+      const phone = getPrimaryPhone(contact);
+      const birthday = getBirthdayIso(contact);
+      if (phone) nextContact.phone = phone;
+      if (birthday) nextContact.birthday = birthday;
+      return nextContact;
+    })
+    .filter((contact): contact is ImportableContact => Boolean(contact))
+    .sort((a, b) => compareImportableContacts(a, b, today));
+
+  console.log("[ImportContacts] Importable contacts mapped", {
+    reason,
+    count: mapped.length,
+  });
+  return mapped;
 }
 
 function takeImportableContactsWithinLimit(
@@ -309,26 +404,29 @@ export default function ImportContacts() {
       ? "Add 1 person to your circle"
       : `Add ${effectiveSelectedContacts.length} people to your circle`;
 
-  async function prepareContacts() {
+  async function prepareContacts(reason: "select" | "import-all") {
     if (!isContactImportSupported()) {
       setError("Contact import works on the iPhone app. You can still add people manually.");
+      console.log("[ImportContacts] Contact import unsupported", { reason, platform: Capacitor.getPlatform() });
       return [];
     }
 
     setIsLoading(true);
     setError("");
     try {
-      const allowed = await ensureContactPermission();
+      const allowed = await requestContactsPermission(reason);
       if (!allowed) {
         setError("We need contact access before we can help you choose people.");
+        console.log("[ImportContacts] Permission denied", { reason });
         return [];
       }
 
-      const loaded = await loadImportableContacts();
+      const loaded = await loadImportableContactsFromPlugin(reason);
       setContacts(loaded);
       setVisibleCount(INITIAL_VISIBLE_CONTACTS);
       return loaded;
-    } catch {
+    } catch (error) {
+      console.log("[ImportContacts] Failed to load contacts", { reason, error });
       setError("We couldn't load your contacts right now.");
       return [];
     } finally {
@@ -352,7 +450,8 @@ export default function ImportContacts() {
   }
 
   async function openSelectFlow() {
-    const loaded = contacts.length ? contacts : await prepareContacts();
+    console.log("[ImportContacts] Select people pressed");
+    const loaded = contacts.length ? contacts : await prepareContacts("select");
     if (!loaded.length && !contacts.length) return;
     setStep("select");
   }
@@ -379,7 +478,8 @@ export default function ImportContacts() {
   }
 
   async function importAllContacts() {
-    const loaded = contacts.length ? contacts : await prepareContacts();
+    console.log("[ImportContacts] Import all contacts pressed");
+    const loaded = contacts.length ? contacts : await prepareContacts("import-all");
     if (!loaded.length) return;
 
     const importableNow = takeImportableContactsWithinLimit(people, loaded, remainingFreeSlots);
@@ -397,6 +497,10 @@ export default function ImportContacts() {
   }
 
   function importSelectedContacts() {
+    console.log("[ImportContacts] Import selected contacts pressed", {
+      selectedCount: effectiveSelectedContacts.length,
+      selectedContactIds: effectiveSelectedContacts.map((contact) => contact.contactId),
+    });
     if (!effectiveSelectedContacts.length) {
       navigate("/paywall", {
         state: {
