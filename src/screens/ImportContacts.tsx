@@ -1,6 +1,6 @@
 import { Contacts, type ContactPayload, type PermissionStatus, PhoneType } from "@capacitor-community/contacts";
 import { Capacitor } from "@capacitor/core";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppState } from "../appState";
 import { useNavigate } from "../router";
 import {
@@ -324,6 +324,7 @@ export default function ImportContacts() {
   const { people, createPeople, markOnboardingComplete } = useAppState();
 
   const [step, setStep] = useState<"entry" | "select" | "done">("entry");
+  const [mode, setMode] = useState<"import-all" | "select" | null>(null);
   const [contacts, setContacts] = useState<ImportableContact[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [query, setQuery] = useState("");
@@ -332,6 +333,23 @@ export default function ImportContacts() {
   const [error, setError] = useState("");
   const [importedIds, setImportedIds] = useState<string[]>([]);
   const [recentlyImportedPeople, setRecentlyImportedPeople] = useState<Person[]>([]);
+
+  function resetFlowState() {
+    setStep("entry");
+    setMode(null);
+    setContacts([]);
+    setSelectedIds([]);
+    setQuery("");
+    setVisibleCount(INITIAL_VISIBLE_CONTACTS);
+    setIsLoading(false);
+    setError("");
+    setImportedIds([]);
+    setRecentlyImportedPeople([]);
+  }
+
+  useEffect(() => {
+    resetFlowState();
+  }, []);
 
   const availableContacts = useMemo(
     () =>
@@ -351,17 +369,21 @@ export default function ImportContacts() {
   }, [availableContacts, query]);
 
   const starterContacts = useMemo(() => {
+    if (mode !== "import-all") return [];
     if (filteredContacts.length <= 1) return [];
     const today = new Date();
     return buildStarterContacts(filteredContacts, today);
-  }, [filteredContacts]);
+  }, [filteredContacts, mode]);
 
   const allContacts = useMemo(() => {
+    if (mode !== "import-all") {
+      return [...filteredContacts].sort(compareImportableContactsAlphabetically);
+    }
     const starterIds = new Set(starterContacts.map((contact) => contact.contactId));
     return filteredContacts
       .filter((contact) => !starterIds.has(contact.contactId))
       .sort(compareImportableContactsAlphabetically);
-  }, [filteredContacts, starterContacts]);
+  }, [filteredContacts, mode, starterContacts]);
 
   const visibleAllContacts = useMemo(
     () => allContacts.slice(0, Math.max(0, visibleCount - starterContacts.length)),
@@ -419,8 +441,7 @@ export default function ImportContacts() {
 
   function handleBack() {
     if (step === "select") {
-      setStep("entry");
-      setQuery("");
+      resetFlowState();
       return;
     }
 
@@ -441,6 +462,11 @@ export default function ImportContacts() {
         return;
       }
 
+      setMode("select");
+      setSelectedIds([]);
+      setQuery("");
+      setImportedIds([]);
+      setRecentlyImportedPeople([]);
       const loaded = await prepareContacts("select");
       console.log("[ImportContacts] handleSelectContacts stop check", {
         loaded: loaded?.length ?? null,
@@ -485,20 +511,24 @@ export default function ImportContacts() {
         return;
       }
 
+      setMode("import-all");
+      setSelectedIds([]);
+      setQuery("");
+      setImportedIds([]);
+      setRecentlyImportedPeople([]);
       const loaded = await prepareContacts("import-all");
       if (!loaded) return;
-      if (people.length + loaded.length > FREE_LIMIT) {
-        console.log("PAYWALL TRIGGERED");
-        navigate("/paywall", {
-          state: {
-            fallbackPath: "/import",
-            source: "people-limit",
-          },
-        });
-        return;
-      }
-
-      finishImport(loaded);
+      const freeSlotsRemaining = Math.max(0, FREE_LIMIT - people.length);
+      const starterIds = buildStarterContacts(
+        loaded.filter(
+          (contact) => !people.some((person) => person.phone && contact.phone && person.phone === contact.phone)
+        ),
+        new Date()
+      )
+        .slice(0, freeSlotsRemaining)
+        .map((contact) => contact.contactId);
+      setSelectedIds(starterIds);
+      setStep("select");
     } catch (error) {
       console.error("[ImportContacts] handleImportAll failed", error);
     }
@@ -542,6 +572,31 @@ export default function ImportContacts() {
 
   function openPersonSetup(personId: string) {
     navigate(`/person/${personId}`);
+  }
+
+  function goToHomeAfterImport() {
+    if (mode === "select") {
+      navigate("/home", {
+        state: {
+          selectModeFeedback: recentlyImportedPeople.map((person) => ({
+            id: person.id,
+            name: person.name,
+          })),
+        },
+      });
+      return;
+    }
+
+    if (mode === "import-all") {
+      navigate("/home", {
+        state: {
+          importAllFeedbackCount: recentlyImportedPeople.length,
+        },
+      });
+      return;
+    }
+
+    navigate("/home");
   }
 
   return (
@@ -812,7 +867,7 @@ export default function ImportContacts() {
 
             <button
               type="button"
-              onClick={() => navigate("/home", { state: { defaultTab: "contacts" } })}
+              onClick={goToHomeAfterImport}
               style={{
                 borderRadius: "12px",
                 padding: "0.85rem 1rem",

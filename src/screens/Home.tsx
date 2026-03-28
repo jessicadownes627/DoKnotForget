@@ -103,6 +103,7 @@ const ADULT_QUICK_IDEAS = [
 ];
 
 const RECOMMENDATIONS_SHEET_URL = (import.meta.env.VITE_RECOMMENDATIONS_SHEET_URL ?? "").trim();
+const FREE_LIMIT = 3;
 
 function startOfToday() {
   const now = new Date();
@@ -410,6 +411,9 @@ export default function Home({
     suggestions: Array<{ id: "quick" | "friendly" | "thoughtful" | "simple" | "custom"; label: string; message: string }>;
     onAfterSend?: () => void;
   }>(null);
+  const [selectModeFeedback, setSelectModeFeedback] = useState<Array<{ id: string; name: string }>>([]);
+  const [isSelectModeFeedbackVisible, setIsSelectModeFeedbackVisible] = useState(false);
+  const [importToastMessage, setImportToastMessage] = useState("");
   const previousPeopleCountRef = useRef<number>(people.length);
   const [today, setToday] = useState(() => startOfToday());
   const isHome = location.pathname === "/" || location.pathname === "/home";
@@ -466,6 +470,52 @@ export default function Home({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const incomingSelectFeedback = Array.isArray(location.state?.selectModeFeedback)
+      ? (location.state.selectModeFeedback as unknown[])
+          .filter((item): item is { id: string; name: string } =>
+            Boolean(
+              item &&
+              typeof item === "object" &&
+              typeof (item as { id?: unknown }).id === "string" &&
+              typeof (item as { name?: unknown }).name === "string"
+            )
+          )
+          .slice(0, 3)
+      : [];
+    const incomingImportAllCount =
+      typeof location.state?.importAllFeedbackCount === "number" ? location.state.importAllFeedbackCount : 0;
+
+    if (!incomingSelectFeedback.length && incomingImportAllCount <= 0) return;
+
+    const timeouts: number[] = [];
+    let frame = 0;
+
+    if (incomingSelectFeedback.length) {
+      setSelectModeFeedback(incomingSelectFeedback);
+      setIsSelectModeFeedbackVisible(false);
+      frame = window.requestAnimationFrame(() => setIsSelectModeFeedbackVisible(true));
+      timeouts.push(window.setTimeout(() => setIsSelectModeFeedbackVisible(false), 2400));
+      timeouts.push(window.setTimeout(() => setSelectModeFeedback([]), 2900));
+    }
+
+    if (incomingImportAllCount > 0) {
+      setImportToastMessage(
+        `You added ${incomingImportAllCount} ${incomingImportAllCount === 1 ? "person" : "people"} to your circle`
+      );
+      timeouts.push(window.setTimeout(() => setImportToastMessage(""), 2600));
+    }
+
+    window.history.replaceState({}, document.title, location.pathname);
+
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      for (const timeoutId of timeouts) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [location.pathname, location.state]);
 
   function seedDemoData() {
     const base = startOfToday();
@@ -1728,6 +1778,22 @@ export default function Home({
     }
   }, [isHome, location.pathname, location.state, navigate]);
 
+  function navigateToAddPerson() {
+    if (people.length >= FREE_LIMIT) {
+      navigate("/paywall");
+      return;
+    }
+    navigate("/add");
+  }
+
+  function navigateToImportContacts() {
+    if (people.length >= FREE_LIMIT) {
+      navigate("/paywall");
+      return;
+    }
+    navigate("/import");
+  }
+
   return (
     <div style={{ background: "var(--paper)", color: "var(--ink)" }}>
       <div
@@ -1938,7 +2004,7 @@ export default function Home({
 	              </div>
 		              <div className="dkf-onboard-cta" style={{ marginTop: "1.75rem", display: "grid", gap: "12px" }}>
 		                <button
-		                  onClick={() => navigate("/add")}
+		                  onClick={navigateToAddPerson}
 		                  style={{
 		                    border: "1px solid var(--border-strong)",
 		                    background: "transparent",
@@ -1956,7 +2022,7 @@ export default function Home({
 		                  + Add someone important
 		                </button>
 		                <button
-		                  onClick={() => navigate("/import")}
+		                  onClick={navigateToImportContacts}
 		                  style={{
 		                    border: "1px solid var(--border-strong)",
 		                    background: "transparent",
@@ -1989,7 +2055,7 @@ export default function Home({
 
               <div style={{ marginTop: "32px", display: "grid", gap: "16px" }}>
                 <button
-                  onClick={() => navigate("/add")}
+                  onClick={navigateToAddPerson}
                   style={{
                     border: "1px solid var(--border-strong)",
                     background: "transparent",
@@ -2221,6 +2287,7 @@ export default function Home({
                   );
 
                   const renderEmpty = () => {
+                    if (hasPendingReminders) return null;
                     if (searchTerm.trim() && filteredPeople.length === 0) {
                       return (
                         <div style={{ marginTop: "1.5rem", padding: "2.25rem 0", textAlign: "center" }}>
@@ -2327,6 +2394,92 @@ export default function Home({
 
                   return (
                     <>
+                      {selectModeFeedback.length > 0 ? (
+                        <div
+                          aria-live="polite"
+                          style={{
+                            display: "flex",
+                            justifyContent: "center",
+                            marginBottom: "16px",
+                            opacity: isSelectModeFeedbackVisible ? 1 : 0,
+                            transform: isSelectModeFeedbackVisible ? "scale(1)" : "scale(0.96)",
+                            transition: "opacity 220ms ease, transform 220ms ease",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "10px",
+                              padding: "10px 14px",
+                              borderRadius: "999px",
+                              border: "1px solid var(--border)",
+                              background: "rgba(255,255,255,0.74)",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center" }}>
+                              {selectModeFeedback.map((person, index) => {
+                                const label = displayNameOrFallback(person.name);
+                                const initial = label.charAt(0).toUpperCase() || "?";
+                                return (
+                                  <div
+                                    key={person.id}
+                                    aria-label={label}
+                                    title={label}
+                                    style={{
+                                      width: "36px",
+                                      height: "36px",
+                                      borderRadius: "999px",
+                                      marginLeft: index === 0 ? 0 : "-8px",
+                                      border: "1px solid rgba(216,180,106,0.42)",
+                                      background: "rgba(216,180,106,0.18)",
+                                      color: "var(--ink)",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      fontSize: "0.95rem",
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    {initial}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.4 }}>
+                              {selectModeFeedback.length === 1
+                                ? `${displayNameOrFallback(selectModeFeedback[0]?.name ?? "Someone")} is in your circle`
+                                : `${selectModeFeedback.length} people are in your circle`}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {importToastMessage ? (
+                        <div
+                          aria-live="polite"
+                          style={{
+                            display: "flex",
+                            justifyContent: "center",
+                            marginBottom: "16px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              padding: "10px 14px",
+                              borderRadius: "999px",
+                              border: "1px solid var(--border)",
+                              background: "rgba(255,255,255,0.78)",
+                              color: "var(--ink)",
+                              fontSize: "0.95rem",
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            {importToastMessage}
+                          </div>
+                        </div>
+                      ) : null}
+
                       {!hasPendingReminders ? renderEmpty() : null}
 
                       {todayReminders.length > 0 ? (
@@ -2446,7 +2599,7 @@ export default function Home({
 	                }}
 	              >
 	                <button
-	                  onClick={() => navigate("/add")}
+	                  onClick={navigateToAddPerson}
                   style={{
                     border: "1px solid var(--border-strong)",
                     background: "transparent",
@@ -2464,7 +2617,7 @@ export default function Home({
 	                  + Add someone important
 	                </button>
 	                <button
-	                  onClick={() => navigate("/import")}
+	                  onClick={navigateToImportContacts}
 	                  style={{
 	                    border: "1px solid var(--border-strong)",
 	                    background: "transparent",
