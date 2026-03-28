@@ -10,6 +10,8 @@ import { parseLocalDate } from "../utils/date";
 import { getSelectedHolidays } from "../utils/personHolidays";
 import { wouldExceedFreePeopleLimit } from "../utils/freeLimit";
 
+const FREE_LIMIT = 3;
+
 export default function AddPerson() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -240,7 +242,8 @@ export default function AddPerson() {
       importantDates: moments.filter((m) => m.type === "custom"),
     };
 
-    if (!editingPerson && wouldExceedFreePeopleLimit(people, [person])) {
+    if (!editingPerson && (people.length >= FREE_LIMIT || wouldExceedFreePeopleLimit(people, [person]))) {
+      console.log("PAYWALL TRIGGERED");
       navigate("/paywall", {
         state: {
           fallbackPath: "/home",

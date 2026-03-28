@@ -13,7 +13,6 @@ import {
   type ImportableContact,
 } from "../utils/contactImport";
 import {
-  FREE_PEOPLE_LIMIT,
   countNetNewPeople,
   wouldExceedFreePeopleLimit,
 } from "../utils/freeLimit";
@@ -25,6 +24,7 @@ const INITIAL_VISIBLE_CONTACTS = 80;
 const VISIBLE_CONTACTS_STEP = 80;
 const STARTER_CONTACT_LIMIT = 8;
 const STARTER_GROUP_CAP = 2;
+const FREE_LIMIT = 3;
 
 function formatBirthday(value: string | undefined) {
   if (!value) return "";
@@ -381,7 +381,7 @@ export default function ImportContacts() {
     [allContacts, starterContacts.length, visibleCount]
   );
 
-  const remainingFreeSlots = Math.max(0, FREE_PEOPLE_LIMIT - people.length);
+  const remainingFreeSlots = Math.max(0, FREE_LIMIT - people.length);
   const prioritizedSelectedContacts = useMemo(() => {
     const today = new Date();
     return contacts
@@ -404,11 +404,11 @@ export default function ImportContacts() {
       ? "Add 1 person to your circle"
       : `Add ${effectiveSelectedContacts.length} people to your circle`;
 
-  async function prepareContacts(reason: "select" | "import-all") {
+  async function prepareContacts(reason: "select" | "import-all"): Promise<ImportableContact[] | null> {
     if (!isContactImportSupported()) {
       setError("Contact import works on the iPhone app. You can still add people manually.");
       console.log("[ImportContacts] Contact import unsupported", { reason, platform: Capacitor.getPlatform() });
-      return [];
+      return null;
     }
 
     setIsLoading(true);
@@ -419,17 +419,18 @@ export default function ImportContacts() {
         window.alert("Contacts access was denied.");
         setError("We need contact access before we can help you choose people.");
         console.log("[ImportContacts] Permission denied", { reason });
-        return [];
+        return null;
       }
 
       const loaded = await loadImportableContactsFromPlugin(reason);
+      console.log("[ImportContacts] number of contacts loaded", loaded.length);
       setContacts(loaded);
       setVisibleCount(INITIAL_VISIBLE_CONTACTS);
       return loaded;
     } catch (error) {
       console.log("[ImportContacts] Failed to load contacts", { reason, error });
       setError("We couldn't load your contacts right now.");
-      return [];
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -451,10 +452,19 @@ export default function ImportContacts() {
   }
 
   async function handleSelectContacts() {
-    console.log("IMPORT CLICKED");
+    console.log("SELECT CLICKED");
     try {
+      if (people.length >= FREE_LIMIT) {
+        console.log("PAYWALL TRIGGERED");
+        navigate("/paywall");
+        return;
+      }
+
       const loaded = await prepareContacts("select");
-      if (!loaded.length) return;
+      console.log("[ImportContacts] handleSelectContacts stop check", {
+        loaded: loaded?.length ?? null,
+      });
+      if (!loaded) return;
       setStep("select");
     } catch (error) {
       console.error("[ImportContacts] handleSelectContacts failed", error);
@@ -463,7 +473,8 @@ export default function ImportContacts() {
 
   function finishImport(items: ImportableContact[]) {
     const importedPeople = mapImportableContactsToPeople(items);
-    if (wouldExceedFreePeopleLimit(people, importedPeople)) {
+    if (people.length >= FREE_LIMIT || wouldExceedFreePeopleLimit(people, importedPeople)) {
+      console.log("PAYWALL TRIGGERED");
       navigate("/paywall", {
         state: {
           fallbackPath: "/import",
@@ -474,6 +485,7 @@ export default function ImportContacts() {
     }
 
     createPeople(importedPeople);
+    console.log("[ImportContacts] number saved", importedPeople.length);
     markOnboardingComplete();
     setImportedIds(importedPeople.map((person) => person.id));
     setRecentlyImportedPeople(importedPeople);
@@ -485,11 +497,18 @@ export default function ImportContacts() {
   async function handleImportAll() {
     console.log("IMPORT CLICKED");
     try {
+      if (people.length >= FREE_LIMIT) {
+        console.log("PAYWALL TRIGGERED");
+        navigate("/paywall");
+        return;
+      }
+
       const loaded = await prepareContacts("import-all");
-      if (!loaded.length) return;
+      if (!loaded) return;
 
       const importableNow = takeImportableContactsWithinLimit(people, loaded, remainingFreeSlots);
       if (!importableNow.length) {
+        console.log("PAYWALL TRIGGERED");
         navigate("/paywall", {
           state: {
             fallbackPath: "/import",
@@ -510,7 +529,14 @@ export default function ImportContacts() {
       selectedCount: effectiveSelectedContacts.length,
       selectedContactIds: effectiveSelectedContacts.map((contact) => contact.contactId),
     });
+    console.log("[ImportContacts] number selected", effectiveSelectedContacts.length);
+    if (people.length >= FREE_LIMIT) {
+      console.log("PAYWALL TRIGGERED");
+      navigate("/paywall");
+      return;
+    }
     if (!effectiveSelectedContacts.length) {
+      console.log("PAYWALL TRIGGERED");
       navigate("/paywall", {
         state: {
           fallbackPath: "/import",
