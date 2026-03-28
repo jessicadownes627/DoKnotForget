@@ -6,17 +6,7 @@ export default function Paywall() {
   const isPeopleLimitPaywall = location.state?.source === "people-limit";
 
   function continueFree() {
-    const fallbackPath =
-      typeof location.state?.fallbackPath === "string" && location.state.fallbackPath.trim()
-        ? location.state.fallbackPath
-        : "/home";
-
-    if (window.history.length > 1) {
-      window.history.back();
-      return;
-    }
-
-    navigate(fallbackPath);
+    navigate("/home", { state: { defaultTab: "home" } });
   }
 
   return (
