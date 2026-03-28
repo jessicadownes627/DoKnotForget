@@ -13,7 +13,6 @@ import {
   type ImportableContact,
 } from "../utils/contactImport";
 import {
-  countNetNewPeople,
   wouldExceedFreePeopleLimit,
 } from "../utils/freeLimit";
 import { displayNameOrFallback } from "../utils/displayName";
@@ -148,27 +147,6 @@ async function loadImportableContactsFromPlugin(reason: "select" | "import-all")
     count: mapped.length,
   });
   return mapped;
-}
-
-function takeImportableContactsWithinLimit(
-  existingPeople: Person[],
-  items: ImportableContact[],
-  limit: number
-) {
-  if (limit <= 0) return [];
-
-  const existingIds = new Set(existingPeople.map((person) => person.id));
-  const nextItems: ImportableContact[] = [];
-
-  for (const item of items) {
-    const person = importableContactToPerson(item);
-    if (existingIds.has(person.id)) continue;
-    existingIds.add(person.id);
-    nextItems.push(item);
-    if (nextItems.length >= limit) break;
-  }
-
-  return nextItems;
 }
 
 function shouldSuggestStarterContact(contact: ImportableContact, today: Date) {
@@ -355,16 +333,25 @@ export default function ImportContacts() {
   const [importedIds, setImportedIds] = useState<string[]>([]);
   const [recentlyImportedPeople, setRecentlyImportedPeople] = useState<Person[]>([]);
 
+  const availableContacts = useMemo(
+    () =>
+      contacts.filter(
+        (contact) => !people.some((person) => person.phone && contact.phone && person.phone === contact.phone)
+      ),
+    [contacts, people]
+  );
+
   const filteredContacts = useMemo(() => {
     const term = query.trim().toLowerCase();
-    if (!term) return contacts;
-    return contacts.filter((contact) => {
+    if (!term) return availableContacts;
+    return availableContacts.filter((contact) => {
       const haystacks = [contact.name, contact.phone ?? "", contact.birthday ?? ""];
       return haystacks.some((value) => value.toLowerCase().includes(term));
     });
-  }, [contacts, query]);
+  }, [availableContacts, query]);
 
   const starterContacts = useMemo(() => {
+    if (filteredContacts.length <= 1) return [];
     const today = new Date();
     return buildStarterContacts(filteredContacts, today);
   }, [filteredContacts]);
@@ -381,24 +368,18 @@ export default function ImportContacts() {
     [allContacts, starterContacts.length, visibleCount]
   );
 
-  const remainingFreeSlots = Math.max(0, FREE_LIMIT - people.length);
   const prioritizedSelectedContacts = useMemo(() => {
     const today = new Date();
-    return contacts
+    return availableContacts
       .filter((contact) => selectedIds.includes(contact.contactId))
       .sort((a, b) => compareImportableContacts(a, b, today));
-  }, [contacts, selectedIds]);
-  const effectiveSelectedContacts = useMemo(
-    () => prioritizedSelectedContacts.slice(0, remainingFreeSlots),
-    [prioritizedSelectedContacts, remainingFreeSlots]
-  );
+  }, [availableContacts, selectedIds]);
+  const effectiveSelectedContacts = prioritizedSelectedContacts;
   const effectiveSelectedIdSet = useMemo(
     () => new Set(effectiveSelectedContacts.map((contact) => contact.contactId)),
     [effectiveSelectedContacts]
   );
-  const selectionWasTrimmed = prioritizedSelectedContacts.length > effectiveSelectedContacts.length;
-  const selectedContactPeople = useMemo(() => mapImportableContactsToPeople(effectiveSelectedContacts), [effectiveSelectedContacts]);
-  const selectedImportWouldExceedLimit = countNetNewPeople(people, selectedContactPeople) > remainingFreeSlots;
+  const selectedImportWouldExceedLimit = people.length + effectiveSelectedContacts.length > FREE_LIMIT;
   const selectedCountLabel =
     effectiveSelectedContacts.length === 1
       ? "Add 1 person to your circle"
@@ -465,6 +446,7 @@ export default function ImportContacts() {
         loaded: loaded?.length ?? null,
       });
       if (!loaded) return;
+      console.log("[ImportContacts] handleSelectContacts proceeding to select screen");
       setStep("select");
     } catch (error) {
       console.error("[ImportContacts] handleSelectContacts failed", error);
@@ -505,9 +487,7 @@ export default function ImportContacts() {
 
       const loaded = await prepareContacts("import-all");
       if (!loaded) return;
-
-      const importableNow = takeImportableContactsWithinLimit(people, loaded, remainingFreeSlots);
-      if (!importableNow.length) {
+      if (people.length + loaded.length > FREE_LIMIT) {
         console.log("PAYWALL TRIGGERED");
         navigate("/paywall", {
           state: {
@@ -518,7 +498,7 @@ export default function ImportContacts() {
         return;
       }
 
-      finishImport(importableNow);
+      finishImport(loaded);
     } catch (error) {
       console.error("[ImportContacts] handleImportAll failed", error);
     }
@@ -531,6 +511,11 @@ export default function ImportContacts() {
     });
     console.log("[ImportContacts] number selected", effectiveSelectedContacts.length);
     if (people.length >= FREE_LIMIT) {
+      console.log("PAYWALL TRIGGERED");
+      navigate("/paywall");
+      return;
+    }
+    if (people.length + effectiveSelectedContacts.length > FREE_LIMIT) {
       console.log("PAYWALL TRIGGERED");
       navigate("/paywall");
       return;
@@ -550,15 +535,9 @@ export default function ImportContacts() {
   }
 
   function toggleSelection(contactId: string) {
-    setSelectedIds((prev) => {
-      const next = prev.includes(contactId) ? prev.filter((id) => id !== contactId) : [...prev, contactId];
-      const today = new Date();
-      return contacts
-        .filter((contact) => next.includes(contact.contactId))
-        .sort((a, b) => compareImportableContacts(a, b, today))
-        .slice(0, remainingFreeSlots)
-        .map((contact) => contact.contactId);
-    });
+    setSelectedIds((prev) =>
+      prev.includes(contactId) ? prev.filter((id) => id !== contactId) : [...prev, contactId]
+    );
   }
 
   function openPersonSetup(personId: string) {
@@ -768,11 +747,6 @@ export default function ImportContacts() {
             ) : null}
 
             <div style={{ display: "grid", gap: "10px", marginTop: "8px" }}>
-              {selectionWasTrimmed ? (
-                <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
-                  {`Only ${remainingFreeSlots} ${remainingFreeSlots === 1 ? "person is" : "people are"} selected right now.`}
-                </div>
-              ) : null}
               {effectiveSelectedContacts.length > 0 && selectedImportWouldExceedLimit ? (
                 <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
                   Add up to 3 people for free.

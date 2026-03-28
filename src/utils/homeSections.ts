@@ -109,7 +109,7 @@ export function buildHomeSections({
     const eventDate = parseLocalDate(moment.eventDate);
     if (!eventDate) return false;
     const daysAway = dayDifference(eventDate, today);
-    return daysAway >= 3 && daysAway <= 10;
+    return daysAway >= 2 && daysAway <= 10;
   });
 
   const cardsByEvent = new Map<string, { moment: UpcomingMomentEvent; reminder: ReminderEvent | null }>();

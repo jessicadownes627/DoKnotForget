@@ -847,7 +847,7 @@ export default function Home({
     } else if (section === "today" && reminder.reminderType === "sevenDay") {
       title = `Coming up: ${display.label.replace(/ in 7 days$/, "")}`;
     } else if (section === "tomorrow" && reminder.reminderType === "dayOf") {
-      title = `Today: ${stripRelativeSuffix(display.label, "today")}${reminder.momentType === "birthday" ? " 🎂" : ""}`;
+      title = `${stripRelativeSuffix(display.label, "today")}${reminder.momentType === "birthday" ? " 🎂" : ""}`;
     } else if (section === "horizon") {
       title =
         reminder.momentType === "childBirthday"
