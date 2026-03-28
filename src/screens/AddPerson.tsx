@@ -12,10 +12,71 @@ import { wouldExceedFreePeopleLimit } from "../utils/freeLimit";
 
 const FREE_LIMIT = 3;
 
+function CircleOrbitGraphic() {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        position: "relative",
+        width: "104px",
+        height: "104px",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: "14px",
+          borderRadius: "999px",
+          border: "1px solid rgba(216, 180, 106, 0.42)",
+          background: "rgba(255,255,255,0.38)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          top: "8px",
+          left: "41px",
+          width: "22px",
+          height: "22px",
+          borderRadius: "999px",
+          border: "1px solid rgba(216, 180, 106, 0.68)",
+          background: "rgba(255,255,255,0.78)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          right: "8px",
+          top: "42px",
+          width: "18px",
+          height: "18px",
+          borderRadius: "999px",
+          border: "1px solid rgba(216, 180, 106, 0.52)",
+          background: "rgba(255,255,255,0.68)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          bottom: "10px",
+          left: "18px",
+          width: "16px",
+          height: "16px",
+          borderRadius: "999px",
+          border: "1px solid rgba(216, 180, 106, 0.52)",
+          background: "rgba(255,255,255,0.68)",
+        }}
+      />
+    </div>
+  );
+}
+
 export default function AddPerson() {
   const navigate = useNavigate();
   const location = useLocation();
   const { people, savePerson } = useAppState();
+  const saveFeedbackHideTimeoutRef = useRef<number | null>(null);
+  const saveFeedbackNavigateTimeoutRef = useRef<number | null>(null);
 
   const editPersonId =
     (location.state as any)?.personId ?? (location.state as any)?.editPersonId ?? null;
@@ -54,6 +115,8 @@ export default function AddPerson() {
   const [openRow, setOpenRow] = useState<
     "name" | "phone" | "birthday" | "anniversary" | "custom" | "related" | null
   >(null);
+  const [saveFeedbackName, setSaveFeedbackName] = useState("");
+  const [isSaveFeedbackVisible, setIsSaveFeedbackVisible] = useState(false);
 
   const lastPrefilledPersonIdRef = useRef<string | null>(null);
 
@@ -85,6 +148,13 @@ export default function AddPerson() {
     );
     setRelatedDrafts([]);
   }, [editingPerson?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (saveFeedbackHideTimeoutRef.current !== null) window.clearTimeout(saveFeedbackHideTimeoutRef.current);
+      if (saveFeedbackNavigateTimeoutRef.current !== null) window.clearTimeout(saveFeedbackNavigateTimeoutRef.current);
+    };
+  }, []);
 
   const dateFormatter = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" });
   const dateWithYearFormatter = new Intl.DateTimeFormat("en-US", {
@@ -258,12 +328,32 @@ export default function AddPerson() {
       createdPeople,
       createdRelationships,
     });
-    navigate("/home", {
-      state: {
-        defaultTab: "home",
-        ...(linkedPartner ? { showPartnerLinkCheck: person.id } : null),
-      },
-    });
+    if (editingPerson) {
+      navigate("/home", {
+        state: {
+          defaultTab: "home",
+          ...(linkedPartner ? { showPartnerLinkCheck: person.id } : null),
+        },
+      });
+      return;
+    }
+
+    setSaveFeedbackName(person.name);
+    setIsSaveFeedbackVisible(false);
+    window.requestAnimationFrame(() => setIsSaveFeedbackVisible(true));
+    if (saveFeedbackHideTimeoutRef.current !== null) window.clearTimeout(saveFeedbackHideTimeoutRef.current);
+    if (saveFeedbackNavigateTimeoutRef.current !== null) window.clearTimeout(saveFeedbackNavigateTimeoutRef.current);
+    saveFeedbackHideTimeoutRef.current = window.setTimeout(() => {
+      setIsSaveFeedbackVisible(false);
+    }, 1700);
+    saveFeedbackNavigateTimeoutRef.current = window.setTimeout(() => {
+      navigate("/home", {
+        state: {
+          defaultTab: "home",
+          ...(linkedPartner ? { showPartnerLinkCheck: person.id } : null),
+        },
+      });
+    }, 2200);
   }
 
   function handleSaveCustomMoment() {
@@ -1087,6 +1177,38 @@ export default function AddPerson() {
           Cancel
         </button>
       </div>
+      {saveFeedbackName ? (
+        <div
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transform: isSaveFeedbackVisible ? "scale(1)" : "scale(0.95)",
+            opacity: isSaveFeedbackVisible ? 1 : 0,
+            transition: "opacity 220ms ease, transform 220ms ease",
+            pointerEvents: "none",
+            zIndex: 30,
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              justifyItems: "center",
+              gap: "16px",
+              padding: "24px",
+              textAlign: "center",
+            }}
+          >
+            <CircleOrbitGraphic />
+            <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.4 }}>
+              {`${saveFeedbackName.trim() || "Someone"} is now in your circle.`}
+            </div>
+          </div>
+        </div>
+      ) : null}
         </div>
       </div>
     </div>

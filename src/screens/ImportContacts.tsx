@@ -519,16 +519,16 @@ export default function ImportContacts() {
       const loaded = await prepareContacts("import-all");
       if (!loaded) return;
       const freeSlotsRemaining = Math.max(0, FREE_LIMIT - people.length);
-      const starterIds = buildStarterContacts(
-        loaded.filter(
-          (contact) => !people.some((person) => person.phone && contact.phone && person.phone === contact.phone)
-        ),
-        new Date()
-      )
-        .slice(0, freeSlotsRemaining)
-        .map((contact) => contact.contactId);
-      setSelectedIds(starterIds);
-      setStep("select");
+      const availableLoadedContacts = loaded.filter(
+        (contact) => !people.some((person) => person.phone && contact.phone && person.phone === contact.phone)
+      );
+      const contactsToImport = availableLoadedContacts.slice(0, freeSlotsRemaining);
+      if (!contactsToImport.length) {
+        console.log("PAYWALL TRIGGERED");
+        navigate("/paywall");
+        return;
+      }
+      finishImport(contactsToImport);
     } catch (error) {
       console.error("[ImportContacts] handleImportAll failed", error);
     }
@@ -575,27 +575,6 @@ export default function ImportContacts() {
   }
 
   function goToHomeAfterImport() {
-    if (mode === "select") {
-      navigate("/home", {
-        state: {
-          selectModeFeedback: recentlyImportedPeople.map((person) => ({
-            id: person.id,
-            name: person.name,
-          })),
-        },
-      });
-      return;
-    }
-
-    if (mode === "import-all") {
-      navigate("/home", {
-        state: {
-          importAllFeedbackCount: recentlyImportedPeople.length,
-        },
-      });
-      return;
-    }
-
     navigate("/home");
   }
 
