@@ -103,11 +103,11 @@ function getBirthdayIso(contact: ContactPayload) {
 
 async function requestContactsPermission(reason: "select" | "import-all") {
   const checked = (await Contacts.checkPermissions()) as PermissionStatus;
-  console.log("[ImportContacts] Contacts permission check", { reason, checked });
+  console.log("[ImportContacts] Permission result", { reason, checked });
   if (checked.contacts === "granted" || checked.contacts === "limited") return true;
 
   const requested = (await Contacts.requestPermissions()) as PermissionStatus;
-  console.log("[ImportContacts] Contacts permission request", { reason, requested });
+  console.log("[ImportContacts] Permission result", { reason, requested });
   return requested.contacts === "granted" || requested.contacts === "limited";
 }
 
@@ -416,6 +416,7 @@ export default function ImportContacts() {
     try {
       const allowed = await requestContactsPermission(reason);
       if (!allowed) {
+        window.alert("Contacts access was denied.");
         setError("We need contact access before we can help you choose people.");
         console.log("[ImportContacts] Permission denied", { reason });
         return [];
@@ -449,11 +450,15 @@ export default function ImportContacts() {
     navigate("/home", { state: { defaultTab: "contacts" } });
   }
 
-  async function openSelectFlow() {
-    console.log("[ImportContacts] Select people pressed");
-    const loaded = contacts.length ? contacts : await prepareContacts("select");
-    if (!loaded.length && !contacts.length) return;
-    setStep("select");
+  async function handleSelectContacts() {
+    console.log("IMPORT CLICKED");
+    try {
+      const loaded = await prepareContacts("select");
+      if (!loaded.length) return;
+      setStep("select");
+    } catch (error) {
+      console.error("[ImportContacts] handleSelectContacts failed", error);
+    }
   }
 
   function finishImport(items: ImportableContact[]) {
@@ -477,23 +482,27 @@ export default function ImportContacts() {
     setStep("done");
   }
 
-  async function importAllContacts() {
-    console.log("[ImportContacts] Import all contacts pressed");
-    const loaded = contacts.length ? contacts : await prepareContacts("import-all");
-    if (!loaded.length) return;
+  async function handleImportAll() {
+    console.log("IMPORT CLICKED");
+    try {
+      const loaded = await prepareContacts("import-all");
+      if (!loaded.length) return;
 
-    const importableNow = takeImportableContactsWithinLimit(people, loaded, remainingFreeSlots);
-    if (!importableNow.length) {
-      navigate("/paywall", {
-        state: {
-          fallbackPath: "/import",
-          source: "people-limit",
-        },
-      });
-      return;
+      const importableNow = takeImportableContactsWithinLimit(people, loaded, remainingFreeSlots);
+      if (!importableNow.length) {
+        navigate("/paywall", {
+          state: {
+            fallbackPath: "/import",
+            source: "people-limit",
+          },
+        });
+        return;
+      }
+
+      finishImport(importableNow);
+    } catch (error) {
+      console.error("[ImportContacts] handleImportAll failed", error);
     }
-
-    finishImport(importableNow);
   }
 
   function importSelectedContacts() {
@@ -591,12 +600,12 @@ export default function ImportContacts() {
             ) : null}
 
             <div style={{ marginTop: "8px", display: "grid", gap: "10px" }}>
-              <button type="button" onClick={() => void openSelectFlow()} disabled={isLoading}>
+              <button type="button" onClick={() => void handleSelectContacts()} disabled={isLoading}>
                 {isLoading ? "Loading contacts..." : "Select people"}
               </button>
               <button
                 type="button"
-                onClick={() => void importAllContacts()}
+                onClick={() => void handleImportAll()}
                 disabled={isLoading}
                 style={{
                   borderRadius: "12px",
