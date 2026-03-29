@@ -644,10 +644,10 @@ export default function PersonDetail({}: {}) {
                   }}
                 >
                   <div style={{ color: "var(--ink)", fontSize: "1rem", fontWeight: 600 }}>
-                    {`Want to add a date for ${person.name.trim() || "them"}?`}
+                    Add your first important date
                   </div>
                   <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
-                    So we can remind you when it matters.
+                    We’ll be ready when you are.
                   </div>
                   <button
                     type="button"

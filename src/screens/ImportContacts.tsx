@@ -101,9 +101,9 @@ function getBirthdayIso(contact: ContactPayload) {
 }
 
 async function requestContactsPermission(reason: "select" | "import-all") {
-  const checked = (await Contacts.checkPermissions()) as PermissionStatus;
-  console.log("[ImportContacts] Permission result", { reason, checked });
-  if (checked.contacts === "granted" || checked.contacts === "limited") return true;
+  const permission = (await Contacts.checkPermissions()) as PermissionStatus;
+  console.log("[ImportContacts] Permission result", { reason, permission });
+  if (permission.contacts === "granted" || permission.contacts === "limited") return true;
 
   const requested = (await Contacts.requestPermissions()) as PermissionStatus;
   console.log("[ImportContacts] Permission result", { reason, requested });
@@ -122,6 +122,7 @@ async function loadImportableContactsFromPlugin(reason: "select" | "import-all")
     reason,
     count: (result?.contacts ?? []).length,
   });
+  console.log("CONTACTS COUNT:", (result?.contacts ?? []).length);
 
   const today = new Date();
   const mapped = ((result?.contacts ?? []) as ContactPayload[])
@@ -760,7 +761,9 @@ export default function ImportContacts() {
                 </>
               ) : (
                 <div style={{ padding: "12px 8px", color: "var(--muted)", lineHeight: 1.5 }}>
-                  {contacts.length === 0 ? "No contacts found." : "No matches yet. Try a different search."}
+                  {contacts.length === 0 || availableContacts.length === 0
+                    ? "No contacts found. Try reloading or check permissions."
+                    : "No matches yet. Try a different search."}
                 </div>
               )}
             </div>

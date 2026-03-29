@@ -116,6 +116,7 @@ export default function AddPerson() {
     "name" | "phone" | "birthday" | "anniversary" | "custom" | "related" | null
   >(null);
   const [saveFeedbackName, setSaveFeedbackName] = useState("");
+  const [saveFeedbackMessage, setSaveFeedbackMessage] = useState("");
   const [isSaveFeedbackVisible, setIsSaveFeedbackVisible] = useState(false);
 
   const lastPrefilledPersonIdRef = useRef<string | null>(null);
@@ -339,6 +340,11 @@ export default function AddPerson() {
     }
 
     setSaveFeedbackName(person.name);
+    setSaveFeedbackMessage(
+      moments.length > 0
+        ? `${person.name.trim() || "Someone"} has been added. We’ll remind you when it matters.`
+        : `${person.name.trim() || "Someone"} has been added. You can add important dates anytime — we’ll be ready.`
+    );
     setIsSaveFeedbackVisible(false);
     window.requestAnimationFrame(() => setIsSaveFeedbackVisible(true));
     if (saveFeedbackHideTimeoutRef.current !== null) window.clearTimeout(saveFeedbackHideTimeoutRef.current);
@@ -1156,17 +1162,7 @@ export default function AddPerson() {
         ) : null}
       </div>
 
-      <div style={{ marginTop: "2.25rem", display: "flex", gap: "1rem" }}>
-        <button
-          onClick={handleSave}
-          style={{
-            padding: "0.75rem 1.25rem",
-            cursor: "pointer",
-          }}
-        >
-          Save
-        </button>
-
+      <div style={{ marginTop: "2.25rem", display: "flex", gap: "1rem", justifyContent: "space-between" }}>
         <button
           onClick={() => navigate("/home")}
           style={{
@@ -1175,6 +1171,15 @@ export default function AddPerson() {
           }}
         >
           Cancel
+        </button>
+        <button
+          onClick={handleSave}
+          style={{
+            padding: "0.75rem 1.25rem",
+            cursor: "pointer",
+          }}
+        >
+          Save
         </button>
       </div>
       {saveFeedbackName ? (
@@ -1204,7 +1209,7 @@ export default function AddPerson() {
           >
             <CircleOrbitGraphic />
             <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.4 }}>
-              {`${saveFeedbackName.trim() || "Someone"} is now in your circle.`}
+              {saveFeedbackMessage}
             </div>
           </div>
         </div>

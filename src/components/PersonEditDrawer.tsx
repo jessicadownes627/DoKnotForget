@@ -940,7 +940,7 @@ export default function PersonEditDrawer({
 
             </div>
 
-                <div style={{ display: "flex", gap: "8px", marginTop: "8px", justifyContent: "flex-end" }}>
+                <div style={{ display: "flex", gap: "8px", marginTop: "8px", justifyContent: "space-between" }}>
               <button
                 onClick={onClose}
                 style={{
