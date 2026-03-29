@@ -1,12 +1,100 @@
+import { useEffect, useState } from "react";
+import { useAppState } from "../appState";
 import { useLocation, useNavigate } from "../router";
+import { fetchPremiumProduct, purchaseProduct, restorePremiumPurchases, type StoreKitProduct } from "../utils/storeKit";
 
 export default function Paywall() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isPremium, setPremium } = useAppState();
   const isPeopleLimitPaywall = location.state?.source === "people-limit";
+  const [isBusy, setIsBusy] = useState(false);
+  const [premiumProduct, setPremiumProduct] = useState<StoreKitProduct | null>(null);
+
+  useEffect(() => {
+    if (!isPremium) return;
+    navigate("/home", { replace: true });
+  }, [isPremium, navigate]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProduct() {
+      console.log("Fetching products...");
+      try {
+        const product = await fetchPremiumProduct();
+        if (cancelled) return;
+        if (!product) {
+          setPremiumProduct(null);
+          console.log("Products loaded: 0");
+          console.log("NO PRODUCTS");
+          return;
+        }
+        setPremiumProduct(product);
+        console.log("Products loaded: 1");
+      } catch (error) {
+        if (cancelled) return;
+        setPremiumProduct(null);
+        console.error("[DKF] Failed to fetch products", error);
+      }
+    }
+
+    void loadProduct();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function continueFree() {
     navigate("/home", { state: { defaultTab: "home" } });
+  }
+
+  async function handleUpgrade() {
+    if (isBusy) return;
+    if (!premiumProduct) {
+      console.error("No product available");
+      console.log("NO PRODUCTS");
+      return;
+    }
+    setIsBusy(true);
+    try {
+      console.log("PURCHASE CALLED");
+      console.log("Purchase triggered");
+      const result = await purchaseProduct(premiumProduct.id);
+      if (result.status === "purchased") {
+        setPremium(true);
+        navigate("/home");
+        return;
+      }
+      if (result.status === "cancelled") {
+        console.log("[DKF] Purchase cancelled");
+        return;
+      }
+      console.log("[DKF] Purchase pending");
+    } catch (error) {
+      console.error("[DKF] Purchase failed", error);
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function handleRestorePurchases() {
+    if (isBusy) return;
+    setIsBusy(true);
+    try {
+      const restored = await restorePremiumPurchases();
+      if (restored) {
+        setPremium(true);
+        navigate("/home");
+        return;
+      }
+      console.log("[DKF] No premium entitlement found to restore");
+    } catch (error) {
+      console.error("[DKF] Restore purchases failed", error);
+    } finally {
+      setIsBusy(false);
+    }
   }
 
   return (
@@ -91,10 +179,8 @@ export default function Paywall() {
           <div style={{ display: "grid", gap: "10px" }}>
             <button
               type="button"
-              onClick={() => {
-                // eslint-disable-next-line no-console
-                console.log("[DKF] Upgrade tapped");
-              }}
+              onClick={() => void handleUpgrade()}
+              disabled={isBusy}
               style={{
                 borderRadius: "12px",
                 padding: "0.85rem 1rem",
@@ -119,10 +205,8 @@ export default function Paywall() {
 
           <button
             type="button"
-            onClick={() => {
-              // eslint-disable-next-line no-console
-              console.log("[DKF] Restore purchases tapped");
-            }}
+            onClick={() => void handleRestorePurchases()}
+            disabled={isBusy}
             style={{
               justifySelf: "center",
               padding: 0,

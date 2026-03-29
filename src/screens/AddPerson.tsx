@@ -74,7 +74,7 @@ function CircleOrbitGraphic() {
 export default function AddPerson() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { people, savePerson } = useAppState();
+  const { people, isPremium, savePerson } = useAppState();
   const saveFeedbackHideTimeoutRef = useRef<number | null>(null);
   const saveFeedbackNavigateTimeoutRef = useRef<number | null>(null);
 
@@ -312,7 +312,7 @@ export default function AddPerson() {
       importantDates: moments.filter((m) => m.type === "custom"),
     };
 
-    if (!editingPerson && (people.length >= FREE_LIMIT || wouldExceedFreePeopleLimit(people, [person]))) {
+    if (!editingPerson && !isPremium && (people.length >= FREE_LIMIT || wouldExceedFreePeopleLimit(people, [person]))) {
       console.log("PAYWALL TRIGGERED");
       navigate("/paywall", {
         state: {

@@ -376,7 +376,7 @@ export default function Home({
 }: {}) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { people, updatePerson, updatePersonFields, createPerson, recordCareEvent } = useAppState();
+  const { people, isPremium, updatePerson, updatePersonFields, createPerson, recordCareEvent } = useAppState();
   const [searchTerm, setSearchTerm] = useState("");
   const [questionTick, setQuestionTick] = useState(0);
   const [shouldPulseBow, setShouldPulseBow] = useState(false);
@@ -1730,7 +1730,7 @@ export default function Home({
   }, [isHome, location.pathname, location.state, navigate]);
 
   function navigateToAddPerson() {
-    if (people.length >= FREE_LIMIT) {
+    if (!isPremium && people.length >= FREE_LIMIT) {
       navigate("/paywall");
       return;
     }
@@ -1738,7 +1738,7 @@ export default function Home({
   }
 
   function navigateToImportContacts() {
-    if (people.length >= FREE_LIMIT) {
+    if (!isPremium && people.length >= FREE_LIMIT) {
       navigate("/paywall");
       return;
     }

@@ -321,7 +321,7 @@ function renderContactRow(
 
 export default function ImportContacts() {
   const navigate = useNavigate();
-  const { people, createPeople, markOnboardingComplete } = useAppState();
+  const { people, isPremium, createPeople, markOnboardingComplete } = useAppState();
 
   const [step, setStep] = useState<"entry" | "select" | "done">("entry");
   const [mode, setMode] = useState<"import-all" | "select" | null>(null);
@@ -401,7 +401,7 @@ export default function ImportContacts() {
     () => new Set(effectiveSelectedContacts.map((contact) => contact.contactId)),
     [effectiveSelectedContacts]
   );
-  const selectedImportWouldExceedLimit = people.length + effectiveSelectedContacts.length > FREE_LIMIT;
+  const selectedImportWouldExceedLimit = !isPremium && people.length + effectiveSelectedContacts.length > FREE_LIMIT;
   const selectedCountLabel =
     effectiveSelectedContacts.length === 1
       ? "Add 1 person to your circle"
@@ -456,7 +456,7 @@ export default function ImportContacts() {
   async function handleSelectContacts() {
     console.log("SELECT CLICKED");
     try {
-      if (people.length >= FREE_LIMIT) {
+      if (!isPremium && people.length >= FREE_LIMIT) {
         console.log("PAYWALL TRIGGERED");
         navigate("/paywall");
         return;
@@ -481,7 +481,7 @@ export default function ImportContacts() {
 
   function finishImport(items: ImportableContact[]) {
     const importedPeople = mapImportableContactsToPeople(items);
-    if (people.length >= FREE_LIMIT || wouldExceedFreePeopleLimit(people, importedPeople)) {
+    if (!isPremium && (people.length >= FREE_LIMIT || wouldExceedFreePeopleLimit(people, importedPeople))) {
       console.log("PAYWALL TRIGGERED");
       navigate("/paywall", {
         state: {
@@ -505,7 +505,7 @@ export default function ImportContacts() {
   async function handleImportAll() {
     console.log("IMPORT CLICKED");
     try {
-      if (people.length >= FREE_LIMIT) {
+      if (!isPremium && people.length >= FREE_LIMIT) {
         console.log("PAYWALL TRIGGERED");
         navigate("/paywall");
         return;
@@ -518,7 +518,7 @@ export default function ImportContacts() {
       setRecentlyImportedPeople([]);
       const loaded = await prepareContacts("import-all");
       if (!loaded) return;
-      const freeSlotsRemaining = Math.max(0, FREE_LIMIT - people.length);
+      const freeSlotsRemaining = isPremium ? Number.MAX_SAFE_INTEGER : Math.max(0, FREE_LIMIT - people.length);
       const availableLoadedContacts = loaded.filter(
         (contact) => !people.some((person) => person.phone && contact.phone && person.phone === contact.phone)
       );
@@ -540,12 +540,12 @@ export default function ImportContacts() {
       selectedContactIds: effectiveSelectedContacts.map((contact) => contact.contactId),
     });
     console.log("[ImportContacts] number selected", effectiveSelectedContacts.length);
-    if (people.length >= FREE_LIMIT) {
+    if (!isPremium && people.length >= FREE_LIMIT) {
       console.log("PAYWALL TRIGGERED");
       navigate("/paywall");
       return;
     }
-    if (people.length + effectiveSelectedContacts.length > FREE_LIMIT) {
+    if (!isPremium && people.length + effectiveSelectedContacts.length > FREE_LIMIT) {
       console.log("PAYWALL TRIGGERED");
       navigate("/paywall");
       return;

@@ -9,6 +9,7 @@ import {
   saveUserSettings,
   type UserSettings,
 } from "./utils/userSettings";
+import { loadPremiumStatus, savePremiumStatus } from "./utils/premium";
 
 type SavePersonPayload = {
   person: Person;
@@ -19,6 +20,7 @@ type SavePersonPayload = {
 type AppState = {
   hasHydrated: boolean;
   onboardingComplete: boolean;
+  isPremium: boolean;
   people: Person[];
   relationships: Relationship[];
   careEvents: CareEvent[];
@@ -31,6 +33,7 @@ type AppState = {
   upsertRelationship: (relationship: Relationship) => void;
   updatePersonFields: (id: string, patch: Partial<Person>) => void;
   updateUserSettings: (patch: Partial<UserSettings>) => void;
+  setPremium: (value: boolean) => void;
   recordCareEvent: (personId: string, type: CareEventType, note?: string) => void;
   deletePerson: (id: string) => void;
 };
@@ -45,6 +48,7 @@ const AppStateContext = createContext<AppState | null>(null);
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [hasHydrated, setHasHydrated] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [isPremium, setIsPremium] = useState(loadPremiumStatus);
   const [people, setPeople] = useState<Person[]>([]);
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [careEvents, setCareEvents] = useState<CareEvent[]>([]);
@@ -189,10 +193,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     saveUserSettings(userSettings);
   }, [hasHydrated, userSettings]);
 
+  useEffect(() => {
+    if (!hasHydrated) return;
+    savePremiumStatus(isPremium);
+  }, [hasHydrated, isPremium]);
+
   const value = useMemo<AppState>(() => {
     return {
       hasHydrated,
       onboardingComplete,
+      isPremium,
       people,
       relationships,
       careEvents,
@@ -283,6 +293,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           return next;
         });
       },
+      setPremium: (value: boolean) => {
+        setIsPremium(value);
+      },
       recordCareEvent: (personId: string, type: CareEventType, note?: string) => {
         setCareEvents((prev) => [
           {
@@ -305,7 +318,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         setCareEvents((prev) => prev.filter((event) => event.personId !== id));
       },
     };
-  }, [careEvents, hasHydrated, onboardingComplete, people, relationships, userSettings]);
+  }, [careEvents, hasHydrated, isPremium, onboardingComplete, people, relationships, userSettings]);
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }
