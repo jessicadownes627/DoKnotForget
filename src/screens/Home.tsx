@@ -1920,41 +1920,10 @@ export default function Home({
                 >
                   Your circle
                 </div>
-                {!hasContacts ? (
-                  <div style={{ color: "var(--muted)", lineHeight: 1.55 }}>
-                    Start with a few people you want to keep close.
-                  </div>
-                ) : null}
+                <div style={{ color: "var(--muted)", lineHeight: 1.55 }}>
+                  Build your circle
+                </div>
               </div>
-
-              {filteredPeople.length === 0 ? (
-                <div style={{ marginTop: "1.5rem" }}>
-                  {hasContacts ? (
-                    <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>No match found.</div>
-                  ) : (
-                    <div style={{ display: "grid", gap: "8px" }}>
-                      <div
-                        style={{
-                          color: "var(--ink)",
-                          fontSize: "1.35rem",
-                          fontWeight: 600,
-                          letterSpacing: "-0.02em",
-                          fontFamily: "var(--font-serif)",
-                        }}
-                      >
-                        Start your circle
-                      </div>
-                      <div style={{ color: "var(--muted)", lineHeight: 1.55 }}>
-                        Add a few people you don’t want to forget.
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div style={{ marginTop: "1.5rem" }}>
-                  <PeopleIndex people={filteredPeople} today={today} onSelectPerson={(p) => navigate(`/person/${p.id}`)} />
-                </div>
-              )}
 
               <div style={{ marginTop: "24px", display: "grid", gap: "12px" }}>
                 <div style={{ display: "grid", gap: "8px" }}>
@@ -1972,13 +1941,13 @@ export default function Home({
                       borderRadius: "12px",
                       padding: "0.85rem 1rem",
                       fontSize: "1rem",
-                      fontFamily: "var(--font-sans)",
-                    }}
+                    fontFamily: "var(--font-sans)",
+                  }}
                   >
                     Choose from contacts
                   </button>
                   <div style={{ color: "var(--muted)", fontSize: "0.88rem", lineHeight: 1.5, padding: "0 4px" }}>
-                    We’ll bring in your contacts so you can choose who matters.
+                    We’ll access your contacts so you can choose who matters.
                   </div>
                 </div>
                 <button
@@ -2003,9 +1972,25 @@ export default function Home({
 
               {!isPremium && people.length >= FREE_LIMIT ? (
                 <div style={{ marginTop: "8px", color: "var(--muted)", fontSize: "0.88rem", lineHeight: 1.5 }}>
-                  {`Your circle has ${people.length} people. Upgrade to add more.`}
+                  {`Your circle has ${people.length} people. Add more with Premium.`}
                 </div>
               ) : null}
+
+              {filteredPeople.length === 0 ? (
+                <div style={{ marginTop: "24px" }}>
+                  {hasContacts ? (
+                    <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>No match found.</div>
+                  ) : (
+                    <div style={{ color: "var(--muted)", lineHeight: 1.55 }}>
+                      Add a few people you don’t want to forget.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ marginTop: "24px" }}>
+                  <PeopleIndex people={filteredPeople} today={today} onSelectPerson={(p) => navigate(`/person/${p.id}`)} />
+                </div>
+              )}
             </section>
           ) : (
             <section aria-label="Home" style={{ marginTop: "24px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
@@ -2414,15 +2399,16 @@ export default function Home({
             aria-live="polite"
             style={{
               position: "fixed",
-              inset: 0,
+              top: "calc(env(safe-area-inset-top, 0px) + 88px)",
+              left: "50%",
               display: "flex",
-              alignItems: "center",
               justifyContent: "center",
-              transform: isCircleSuccessVisible ? "scale(1)" : "scale(0.95)",
+              width: "min(520px, calc(100vw - 32px))",
+              transform: `translateX(-50%) scale(${isCircleSuccessVisible ? 1 : 0.95})`,
               opacity: isCircleSuccessVisible ? 1 : 0,
               transition: "opacity 220ms ease, transform 220ms ease",
               pointerEvents: "none",
-              zIndex: 30,
+              zIndex: 999,
             }}
           >
             <div
@@ -2430,8 +2416,14 @@ export default function Home({
                 display: "grid",
                 justifyItems: "center",
                 gap: "16px",
-                padding: "24px",
+                width: "100%",
+                padding: "20px 22px",
                 textAlign: "center",
+                background: "rgba(255,255,255,0.96)",
+                border: "1px solid var(--border)",
+                borderRadius: "18px",
+                boxShadow: "0 12px 30px rgba(27,42,65,0.16)",
+                backdropFilter: "blur(10px)",
               }}
             >
               <CircleEmptyStateGraphic />

@@ -403,11 +403,14 @@ export default function ImportContacts() {
     () => new Set(effectiveSelectedContacts.map((contact) => contact.contactId)),
     [effectiveSelectedContacts]
   );
-  const selectedImportWouldExceedLimit = !isPremium && people.length + effectiveSelectedContacts.length > FREE_LIMIT;
+  const remainingFreeSlots = isPremium ? Number.POSITIVE_INFINITY : Math.max(0, FREE_LIMIT - people.length);
+  const allowedSelectedCount = isPremium
+    ? effectiveSelectedContacts.length
+    : Math.min(effectiveSelectedContacts.length, remainingFreeSlots);
   const selectedCountLabel =
-    effectiveSelectedContacts.length === 1
+    allowedSelectedCount === 1
       ? "Add 1 person to your circle"
-      : `Add ${effectiveSelectedContacts.length} people to your circle`;
+      : `Add ${allowedSelectedCount} people to your circle`;
 
   async function prepareContacts(reason: "select"): Promise<{ access: ContactsAccessState; contacts: ImportableContact[] } | null> {
     if (!isContactImportSupported()) {
@@ -535,7 +538,7 @@ export default function ImportContacts() {
     const contactsToImport = isPremium ? effectiveSelectedContacts : effectiveSelectedContacts.slice(0, remaining);
     if (!contactsToImport.length) return;
     if (!isPremium && contactsToImport.length < effectiveSelectedContacts.length) {
-      setSelectionNotice(`Only ${contactsToImport.length} ${contactsToImport.length === 1 ? "person" : "people"} could be added right now.`);
+      setSelectionNotice(`Added ${contactsToImport.length} ${contactsToImport.length === 1 ? "person" : "people"}. Upgrade to add more.`);
     } else {
       setSelectionNotice("");
     }
@@ -602,9 +605,9 @@ export default function ImportContacts() {
               Bring your people in
               </div>
               <div style={{ color: "var(--muted)", lineHeight: 1.6, whiteSpace: "pre-line" }}>
-              {`We’ll bring in your contacts so you can easily choose who matters.
+              {`We’ll access your contacts so you can choose who matters.
 
-Nothing is shared — everything stays private.`}
+You can always change this later.`}
               </div>
 
             {error ? (
@@ -687,7 +690,7 @@ Nothing is shared — everything stays private.`}
 
             <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
               {effectiveSelectedContacts.length > 0
-                ? `${effectiveSelectedContacts.length} selected`
+                ? `You’re adding ${effectiveSelectedContacts.length} ${effectiveSelectedContacts.length === 1 ? "person" : "people"} to your circle`
                 : `${filteredContacts.length} contacts available`}
             </div>
 
@@ -785,9 +788,9 @@ Nothing is shared — everything stays private.`}
                   {selectionNotice}
                 </div>
               ) : null}
-              {effectiveSelectedContacts.length > 0 && selectedImportWouldExceedLimit ? (
+              {!isPremium && effectiveSelectedContacts.length > remainingFreeSlots && remainingFreeSlots > 0 ? (
                 <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
-                  {`Your circle has ${people.length} people. Upgrade to add more.`}
+                  {`You can add ${remainingFreeSlots} ${remainingFreeSlots === 1 ? "person" : "people"}. Upgrade to add more.`}
                 </div>
               ) : null}
             </div>
