@@ -1,5 +1,4 @@
 import { Contacts, type ContactPayload, type PermissionStatus, PhoneType } from "@capacitor-community/contacts";
-import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { useEffect, useMemo, useState } from "react";
 import { useAppState } from "../appState";
@@ -328,7 +327,7 @@ export default function ImportContacts() {
   const navigate = useNavigate();
   const { people, isPremium, createPeople, markOnboardingComplete } = useAppState();
 
-  const [step, setStep] = useState<"entry" | "limited" | "select" | "done">("entry");
+  const [step, setStep] = useState<"entry" | "select" | "done">("entry");
   const [contacts, setContacts] = useState<ImportableContact[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [query, setQuery] = useState("");
@@ -336,6 +335,7 @@ export default function ImportContacts() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [contactsAccess, setContactsAccess] = useState<ContactsAccessState>("prompt");
+  const [selectionNotice, setSelectionNotice] = useState("");
   const [importedIds, setImportedIds] = useState<string[]>([]);
   const [recentlyImportedPeople, setRecentlyImportedPeople] = useState<Person[]>([]);
 
@@ -348,6 +348,7 @@ export default function ImportContacts() {
     setIsLoading(false);
     setError("");
     setContactsAccess("prompt");
+    setSelectionNotice("");
     setImportedIds([]);
     setRecentlyImportedPeople([]);
   }
@@ -355,43 +356,6 @@ export default function ImportContacts() {
   useEffect(() => {
     resetFlowState();
   }, []);
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    async function refreshContactsAfterResume() {
-      if (step !== "limited") return;
-      try {
-        const permission = (await Contacts.checkPermissions()) as PermissionStatus;
-        if (isCancelled) return;
-
-        const nextAccess = permission.contacts;
-        setContactsAccess(nextAccess);
-
-        if (nextAccess !== "granted" && nextAccess !== "limited") return;
-
-        const loaded = await loadImportableContactsFromPlugin("select");
-        if (isCancelled) return;
-
-        setContacts(loaded);
-        setVisibleCount(INITIAL_VISIBLE_CONTACTS);
-        if (nextAccess === "granted") {
-          setStep("select");
-        }
-      } catch (resumeError) {
-        console.log("[ImportContacts] Failed to refresh contacts after resume", { resumeError });
-      }
-    }
-
-    const listenerPromise = App.addListener("resume", () => {
-      void refreshContactsAfterResume();
-    });
-
-    return () => {
-      isCancelled = true;
-      void listenerPromise.then((listener) => listener.remove());
-    };
-  }, [step]);
 
   const availableContacts = useMemo(
     () =>
@@ -506,7 +470,7 @@ export default function ImportContacts() {
       });
       if (!result) return;
       console.log("[ImportContacts] handleSelectContacts proceeding", { access: result.access });
-      setStep(result.access === "limited" ? "limited" : "select");
+      setStep("select");
     } catch (error) {
       console.error("[ImportContacts] handleSelectContacts failed", error);
     }
@@ -551,12 +515,8 @@ export default function ImportContacts() {
       selectedContactIds: effectiveSelectedContacts.map((contact) => contact.contactId),
     });
     console.log("[ImportContacts] number selected", effectiveSelectedContacts.length);
-    if (!isPremium && people.length >= FREE_LIMIT) {
-      console.log("PAYWALL TRIGGERED");
-      navigate("/paywall");
-      return;
-    }
-    if (!isPremium && people.length + effectiveSelectedContacts.length > FREE_LIMIT) {
+    const remaining = isPremium ? Number.POSITIVE_INFINITY : Math.max(0, FREE_LIMIT - people.length);
+    if (!isPremium && remaining <= 0) {
       console.log("PAYWALL TRIGGERED");
       navigate("/paywall");
       return;
@@ -572,7 +532,15 @@ export default function ImportContacts() {
       return;
     }
 
-    finishImport(effectiveSelectedContacts);
+    const contactsToImport = isPremium ? effectiveSelectedContacts : effectiveSelectedContacts.slice(0, remaining);
+    if (!contactsToImport.length) return;
+    if (!isPremium && contactsToImport.length < effectiveSelectedContacts.length) {
+      setSelectionNotice(`Only ${contactsToImport.length} ${contactsToImport.length === 1 ? "person" : "people"} could be added right now.`);
+    } else {
+      setSelectionNotice("");
+    }
+
+    finishImport(contactsToImport);
   }
 
   function toggleSelection(contactId: string) {
@@ -586,7 +554,11 @@ export default function ImportContacts() {
   }
 
   function goToHomeAfterImport() {
-    navigate("/home");
+    const successMessage =
+      importedIds.length === 1
+        ? `${displayNameOrFallback(recentlyImportedPeople[0]?.name) || "Someone"} was added to your circle`
+        : `${importedIds.length} people were added to your circle`;
+    navigate("/contacts", { state: { circleSuccessMessage: successMessage } });
   }
 
   return (
@@ -659,59 +631,11 @@ Nothing is shared — everything stays private.`}
           </div>
         ) : null}
 
-        {step === "limited" ? (
-          <div style={{ marginTop: "24px", display: "grid", gap: "16px" }}>
-            <div style={{ display: "grid", gap: "8px" }}>
-              <div style={{ fontFamily: "var(--font-serif)", fontSize: "28px", fontWeight: 600 }}>
-                You’ve shared a few contacts
-              </div>
-              <div style={{ color: "var(--muted)", lineHeight: 1.6 }}>
-                Only the people you chose are visible here.
-                <br />
-                <br />
-                You can bring in more contacts anytime and choose who matters later.
-              </div>
-            </div>
-
-            {error ? (
-              <div
-                style={{
-                  border: "1px solid var(--border)",
-                  borderRadius: "14px",
-                  padding: "12px 14px",
-                  color: "var(--muted)",
-                  lineHeight: 1.55,
-                }}
-              >
-                {error}
-              </div>
-            ) : null}
-
-            <div style={{ display: "grid", gap: "10px" }}>
-              <button type="button" onClick={() => void openContactAccessSettings()}>
-                Manage Contact Access
-              </button>
-              <button
-                type="button"
-                onClick={() => setStep("select")}
-                style={{
-                  borderRadius: "12px",
-                  padding: "0.85rem 1rem",
-                  fontSize: "1rem",
-                  background: "transparent",
-                }}
-              >
-                Continue with Current Contacts
-              </button>
-            </div>
-          </div>
-        ) : null}
-
         {step === "select" ? (
           <div style={{ marginTop: "24px", display: "grid", gap: "16px" }}>
             <div style={{ display: "grid", gap: "8px" }}>
               <div style={{ fontFamily: "var(--font-serif)", fontSize: "28px", fontWeight: 600 }}>
-                Choose from Contacts
+                Choose from contacts
               </div>
               <div style={{ color: "var(--muted)", lineHeight: 1.6 }}>
                 Choose the people you want close at hand. We’ll just bring in the basics.
@@ -729,14 +653,13 @@ Nothing is shared — everything stays private.`}
                   background: "rgba(255,255,255,0.7)",
                 }}
               >
-                <div style={{ fontWeight: 600 }}>You’re sharing selected contacts</div>
+                <div style={{ fontWeight: 600 }}>Finish setting this up</div>
                 <div style={{ color: "var(--muted)", lineHeight: 1.55 }}>
-                  Only the people you chose are visible here. You can bring in more contacts anytime and choose who
-                  matters later.
+                  To bring in more people, you can allow full contact access in Settings.
                 </div>
                 <div>
                   <button type="button" onClick={() => void openContactAccessSettings()}>
-                    Manage Contact Access
+                    Bring in full contact list
                   </button>
                 </div>
               </div>
@@ -833,7 +756,7 @@ Nothing is shared — everything stays private.`}
               ) : (
                 <div style={{ padding: "12px 8px", color: "var(--muted)", lineHeight: 1.5 }}>
                   {contactsAccess === "limited"
-                    ? "Only the contacts you shared are visible here. Update contact access in Settings to bring in more."
+                    ? "Only the people you shared are visible here. To bring in more people, allow full contact access in Settings."
                     : contacts.length === 0 || availableContacts.length === 0
                     ? "No contacts found. Try reloading or check permissions."
                     : "No matches yet. Try a different search."}
@@ -857,9 +780,14 @@ Nothing is shared — everything stays private.`}
             ) : null}
 
             <div style={{ display: "grid", gap: "10px", marginTop: "8px" }}>
+              {selectionNotice ? (
+                <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
+                  {selectionNotice}
+                </div>
+              ) : null}
               {effectiveSelectedContacts.length > 0 && selectedImportWouldExceedLimit ? (
                 <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
-                  Add up to 3 people for free.
+                  {`Your circle has ${people.length} people. Upgrade to add more.`}
                 </div>
               ) : null}
             </div>

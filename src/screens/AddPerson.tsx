@@ -8,75 +8,13 @@ import { useLocation, useNavigate } from "../router";
 import { normalizePhone } from "../utils/phone";
 import { parseLocalDate } from "../utils/date";
 import { getSelectedHolidays } from "../utils/personHolidays";
-import { wouldExceedFreePeopleLimit } from "../utils/freeLimit";
 
 const FREE_LIMIT = 3;
-
-function CircleOrbitGraphic() {
-  return (
-    <div
-      aria-hidden="true"
-      style={{
-        position: "relative",
-        width: "104px",
-        height: "104px",
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          inset: "14px",
-          borderRadius: "999px",
-          border: "1px solid rgba(216, 180, 106, 0.42)",
-          background: "rgba(255,255,255,0.38)",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          top: "8px",
-          left: "41px",
-          width: "22px",
-          height: "22px",
-          borderRadius: "999px",
-          border: "1px solid rgba(216, 180, 106, 0.68)",
-          background: "rgba(255,255,255,0.78)",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          right: "8px",
-          top: "42px",
-          width: "18px",
-          height: "18px",
-          borderRadius: "999px",
-          border: "1px solid rgba(216, 180, 106, 0.52)",
-          background: "rgba(255,255,255,0.68)",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          bottom: "10px",
-          left: "18px",
-          width: "16px",
-          height: "16px",
-          borderRadius: "999px",
-          border: "1px solid rgba(216, 180, 106, 0.52)",
-          background: "rgba(255,255,255,0.68)",
-        }}
-      />
-    </div>
-  );
-}
 
 export default function AddPerson() {
   const navigate = useNavigate();
   const location = useLocation();
   const { people, isPremium, savePerson } = useAppState();
-  const saveFeedbackHideTimeoutRef = useRef<number | null>(null);
-  const saveFeedbackNavigateTimeoutRef = useRef<number | null>(null);
 
   const editPersonId =
     (location.state as any)?.personId ?? (location.state as any)?.editPersonId ?? null;
@@ -115,10 +53,6 @@ export default function AddPerson() {
   const [openRow, setOpenRow] = useState<
     "name" | "phone" | "birthday" | "anniversary" | "custom" | "related" | null
   >(null);
-  const [saveFeedbackName, setSaveFeedbackName] = useState("");
-  const [saveFeedbackMessage, setSaveFeedbackMessage] = useState("");
-  const [isSaveFeedbackVisible, setIsSaveFeedbackVisible] = useState(false);
-
   const lastPrefilledPersonIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -149,13 +83,6 @@ export default function AddPerson() {
     );
     setRelatedDrafts([]);
   }, [editingPerson?.id]);
-
-  useEffect(() => {
-    return () => {
-      if (saveFeedbackHideTimeoutRef.current !== null) window.clearTimeout(saveFeedbackHideTimeoutRef.current);
-      if (saveFeedbackNavigateTimeoutRef.current !== null) window.clearTimeout(saveFeedbackNavigateTimeoutRef.current);
-    };
-  }, []);
 
   const dateFormatter = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" });
   const dateWithYearFormatter = new Intl.DateTimeFormat("en-US", {
@@ -313,11 +240,11 @@ export default function AddPerson() {
       importantDates: moments.filter((m) => m.type === "custom"),
     };
 
-    if (!editingPerson && !isPremium && (people.length >= FREE_LIMIT || wouldExceedFreePeopleLimit(people, [person]))) {
+    if (!editingPerson && !isPremium && people.length >= FREE_LIMIT) {
       console.log("PAYWALL TRIGGERED");
       navigate("/paywall", {
         state: {
-          fallbackPath: "/home",
+          fallbackPath: "/contacts",
           source: "people-limit",
         },
       });
@@ -339,27 +266,11 @@ export default function AddPerson() {
       return;
     }
 
-    setSaveFeedbackName(person.name);
-    setSaveFeedbackMessage(
-      moments.length > 0
-        ? `${person.name.trim() || "Someone"} has been added. We’ll remind you when it matters.`
-        : `${person.name.trim() || "Someone"} has been added. You can add important dates anytime — we’ll be ready.`
-    );
-    setIsSaveFeedbackVisible(false);
-    window.requestAnimationFrame(() => setIsSaveFeedbackVisible(true));
-    if (saveFeedbackHideTimeoutRef.current !== null) window.clearTimeout(saveFeedbackHideTimeoutRef.current);
-    if (saveFeedbackNavigateTimeoutRef.current !== null) window.clearTimeout(saveFeedbackNavigateTimeoutRef.current);
-    saveFeedbackHideTimeoutRef.current = window.setTimeout(() => {
-      setIsSaveFeedbackVisible(false);
-    }, 1700);
-    saveFeedbackNavigateTimeoutRef.current = window.setTimeout(() => {
-      navigate("/home", {
-        state: {
-          defaultTab: "home",
-          ...(linkedPartner ? { showPartnerLinkCheck: person.id } : null),
-        },
-      });
-    }, 2200);
+    navigate("/contacts", {
+      state: {
+        circleSuccessMessage: `${person.name.trim() || "Someone"} was added to your circle`,
+      },
+    });
   }
 
   function handleSaveCustomMoment() {
@@ -1182,38 +1093,6 @@ export default function AddPerson() {
           Save
         </button>
       </div>
-      {saveFeedbackName ? (
-        <div
-          aria-live="polite"
-          style={{
-            position: "fixed",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            transform: isSaveFeedbackVisible ? "scale(1)" : "scale(0.95)",
-            opacity: isSaveFeedbackVisible ? 1 : 0,
-            transition: "opacity 220ms ease, transform 220ms ease",
-            pointerEvents: "none",
-            zIndex: 30,
-          }}
-        >
-          <div
-            style={{
-              display: "grid",
-              justifyItems: "center",
-              gap: "16px",
-              padding: "24px",
-              textAlign: "center",
-            }}
-          >
-            <CircleOrbitGraphic />
-            <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.4 }}>
-              {saveFeedbackMessage}
-            </div>
-          </div>
-        </div>
-      ) : null}
         </div>
       </div>
     </div>

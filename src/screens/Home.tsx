@@ -380,7 +380,6 @@ export default function Home({
   const [searchTerm, setSearchTerm] = useState("");
   const [questionTick, setQuestionTick] = useState(0);
   const [shouldPulseBow, setShouldPulseBow] = useState(false);
-  const [showNiceStart, setShowNiceStart] = useState(false);
   const [handledReminderActions, setHandledReminderActions] = useState<Record<string, true>>(() => {
     try {
       const raw = window.localStorage.getItem("doknotforget_handled_reminder_actions_v1");
@@ -393,6 +392,8 @@ export default function Home({
     }
   });
   const [dismissedReminderKeys, setDismissedReminderKeys] = useState<Record<string, true>>({});
+  const [circleSuccessMessage, setCircleSuccessMessage] = useState("");
+  const [isCircleSuccessVisible, setIsCircleSuccessVisible] = useState(false);
   const [sheetRecommendations, setSheetRecommendations] = useState<SheetRecommendation[]>([]);
   const [dismissedHorizonKeys] = useState<Record<string, true>>(() => {
     try {
@@ -1650,7 +1651,7 @@ export default function Home({
     setQuestionTick((v) => v + 1);
   }
 
-  const greetingText = isContacts ? "Your contacts." : "Today";
+  const greetingText = isContacts ? "Your circle" : "Today";
 
   useEffect(() => {
     const personId = location.state?.showPartnerLinkCheck as string | undefined;
@@ -1707,24 +1708,26 @@ export default function Home({
   }, [people.length]);
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem("doknotforget_just_added_first_contact");
-      if (!raw) return;
-      window.localStorage.removeItem("doknotforget_just_added_first_contact");
-      setShowNiceStart(true);
-      window.setTimeout(() => setShowNiceStart(false), 4200);
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  useEffect(() => {
     if (location.state?.defaultTab === "contacts" && isHome) {
       navigate("/contacts", { replace: true });
       return;
     }
 
-    if (location.state?.defaultTab || location.state?.showPartnerLinkCheck) {
+    if (location.state?.circleSuccessMessage && isContacts) {
+      const nextMessage = String(location.state.circleSuccessMessage);
+      setCircleSuccessMessage(nextMessage);
+      setIsCircleSuccessVisible(false);
+      window.requestAnimationFrame(() => setIsCircleSuccessVisible(true));
+      const timeoutId = window.setTimeout(() => {
+        setIsCircleSuccessVisible(false);
+        window.setTimeout(() => setCircleSuccessMessage(""), 220);
+      }, 1800);
+
+      window.history.replaceState({}, document.title, location.pathname);
+      return () => window.clearTimeout(timeoutId);
+    }
+
+    if (location.state?.defaultTab || location.state?.showPartnerLinkCheck || location.state?.circleSuccessMessage) {
       window.history.replaceState({}, document.title, location.pathname);
     }
   }, [isHome, location.pathname, location.state, navigate]);
@@ -1844,7 +1847,7 @@ export default function Home({
               textUnderlineOffset: "6px",
             }}
           >
-            Contacts
+            Circle
           </button>
           <div aria-hidden="true" style={{ color: "var(--muted)" }}>
             |
@@ -1903,100 +1906,49 @@ export default function Home({
         ) : null}
 
         <main style={{ marginTop: "24px" }}>
-	          {isSearching ? null : activeTab === "contacts" && !hasContacts ? null : people.length === 0 ? (
-	            <div
-	              style={{
-	                marginTop: "64px",
-	                maxWidth: "560px",
-	                marginLeft: "auto",
-	                marginRight: "auto",
-	                display: "grid",
-	                gap: "20px",
-	                justifyItems: "center",
-	                textAlign: "center",
-	              }}
-	            >
-	              <div
-	                className="dkf-onboard-headline"
-	                style={{
-	                  maxWidth: "500px",
-	                  fontSize: "34px",
-	                  lineHeight: 1.15,
-	                  fontWeight: 600,
-	                  color: "var(--ink)",
-	                  letterSpacing: "-0.03em",
-	                  fontFamily: "var(--font-serif)",
-	                }}
-	              >
-	                For the people you never want to forget
-	              </div>
-	              <div
-	                className="dkf-onboard-copy dkf-onboard-copy-delay-1"
-	                style={{
-	                  maxWidth: "460px",
-	                  color: "var(--ink)",
-	                  lineHeight: 1.55,
-	                  fontSize: "1.2rem",
-	                  fontWeight: 500,
-	                }}
-	              >
-	                Because the people you love deserve to feel remembered.
-	              </div>
-	              <div
-	                className="dkf-onboard-copy dkf-onboard-copy-delay-2"
-	                style={{
-	                  maxWidth: "440px",
-	                  color: "var(--muted)",
-	                  lineHeight: 1.6,
-	                  fontSize: "1rem",
-	                }}
-	              >
-	                We’ll remind you about birthdays, holidays, and the moments that matter.
-	              </div>
-		              <div className="dkf-onboard-cta" style={{ marginTop: "1.75rem", display: "grid", gap: "12px" }}>
-		                <button
-		                  onClick={navigateToAddPerson}
-		                  style={{
-		                    border: "1px solid var(--border-strong)",
-		                    background: "transparent",
-		                    color: "var(--ink)",
-	                    cursor: "pointer",
-	                    textAlign: "center",
-	                    fontWeight: 500,
-	                    letterSpacing: "0.01em",
-	                    borderRadius: "12px",
-	                    padding: "0.75rem 1.15rem",
-		                    fontSize: "1rem",
-		                    fontFamily: "var(--font-sans)",
-	                  }}
-		                >
-		                  + Add someone important
-		                </button>
-		                <button
-		                  onClick={navigateToImportContacts}
-		                  style={{
-		                    border: "1px solid var(--border-strong)",
-		                    background: "transparent",
-		                    color: "var(--ink)",
-                    cursor: "pointer",
-                    textAlign: "center",
-	                    fontWeight: 500,
-                    letterSpacing: "0.01em",
-                    borderRadius: "12px",
-                    padding: "0.75rem 1.15rem",
-		                    fontSize: "1rem",
-		                    fontFamily: "var(--font-sans)",
-		                  }}
-		                >
-		                  Import from contacts
-		                </button>
-		              </div>
-		            </div>
-          ) : activeTab === "contacts" ? (
-            <section aria-label="Contacts" style={{ marginTop: "24px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
+          {isSearching ? null : activeTab === "contacts" ? (
+            <section aria-label="Circle" style={{ marginTop: "24px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
+              <div style={{ display: "grid", gap: "8px" }}>
+                <div
+                  style={{
+                    color: "var(--ink)",
+                    fontSize: "1.35rem",
+                    fontWeight: 600,
+                    letterSpacing: "-0.02em",
+                    fontFamily: "var(--font-serif)",
+                  }}
+                >
+                  Your circle
+                </div>
+                {!hasContacts ? (
+                  <div style={{ color: "var(--muted)", lineHeight: 1.55 }}>
+                    Start with a few people you want to keep close.
+                  </div>
+                ) : null}
+              </div>
+
               {filteredPeople.length === 0 ? (
                 <div style={{ marginTop: "1.5rem" }}>
-                  <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>No match found.</div>
+                  {hasContacts ? (
+                    <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>No match found.</div>
+                  ) : (
+                    <div style={{ display: "grid", gap: "8px" }}>
+                      <div
+                        style={{
+                          color: "var(--ink)",
+                          fontSize: "1.35rem",
+                          fontWeight: 600,
+                          letterSpacing: "-0.02em",
+                          fontFamily: "var(--font-serif)",
+                        }}
+                      >
+                        Start your circle
+                      </div>
+                      <div style={{ color: "var(--muted)", lineHeight: 1.55 }}>
+                        Add a few people you don’t want to forget.
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div style={{ marginTop: "1.5rem" }}>
@@ -2004,7 +1956,31 @@ export default function Home({
                 </div>
               )}
 
-              <div style={{ marginTop: "32px", display: "grid", gap: "16px" }}>
+              <div style={{ marginTop: "24px", display: "grid", gap: "12px" }}>
+                <div style={{ display: "grid", gap: "8px" }}>
+                  <button
+                    onClick={navigateToImportContacts}
+                    style={{
+                      width: "100%",
+                      border: "1px solid var(--ink)",
+                      background: "var(--ink)",
+                      color: "var(--paper)",
+                      cursor: "pointer",
+                      textAlign: "center",
+                      fontWeight: 600,
+                      letterSpacing: "0.01em",
+                      borderRadius: "12px",
+                      padding: "0.85rem 1rem",
+                      fontSize: "1rem",
+                      fontFamily: "var(--font-sans)",
+                    }}
+                  >
+                    Choose from contacts
+                  </button>
+                  <div style={{ color: "var(--muted)", fontSize: "0.88rem", lineHeight: 1.5, padding: "0 4px" }}>
+                    We’ll bring in your contacts so you can choose who matters.
+                  </div>
+                </div>
                 <button
                   onClick={navigateToAddPerson}
                   style={{
@@ -2012,38 +1988,28 @@ export default function Home({
                     background: "transparent",
                     color: "var(--ink)",
                     cursor: "pointer",
-                    textAlign: "left",
+                    textAlign: "center",
                     fontWeight: 500,
                     letterSpacing: "0.01em",
                     borderRadius: "12px",
-                    padding: "0.65rem 1rem",
+                    padding: "0.75rem 1rem",
                     fontSize: "0.95rem",
                     fontFamily: "var(--font-sans)",
                   }}
                 >
-                  + Add someone important
+                  Add someone manually
                 </button>
               </div>
+
+              {!isPremium && people.length >= FREE_LIMIT ? (
+                <div style={{ marginTop: "8px", color: "var(--muted)", fontSize: "0.88rem", lineHeight: 1.5 }}>
+                  {`Your circle has ${people.length} people. Upgrade to add more.`}
+                </div>
+              ) : null}
             </section>
           ) : (
-            <>
-              <section aria-label="Home" style={{ marginTop: "24px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
-                {showNiceStart && people.length === 1 ? (
-                  <div
-                    style={{
-                      border: "1px solid var(--border)",
-                      borderRadius: "14px",
-                      background: "rgba(255,255,255,0.65)",
-                      padding: "14px 16px",
-                      boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-                      marginBottom: "14px",
-                    }}
-                  >
-                    <div style={{ fontWeight: 600, color: "var(--ink)" }}>Nice start ⭐</div>
-                    <div style={{ marginTop: "4px", color: "var(--muted)" }}>We’ll remind you when it matters.</div>
-                  </div>
-                ) : null}
-                {(() => {
+            <section aria-label="Home" style={{ marginTop: "24px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
+              {(() => {
                   const headerStyle: React.CSSProperties = {
                     fontSize: "18px",
                     fontWeight: 600,
@@ -2247,8 +2213,6 @@ export default function Home({
                       );
                     }
 
-                    const firstPersonName = people[0]?.name?.trim() || "Someone";
-
                     return (
                       <div
                         style={{
@@ -2262,9 +2226,9 @@ export default function Home({
                           borderRadius: "18px",
                           background: "rgba(255,255,255,0.58)",
                         }}
-                      >
-                        <CircleEmptyStateGraphic />
-                        <div
+                        >
+                          <CircleEmptyStateGraphic />
+                          <div
                           style={{
                             color: "var(--ink)",
                             fontSize: "1.35rem",
@@ -2273,22 +2237,14 @@ export default function Home({
                             fontFamily: "var(--font-serif)",
                           }}
                         >
-                          You're all set.
+                          Nothing coming up
                         </div>
-                        {people.length > 0 ? (
-                          <>
-                            <div style={{ color: "var(--ink)", fontSize: "1rem", lineHeight: 1.5 }}>
-                              {`${firstPersonName} is in your circle.`}
-                            </div>
-                            <div style={{ color: "var(--muted)", fontSize: "0.98rem", lineHeight: 1.55 }}>
-                              We&apos;ll remind you when it matters.
-                            </div>
-                          </>
-                        ) : (
-                          <div style={{ color: "var(--muted)", fontSize: "0.98rem", lineHeight: 1.55 }}>
-                            We&apos;ll remind you when something&apos;s coming up.
-                          </div>
-                        )}
+                        <div style={{ color: "var(--ink)", fontSize: "1rem", lineHeight: 1.5 }}>
+                          You&apos;re all caught up for now.
+                        </div>
+                        <div style={{ color: "var(--muted)", fontSize: "0.98rem", lineHeight: 1.55 }}>
+                          Add more people or dates to stay ahead.
+                        </div>
                       </div>
                     );
                   };
@@ -2449,60 +2405,42 @@ export default function Home({
                     </>
                   );
                 })()}
-              </section>
-
-	              <div
-	                style={{
-	                  marginTop: "32px",
-	                  paddingTop: "24px",
-	                  borderTop: "1px solid var(--border)",
-	                  maxWidth: "560px",
-	                  marginLeft: "auto",
-	                  marginRight: "auto",
-	                  display: "grid",
-	                  gap: "10px",
-	                }}
-	              >
-	                <button
-	                  onClick={navigateToAddPerson}
-                  style={{
-                    border: "1px solid var(--border-strong)",
-                    background: "transparent",
-                    color: "var(--ink)",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    fontWeight: 500,
-                    letterSpacing: "0.01em",
-                    borderRadius: "12px",
-                    padding: "0.65rem 1rem",
-                    fontSize: "0.95rem",
-                    fontFamily: "var(--font-sans)",
-                  }}
-	                >
-	                  + Add someone important
-	                </button>
-	                <button
-	                  onClick={navigateToImportContacts}
-	                  style={{
-	                    border: "1px solid var(--border-strong)",
-	                    background: "transparent",
-	                    color: "var(--ink)",
-	                    cursor: "pointer",
-	                    textAlign: "left",
-	                    fontWeight: 500,
-	                    letterSpacing: "0.01em",
-	                    borderRadius: "12px",
-	                    padding: "0.65rem 1rem",
-	                    fontSize: "0.95rem",
-	                    fontFamily: "var(--font-sans)",
-	                  }}
-	                >
-	                  Import from contacts
-	                </button>
-	              </div>
-            </>
+            </section>
           )}
         </main>
+
+        {circleSuccessMessage ? (
+          <div
+            aria-live="polite"
+            style={{
+              position: "fixed",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transform: isCircleSuccessVisible ? "scale(1)" : "scale(0.95)",
+              opacity: isCircleSuccessVisible ? 1 : 0,
+              transition: "opacity 220ms ease, transform 220ms ease",
+              pointerEvents: "none",
+              zIndex: 30,
+            }}
+          >
+            <div
+              style={{
+                display: "grid",
+                justifyItems: "center",
+                gap: "16px",
+                padding: "24px",
+                textAlign: "center",
+              }}
+            >
+              <CircleEmptyStateGraphic />
+              <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.4 }}>
+                {circleSuccessMessage}
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {birthdayPickerPersonId ? (
           <MomentDatePicker
