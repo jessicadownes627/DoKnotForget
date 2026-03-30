@@ -1909,47 +1909,31 @@ export default function Home({
           {isSearching ? null : activeTab === "contacts" ? (
             <section aria-label="Circle" style={{ marginTop: "24px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
               <div style={{ display: "grid", gap: "8px" }}>
-                <div
-                  style={{
-                    color: "var(--ink)",
-                    fontSize: "1.35rem",
-                    fontWeight: 600,
-                    letterSpacing: "-0.02em",
-                    fontFamily: "var(--font-serif)",
-                  }}
-                >
-                  Your circle
-                </div>
                 <div style={{ color: "var(--muted)", lineHeight: 1.55 }}>
                   Build your circle
                 </div>
               </div>
 
               <div style={{ marginTop: "24px", display: "grid", gap: "12px" }}>
-                <div style={{ display: "grid", gap: "8px" }}>
-                  <button
-                    onClick={navigateToImportContacts}
-                    style={{
-                      width: "100%",
-                      border: "1px solid var(--ink)",
-                      background: "var(--ink)",
-                      color: "var(--paper)",
-                      cursor: "pointer",
-                      textAlign: "center",
-                      fontWeight: 600,
-                      letterSpacing: "0.01em",
-                      borderRadius: "12px",
-                      padding: "0.85rem 1rem",
-                      fontSize: "1rem",
+                <button
+                  onClick={navigateToImportContacts}
+                  style={{
+                    width: "100%",
+                    border: "1px solid var(--ink)",
+                    background: "var(--ink)",
+                    color: "var(--paper)",
+                    cursor: "pointer",
+                    textAlign: "center",
+                    fontWeight: 600,
+                    letterSpacing: "0.01em",
+                    borderRadius: "12px",
+                    padding: "0.85rem 1rem",
+                    fontSize: "1rem",
                     fontFamily: "var(--font-sans)",
                   }}
-                  >
-                    Choose from contacts
-                  </button>
-                  <div style={{ color: "var(--muted)", fontSize: "0.88rem", lineHeight: 1.5, padding: "0 4px" }}>
-                    We’ll access your contacts so you can choose who matters.
-                  </div>
-                </div>
+                >
+                  Choose from contacts
+                </button>
                 <button
                   onClick={navigateToAddPerson}
                   style={{
@@ -1968,6 +1952,9 @@ export default function Home({
                 >
                   Add someone manually
                 </button>
+                <div style={{ color: "var(--muted)", fontSize: "0.88rem", lineHeight: 1.5, padding: "0 4px" }}>
+                  We’ll access your contacts so you can choose who matters.
+                </div>
               </div>
 
               {!isPremium && people.length >= FREE_LIMIT ? (
