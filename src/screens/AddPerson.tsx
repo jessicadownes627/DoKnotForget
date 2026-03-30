@@ -813,20 +813,6 @@ export default function AddPerson() {
             />
             <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
               <button
-                onClick={handleSaveCustomMoment}
-                style={{
-                  padding: 0,
-                  border: "none",
-                  background: "none",
-                  color: "var(--ink)",
-                  fontSize: "0.9rem",
-                  cursor: "pointer",
-                  textAlign: "left",
-                }}
-              >
-                Done
-              </button>
-              <button
                 onClick={() => {
                   setCustomMomentTitle("");
                   setCustomMomentDate("");
@@ -846,6 +832,20 @@ export default function AddPerson() {
                 }}
               >
                 Cancel
+              </button>
+              <button
+                onClick={handleSaveCustomMoment}
+                style={{
+                  padding: 0,
+                  border: "none",
+                  background: "none",
+                  color: "var(--ink)",
+                  fontSize: "0.9rem",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                Done
               </button>
             </div>
           </div>
@@ -969,20 +969,6 @@ export default function AddPerson() {
                     />
                     <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
                       <button
-                        onClick={handleUpdateCustomMoment}
-                        style={{
-                          padding: 0,
-                          border: "none",
-                          background: "none",
-                          color: "var(--ink)",
-                          fontSize: "0.9rem",
-                          cursor: "pointer",
-                          textAlign: "left",
-                        }}
-                      >
-                        Done
-                      </button>
-                      <button
                         onClick={() => {
                           setEditingCustomMomentIndex(null);
                           setEditingCustomMomentTitle("");
@@ -1002,6 +988,20 @@ export default function AddPerson() {
                         }}
                       >
                         Cancel
+                      </button>
+                      <button
+                        onClick={handleUpdateCustomMoment}
+                        style={{
+                          padding: 0,
+                          border: "none",
+                          background: "none",
+                          color: "var(--ink)",
+                          fontSize: "0.9rem",
+                          cursor: "pointer",
+                          textAlign: "left",
+                        }}
+                      >
+                        Done
                       </button>
                     </div>
                   </div>
@@ -1087,22 +1087,6 @@ export default function AddPerson() {
             </select>
             <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
               <button
-                onClick={handleAddRelatedPerson}
-                disabled={!selectedRelatedPersonId}
-                style={{
-                  padding: 0,
-                  border: "none",
-                  background: "none",
-                  color: "var(--ink)",
-                  fontSize: "0.9rem",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  opacity: selectedRelatedPersonId ? 1 : 0.5,
-                }}
-              >
-                Save connection
-              </button>
-              <button
                 onClick={() => {
                   setSelectedRelatedPersonId("");
                   setRelatedSearch("");
@@ -1120,6 +1104,22 @@ export default function AddPerson() {
                 }}
               >
                 Cancel
+              </button>
+              <button
+                onClick={handleAddRelatedPerson}
+                disabled={!selectedRelatedPersonId}
+                style={{
+                  padding: 0,
+                  border: "none",
+                  background: "none",
+                  color: "var(--ink)",
+                  fontSize: "0.9rem",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  opacity: selectedRelatedPersonId ? 1 : 0.5,
+                }}
+              >
+                Save connection
               </button>
             </div>
           </div>

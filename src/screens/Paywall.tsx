@@ -20,18 +20,16 @@ export default function Paywall() {
     let cancelled = false;
 
     async function loadProduct() {
-      console.log("Fetching products...");
       try {
         const product = await fetchPremiumProduct();
         if (cancelled) return;
         if (!product) {
           setPremiumProduct(null);
-          console.log("Products loaded: 0");
           console.log("NO PRODUCTS");
           return;
         }
         setPremiumProduct(product);
-        console.log("Products loaded: 1");
+        console.log("Selected product:", product);
       } catch (error) {
         if (cancelled) return;
         setPremiumProduct(null);
@@ -51,6 +49,7 @@ export default function Paywall() {
   }
 
   async function handleUpgrade() {
+    console.log("Upgrade button tapped");
     if (isBusy) return;
     if (!premiumProduct) {
       console.error("No product available");
@@ -59,9 +58,11 @@ export default function Paywall() {
     }
     setIsBusy(true);
     try {
+      console.log("Selected product before purchase:", premiumProduct);
       console.log("PURCHASE CALLED");
       console.log("Purchase triggered");
       const result = await purchaseProduct(premiumProduct.id);
+      console.log("Purchase result:", result);
       if (result.status === "purchased") {
         setPremium(true);
         navigate("/home");
@@ -73,7 +74,7 @@ export default function Paywall() {
       }
       console.log("[DKF] Purchase pending");
     } catch (error) {
-      console.error("[DKF] Purchase failed", error);
+      console.error("Purchase failed:", error);
     } finally {
       setIsBusy(false);
     }
@@ -199,7 +200,7 @@ export default function Paywall() {
                 background: "transparent",
               }}
             >
-              {isPeopleLimitPaywall ? "Not now" : "Continue free"}
+              Not now
             </button>
           </div>
 
