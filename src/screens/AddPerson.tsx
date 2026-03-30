@@ -1078,6 +1078,8 @@ export default function AddPerson() {
           onClick={() => navigate("/home")}
           style={{
             padding: "0.75rem 1.25rem",
+            background: "transparent",
+            color: "var(--muted)",
             cursor: "pointer",
           }}
         >
@@ -1087,6 +1089,9 @@ export default function AddPerson() {
           onClick={handleSave}
           style={{
             padding: "0.75rem 1.25rem",
+            background: "var(--ink)",
+            color: "var(--paper)",
+            border: "1px solid var(--ink)",
             cursor: "pointer",
           }}
         >

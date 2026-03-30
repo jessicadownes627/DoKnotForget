@@ -394,6 +394,7 @@ export default function Home({
   const [dismissedReminderKeys, setDismissedReminderKeys] = useState<Record<string, true>>({});
   const [circleSuccessMessage, setCircleSuccessMessage] = useState("");
   const [isCircleSuccessVisible, setIsCircleSuccessVisible] = useState(false);
+  const circleSuccessTimeoutRef = useRef<number | null>(null);
   const [sheetRecommendations, setSheetRecommendations] = useState<SheetRecommendation[]>([]);
   const [dismissedHorizonKeys] = useState<Record<string, true>>(() => {
     try {
@@ -1708,6 +1709,23 @@ export default function Home({
   }, [people.length]);
 
   useEffect(() => {
+    return () => {
+      if (circleSuccessTimeoutRef.current !== null) {
+        window.clearTimeout(circleSuccessTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  function dismissCircleSuccess() {
+    if (circleSuccessTimeoutRef.current !== null) {
+      window.clearTimeout(circleSuccessTimeoutRef.current);
+      circleSuccessTimeoutRef.current = null;
+    }
+    setIsCircleSuccessVisible(false);
+    window.setTimeout(() => setCircleSuccessMessage(""), 220);
+  }
+
+  useEffect(() => {
     if (location.state?.defaultTab === "contacts" && isHome) {
       navigate("/contacts", { replace: true });
       return;
@@ -1718,13 +1736,14 @@ export default function Home({
       setCircleSuccessMessage(nextMessage);
       setIsCircleSuccessVisible(false);
       window.requestAnimationFrame(() => setIsCircleSuccessVisible(true));
-      const timeoutId = window.setTimeout(() => {
-        setIsCircleSuccessVisible(false);
-        window.setTimeout(() => setCircleSuccessMessage(""), 220);
+      if (circleSuccessTimeoutRef.current !== null) {
+        window.clearTimeout(circleSuccessTimeoutRef.current);
+      }
+      circleSuccessTimeoutRef.current = window.setTimeout(() => {
+        dismissCircleSuccess();
       }, 1800);
 
       window.history.replaceState({}, document.title, location.pathname);
-      return () => window.clearTimeout(timeoutId);
     }
 
     if (location.state?.defaultTab || location.state?.showPartnerLinkCheck || location.state?.circleSuccessMessage) {
@@ -2399,18 +2418,21 @@ export default function Home({
             }}
           >
             <div
+              onClick={dismissCircleSuccess}
               style={{
                 display: "grid",
                 justifyItems: "center",
-                gap: "16px",
+                gap: "12px",
                 width: "100%",
-                padding: "20px 22px",
+                padding: "16px 18px",
                 textAlign: "center",
                 background: "rgba(255,255,255,0.96)",
                 border: "1px solid var(--border)",
                 borderRadius: "18px",
                 boxShadow: "0 12px 30px rgba(27,42,65,0.16)",
                 backdropFilter: "blur(10px)",
+                pointerEvents: "auto",
+                cursor: "pointer",
               }}
             >
               <CircleEmptyStateGraphic />
