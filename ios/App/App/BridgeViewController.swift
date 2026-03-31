@@ -2,12 +2,13 @@ import UIKit
 import Capacitor
 
 class BridgeViewController: CAPBridgeViewController {
-    override func capacitorDidLoad() {
+
+    override open func capacitorDidLoad() {
         super.capacitorDidLoad()
 
         print("🔥 capacitorDidLoad running")
 
-        // bridge?.registerPluginType(StoreKitPlugin.self)
+        self.bridge?.registerPluginInstance(StoreKitPlugin())
 
         print("✅ StoreKitPlugin registered")
     }
