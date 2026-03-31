@@ -55,31 +55,23 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc public func restorePurchases(_ call: CAPPluginCall) {
         Task {
-            do {
-                try await AppStore.sync()
+            var hasPurchase = false
 
-                var hasPurchase = false
-
-                for await result in Transaction.currentEntitlements {
-                    guard case .verified(let transaction) = result else {
-                        continue
+            for await result in Transaction.currentEntitlements {
+                switch result {
+                case .verified(let transaction):
+                    if transaction.productID == "com.doknotforget.premium" {
+                        hasPurchase = true
                     }
-
-                    if transaction.revocationDate != nil {
-                        continue
-                    }
-
-                    if let expirationDate = transaction.expirationDate, expirationDate < Date() {
-                        continue
-                    }
-
-                    hasPurchase = true
-                    break
+                case .unverified:
+                    continue
                 }
+            }
 
+            if hasPurchase {
                 call.resolve(["success": hasPurchase])
-            } catch {
-                call.reject("Restore failed")
+            } else {
+                call.resolve(["success": false])
             }
         }
     }
