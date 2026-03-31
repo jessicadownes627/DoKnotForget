@@ -1,34 +1,91 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAppState } from "../appState";
 import { useLocation, useNavigate } from "../router";
-import { purchaseProduct } from "../utils/storeKit";
+import { purchaseProduct, restorePremiumPurchases } from "../utils/storeKit";
 
 export default function Paywall() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isPremium } = useAppState();
+  const { isPremium, setPremium } = useAppState();
   const isPeopleLimitPaywall = location.state?.source === "people-limit";
-  const [isBusy] = useState(false);
-
-  useEffect(() => {
-    if (!isPremium) return;
-    navigate("/home", { replace: true });
-  }, [isPremium, navigate]);
+  const [isBusy, setIsBusy] = useState(false);
 
   function continueFree() {
     navigate("/home", { state: { defaultTab: "home" } });
   }
 
   async function handleUpgrade() {
+    if (isBusy) return;
+
     try {
-      alert("STEP 1");
+      setIsBusy(true);
 
       const success = await purchaseProduct("com.doknotforget.premium");
 
-      alert("RESULT: " + success);
-    } catch (e: any) {
-      alert("ERROR: " + JSON.stringify(e));
+      if (success) {
+        setPremium(true);
+        alert("You're premium 🎉");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Purchase failed");
+    } finally {
+      setIsBusy(false);
     }
+  }
+
+  async function handleRestorePurchases() {
+    if (isBusy) return;
+
+    try {
+      setIsBusy(true);
+
+      const restored = await restorePremiumPurchases();
+
+      if (restored) {
+        setPremium(true);
+        alert("Restored 🎉");
+        return;
+      }
+
+      alert("No purchases found");
+    } catch (e) {
+      console.error(e);
+      alert("No purchases found");
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  if (isPremium) {
+    return (
+      <div style={{ background: "var(--paper)", color: "var(--ink)", minHeight: "100vh" }}>
+        <div
+          style={{
+            maxWidth: "560px",
+            margin: "0 auto",
+            padding: "64px 16px 32px",
+            boxSizing: "border-box",
+            minHeight: "100vh",
+            display: "grid",
+            alignContent: "center",
+          }}
+        >
+          <h2
+            style={{
+              margin: 0,
+              fontFamily: "var(--font-serif)",
+              fontSize: "30px",
+              lineHeight: 1.1,
+              fontWeight: 600,
+              letterSpacing: "-0.03em",
+            }}
+          >
+            You're already premium 🎉
+          </h2>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -113,7 +170,7 @@ export default function Paywall() {
           <div style={{ display: "grid", gap: "10px" }}>
             <button
               type="button"
-              onClick={() => void handleUpgrade()}
+              onClick={handleUpgrade}
               disabled={isBusy}
               style={{
                 borderRadius: "12px",
@@ -121,7 +178,7 @@ export default function Paywall() {
                 fontSize: "1rem",
               }}
             >
-              {isPeopleLimitPaywall ? "Unlock your full list" : "Upgrade"}
+              {isBusy ? "Processing..." : isPeopleLimitPaywall ? "Unlock your full list" : "Upgrade"}
             </button>
             <button
               type="button"
@@ -134,6 +191,19 @@ export default function Paywall() {
               }}
             >
               Not now
+            </button>
+            <button
+              type="button"
+              onClick={handleRestorePurchases}
+              disabled={isBusy}
+              style={{
+                borderRadius: "12px",
+                padding: "0.85rem 1rem",
+                fontSize: "1rem",
+                background: "transparent",
+              }}
+            >
+              Restore Purchases
             </button>
           </div>
 

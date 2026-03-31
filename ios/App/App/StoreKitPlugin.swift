@@ -3,13 +3,17 @@ import Capacitor
 import StoreKit
 
 @objc(StoreKitPlugin)
-public class StoreKitPlugin: CAPPlugin {
+public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
 
-    @objc override public func load() {
-        print("🔥 StoreKitPlugin LOADED")
-    }
+    public let identifier = "StoreKitPlugin"
+    public let jsName = "StoreKit"
 
-    @objc func purchase(_ call: CAPPluginCall) {
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "purchase", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "restorePurchases", returnType: CAPPluginReturnPromise)
+    ]
+
+    @objc public func purchase(_ call: CAPPluginCall) {
         guard let productId = call.getString("productId") else {
             call.reject("Missing productId")
             return
@@ -45,6 +49,37 @@ public class StoreKitPlugin: CAPPlugin {
 
             } catch {
                 call.reject("Purchase failed")
+            }
+        }
+    }
+
+    @objc public func restorePurchases(_ call: CAPPluginCall) {
+        Task {
+            do {
+                try await AppStore.sync()
+
+                var hasPurchase = false
+
+                for await result in Transaction.currentEntitlements {
+                    guard case .verified(let transaction) = result else {
+                        continue
+                    }
+
+                    if transaction.revocationDate != nil {
+                        continue
+                    }
+
+                    if let expirationDate = transaction.expirationDate, expirationDate < Date() {
+                        continue
+                    }
+
+                    hasPurchase = true
+                    break
+                }
+
+                call.resolve(["success": hasPurchase])
+            } catch {
+                call.reject("Restore failed")
             }
         }
     }

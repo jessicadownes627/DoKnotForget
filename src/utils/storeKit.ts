@@ -2,6 +2,7 @@ import { registerPlugin } from "@capacitor/core";
 
 type StoreKitPlugin = {
   purchase(options: { productId: string }): Promise<{ success: boolean }>;
+  restorePurchases(): Promise<{ success: boolean }>;
 };
 
 const StoreKit = registerPlugin<StoreKitPlugin>("StoreKit");
@@ -19,5 +20,15 @@ export async function purchaseProduct(productId: string) {
   } catch (error) {
     console.error("❌ Purchase failed:", error);
     throw error;
+  }
+}
+
+export async function restorePremiumPurchases() {
+  try {
+    const result = await StoreKit.restorePurchases();
+    return result?.success === true;
+  } catch (error) {
+    console.error("❌ Restore failed:", error);
+    return false;
   }
 }
