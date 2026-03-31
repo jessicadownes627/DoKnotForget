@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAppState } from "../appState";
 import { useLocation, useNavigate } from "../router";
 import { purchaseProduct, restorePremiumPurchases } from "../utils/storeKit";
@@ -9,6 +9,16 @@ export default function Paywall() {
   const { isPremium, setPremium } = useAppState();
   const isPeopleLimitPaywall = location.state?.source === "people-limit";
   const [isBusy, setIsBusy] = useState(false);
+
+  useEffect(() => {
+    if (!isPremium) return;
+
+    const timeoutId = window.setTimeout(() => {
+      navigate("/");
+    }, 1500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isPremium, navigate]);
 
   function continueFree() {
     navigate("/home", { state: { defaultTab: "home" } });
@@ -55,37 +65,6 @@ export default function Paywall() {
     } finally {
       setIsBusy(false);
     }
-  }
-
-  if (isPremium) {
-    return (
-      <div style={{ background: "var(--paper)", color: "var(--ink)", minHeight: "100vh" }}>
-        <div
-          style={{
-            maxWidth: "560px",
-            margin: "0 auto",
-            padding: "64px 16px 32px",
-            boxSizing: "border-box",
-            minHeight: "100vh",
-            display: "grid",
-            alignContent: "center",
-          }}
-        >
-          <h2
-            style={{
-              margin: 0,
-              fontFamily: "var(--font-serif)",
-              fontSize: "30px",
-              lineHeight: 1.1,
-              fontWeight: 600,
-              letterSpacing: "-0.03em",
-            }}
-          >
-            You're already premium 🎉
-          </h2>
-        </div>
-      </div>
-    );
   }
 
   return (
