@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CareEvent } from "../models/CareEvent";
-import type { Person } from "../models/Person";
+import type { Moment, Person } from "../models/Person";
 import type { Relationship } from "../models/Relationship";
 import PersonEditDrawer from "../components/PersonEditDrawer";
 import MomentDatePicker from "../components/MomentDatePicker";
@@ -122,17 +122,68 @@ function possessive(name: string) {
   return name.endsWith("s") ? `${name}'` : `${name}'s`;
 }
 
+function formatRelationshipType(type: Relationship["type"]) {
+  if (type === "other") return "Someone important";
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
 type EditableConnection = {
   person: Person;
   type: Relationship["type"];
   relationshipId: string | null;
 };
 
-export default function PersonDetail({}: {}) {
+type MomentComposerState =
+  | { kind: "hidden" }
+  | { kind: "chooser" }
+  | { kind: "birthday" }
+  | { kind: "anniversary" }
+  | { kind: "custom"; momentId: string | null };
+
+function SurfaceCard({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <section
+      className="dkf-enter"
+      style={{
+        borderRadius: "28px",
+        border: "1px solid rgba(10, 27, 42, 0.08)",
+        background: "rgba(255,255,255,0.88)",
+        boxShadow: "0 16px 45px rgba(32, 26, 17, 0.06)",
+        padding: "1.1rem",
+        ...style,
+      }}
+    >
+      {children}
+    </section>
+  );
+}
+
+function ActionPill({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        borderRadius: "999px",
+        border: "1px solid rgba(10, 27, 42, 0.1)",
+        background: "rgba(255,255,255,0.92)",
+        color: "var(--ink)",
+        padding: "0.8rem 0.95rem",
+        fontSize: "0.94rem",
+        fontWeight: 600,
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+export default function PersonDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams<{ id: string }>();
-  const { people, relationships, careEvents, updatePerson, upsertRelationship, deletePerson } = useAppState();
+  const { people, relationships, careEvents, updatePerson, updatePersonFields, upsertRelationship, deletePerson } =
+    useAppState();
   const person = people.find((p) => p.id === id) ?? null;
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [initialChildId, setInitialChildId] = useState<string | null>(null);
@@ -148,6 +199,19 @@ export default function PersonDetail({}: {}) {
   const [editingConnection, setEditingConnection] = useState<EditableConnection | null>(null);
   const [connectionSearch, setConnectionSearch] = useState("");
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
+  const [momentComposer, setMomentComposer] = useState<MomentComposerState>({ kind: "hidden" });
+  const [birthdayDraftMonthDay, setBirthdayDraftMonthDay] = useState("");
+  const [birthdayDraftYear, setBirthdayDraftYear] = useState("");
+  const [anniversaryDraftMonthDay, setAnniversaryDraftMonthDay] = useState("");
+  const [anniversaryDraftYear, setAnniversaryDraftYear] = useState("");
+  const [customMomentTitle, setCustomMomentTitle] = useState("");
+  const [customMomentDate, setCustomMomentDate] = useState("");
+  const [customDraftMonthDay, setCustomDraftMonthDay] = useState("");
+  const [customDraftYear, setCustomDraftYear] = useState("");
+  const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] = useState(false);
+  const [isPhoneEditorOpen, setIsPhoneEditorOpen] = useState(false);
+  const [phoneDraft, setPhoneDraft] = useState("");
+  const [phoneDraftError, setPhoneDraftError] = useState(false);
   const today = useMemo(() => startOfDay(new Date()), []);
 
   useEffect(() => {
@@ -193,8 +257,17 @@ export default function PersonDetail({}: {}) {
     []
   );
 
+  const birthdayMoment = useMemo(
+    () => (person.moments ?? []).find((m) => m.type === "birthday") ?? null,
+    [person.moments]
+  );
+  const anniversaryMoment = useMemo(
+    () => (person.moments ?? []).find((m) => m.type === "anniversary") ?? null,
+    [person.moments]
+  );
+
   const birthdayInfo = useMemo(() => {
-    const b = (person.moments ?? []).find((m) => m.type === "birthday") ?? null;
+    const b = birthdayMoment;
     if (!b?.date) return null;
     const next = getNextBirthdayFromIso(b.date, today);
     if (!next) return null;
@@ -205,8 +278,9 @@ export default function PersonDetail({}: {}) {
       formattedDate,
       age,
       isToday: next.daysUntilBirthday === 0,
+      daysUntil: next.daysUntilBirthday,
     };
-  }, [fullDateFormatter, monthDayFormatter, person.moments, today]);
+  }, [birthdayMoment, fullDateFormatter, monthDayFormatter, today]);
 
   const anniversaryDisplay = useMemo(() => {
     const mmdd = getAnniversaryMonthDay(person);
@@ -219,7 +293,6 @@ export default function PersonDetail({}: {}) {
       .filter((moment) => moment.type === "custom")
       .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
   }, [person.moments]);
-  const hasAnyImportantDates = Boolean(birthdayInfo || anniversaryDisplay || otherMoments.length > 0);
 
   const relationshipsForPerson = (relationships ?? []).filter(
     (rel) => rel.fromId === person.id || rel.toId === person.id
@@ -240,9 +313,7 @@ export default function PersonDetail({}: {}) {
     );
     if (person.partnerId && !hasPartnerRelationship) {
       const partner = people.find((candidate) => candidate.id === person.partnerId) ?? null;
-      if (partner) {
-        items.push({ person: partner, type: "partner", relationshipId: null });
-      }
+      if (partner) items.push({ person: partner, type: "partner", relationshipId: null });
     }
 
     const seen = new Set<string>();
@@ -254,16 +325,17 @@ export default function PersonDetail({}: {}) {
     });
   })();
 
-  const relationshipOrder: Array<Relationship["type"]> = ["partner", "child", "parent", "sibling", "friend", "other"];
-
-  const groupedRelatedPeople = relationshipOrder
-    .map((type) => ({
-      type,
-      items: relatedPeople
-        .filter((item) => item.type === type)
-        .sort((a, b) => a.person.name.localeCompare(b.person.name)),
-    }))
-    .filter((group) => group.items.length > 0);
+  const groupedRelatedPeople = useMemo(() => {
+    const relationshipOrder: Array<Relationship["type"]> = ["partner", "child", "parent", "sibling", "friend", "other"];
+    return relationshipOrder
+      .map((type) => ({
+        type,
+        items: relatedPeople
+          .filter((item) => item.type === type)
+          .sort((a, b) => a.person.name.localeCompare(b.person.name)),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [relatedPeople]);
 
   const availableConnections = useMemo(() => {
     const connectedIds = new Set(relatedPeople.map((item) => item.person.id));
@@ -284,18 +356,13 @@ export default function PersonDetail({}: {}) {
       : null;
 
   const familyTimeline = useMemo(() => {
-    const events: Array<{ id: string; personName: string; label: string; targetDate: Date }> = [];
+    const events: Array<{ id: string; label: string; targetDate: Date }> = [];
 
     const addRecurringEvent = (id: string, label: string, isoDate: string | undefined) => {
       if (!isoDate) return;
       const next = getNextBirthdayFromIso(isoDate, today);
       if (!next || next.target < today) return;
-      events.push({
-        id,
-        personName: resolvedPerson.name,
-        label,
-        targetDate: next.target,
-      });
+      events.push({ id, label, targetDate: next.target });
     };
 
     const addOneTimeOrRecurringMoment = (momentId: string, label: string, isoDate: string, recurring: boolean) => {
@@ -306,28 +373,16 @@ export default function PersonDetail({}: {}) {
       }
       const parsed = parseLocalDate(isoDate);
       if (!parsed || parsed < today) return;
-      events.push({
-        id: momentId,
-        personName: resolvedPerson.name,
-        label,
-        targetDate: parsed,
-      });
+      events.push({ id: momentId, label, targetDate: parsed });
     };
 
-    const birthdayMoment = (resolvedPerson.moments ?? []).find((moment) => moment.type === "birthday") ?? null;
-    addRecurringEvent(
-      `${resolvedPerson.id}:birthday`,
-      "Birthday",
-      birthdayMoment?.date
-    );
-
-    const anniversaryMoment = (resolvedPerson.moments ?? []).find((moment) => moment.type === "anniversary") ?? null;
+    addRecurringEvent(`${resolvedPerson.id}:birthday`, `${possessive(resolvedPerson.name)} birthday`, birthdayMoment?.date);
     const anniversaryIso = anniversaryMoment?.date
       ? anniversaryMoment.date
       : resolvedPerson.anniversary
         ? `0000-${resolvedPerson.anniversary}`
         : undefined;
-    addRecurringEvent(`${resolvedPerson.id}:anniversary`, "Anniversary", anniversaryIso);
+    addRecurringEvent(`${resolvedPerson.id}:anniversary`, `${possessive(resolvedPerson.name)} anniversary`, anniversaryIso);
 
     for (const child of resolvedPerson.children ?? []) {
       const childBirthday = (child.birthday ?? child.birthdate ?? "").trim();
@@ -341,38 +396,30 @@ export default function PersonDetail({}: {}) {
       addOneTimeOrRecurringMoment(moment.id, moment.label, moment.date, moment.recurring);
     }
 
-    for (const moment of resolvedPerson.importantDates ?? []) {
-      if (moment.type !== "custom") continue;
-      addOneTimeOrRecurringMoment(`important:${moment.id}`, moment.label, moment.date, moment.recurring);
-    }
-
-    for (const moment of resolvedPerson.sensitiveMoments ?? []) {
-      if (moment.type !== "custom") continue;
-      addOneTimeOrRecurringMoment(`sensitive:${moment.id}`, moment.label, moment.date, moment.recurring);
-    }
-
     return events
       .sort((a, b) => {
         if (a.targetDate.getTime() !== b.targetDate.getTime()) {
           return a.targetDate.getTime() - b.targetDate.getTime();
         }
         return a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
-      });
+      })
+      .slice(0, 3);
   }, [
+    anniversaryMoment?.date,
+    birthdayMoment?.date,
     resolvedPerson.anniversary,
     resolvedPerson.children,
     resolvedPerson.id,
-    resolvedPerson.importantDates,
     resolvedPerson.moments,
     resolvedPerson.name,
-    resolvedPerson.sensitiveMoments,
     today,
   ]);
 
   const careHistory = useMemo(() => {
     return [...careEvents]
       .filter((event) => event.personId === person.id)
-      .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+      .slice(0, 3);
   }, [careEvents, person.id]);
 
   const children = useMemo(() => {
@@ -383,10 +430,25 @@ export default function PersonDetail({}: {}) {
 
   const selectedHolidays = getSelectedHolidays(person);
 
-  function formatRelationshipType(type: Relationship["type"]) {
-    if (type === "other") return "Family member";
-    return type.charAt(0).toUpperCase() + type.slice(1);
-  }
+  const relationshipLine = useMemo(() => {
+    const primary = groupedRelatedPeople[0];
+    if (!primary?.items.length) return null;
+    if (primary.type === "partner") return "Connected to a partner";
+    if (primary.type === "child") return `Connected to ${children.length} ${children.length === 1 ? "child" : "children"}`;
+    return primary.items.length === 1
+      ? `Connected to ${primary.items[0].person.name}`
+      : `Connected to ${primary.items.length} people`;
+  }, [children.length, groupedRelatedPeople]);
+
+  const portraitSubtitle = birthdayInfo
+    ? birthdayInfo.isToday
+      ? `${possessive(person.name)} birthday is today`
+      : birthdayInfo.daysUntil === 1
+        ? `${possessive(person.name)} birthday is tomorrow`
+        : `${possessive(person.name)} birthday is in ${birthdayInfo.daysUntil} days`
+    : anniversaryDisplay
+      ? `Anniversary on ${anniversaryDisplay}`
+      : relationshipLine ?? "A living page in your circle";
 
   function formatCareEventDate(timestamp: string) {
     const parsed = parseLocalDate(timestamp.slice(0, 10));
@@ -407,6 +469,94 @@ export default function PersonDetail({}: {}) {
     return `Checked in with ${personName}`;
   }
 
+  function updateMomentBuckets(nextMoments: Moment[]) {
+    updatePerson({
+      ...resolvedPerson,
+      moments: nextMoments,
+      importantDates: nextMoments.filter((moment) => moment.type === "custom" && moment.category !== "sensitive"),
+      sensitiveMoments: nextMoments.filter((moment) => moment.type === "custom" && moment.category === "sensitive"),
+    });
+  }
+
+  function resetMomentComposer() {
+    setMomentComposer({ kind: "hidden" });
+    setBirthdayDraftMonthDay("");
+    setBirthdayDraftYear("");
+    setAnniversaryDraftMonthDay("");
+    setAnniversaryDraftYear("");
+    setCustomMomentTitle("");
+    setCustomMomentDate("");
+    setCustomDraftMonthDay("");
+    setCustomDraftYear("");
+    setIsCustomDatePickerOpen(false);
+  }
+
+  function openBirthdayEditor() {
+    const draft = connectionDraftFromIso(birthdayMoment?.date);
+    setBirthdayDraftMonthDay(draft.monthDay);
+    setBirthdayDraftYear(draft.year);
+    setMomentComposer({ kind: "birthday" });
+  }
+
+  function openAnniversaryEditor() {
+    const draft = connectionDraftFromIso(anniversaryMoment?.date);
+    setAnniversaryDraftMonthDay(draft.monthDay);
+    setAnniversaryDraftYear(draft.year);
+    setMomentComposer({ kind: "anniversary" });
+  }
+
+  function openCustomMomentEditor(moment?: Moment) {
+    setCustomMomentTitle(moment?.label ?? "");
+    setCustomMomentDate(moment?.date ?? "");
+    const draft = connectionDraftFromIso(moment?.date);
+    setCustomDraftMonthDay(draft.monthDay);
+    setCustomDraftYear(draft.year);
+    setMomentComposer({ kind: "custom", momentId: moment?.id ?? null });
+  }
+
+  function saveBirthdayFromDraft() {
+    const iso = buildMomentIso(birthdayDraftMonthDay, birthdayDraftYear, false);
+    if (!iso) return;
+    const updatedMoment: Moment = birthdayMoment
+      ? { ...birthdayMoment, date: iso, recurring: true }
+      : { id: makeId(), type: "birthday", label: "Birthday", date: iso, recurring: true };
+    const other = resolvedPerson.moments.filter((moment) => moment.type !== "birthday");
+    updateMomentBuckets([updatedMoment, ...other]);
+    setMomentComposer({ kind: "hidden" });
+  }
+
+  function saveAnniversaryFromDraft() {
+    const iso = buildMomentIso(anniversaryDraftMonthDay, anniversaryDraftYear, false);
+    if (!iso) return;
+    const updatedMoment: Moment = anniversaryMoment
+      ? { ...anniversaryMoment, date: iso, recurring: true }
+      : { id: makeId(), type: "anniversary", label: "Anniversary", date: iso, recurring: true };
+    const other = resolvedPerson.moments.filter((moment) => moment.type !== "anniversary");
+    updatePerson({
+      ...resolvedPerson,
+      anniversary: `${iso.split("-")[1]}-${iso.split("-")[2]}`,
+      moments: [updatedMoment, ...other],
+      importantDates: resolvedPerson.importantDates,
+      sensitiveMoments: resolvedPerson.sensitiveMoments,
+    });
+    setMomentComposer({ kind: "hidden" });
+  }
+
+  function saveCustomMoment() {
+    if (!customMomentTitle.trim() || !customMomentDate) return;
+    const existingId = momentComposer.kind === "custom" ? momentComposer.momentId : null;
+    const nextMoment: Moment = {
+      id: existingId ?? makeId(),
+      type: "custom",
+      label: customMomentTitle.trim(),
+      date: customMomentDate,
+      recurring: true,
+    };
+    const remaining = resolvedPerson.moments.filter((moment) => moment.id !== existingId);
+    updateMomentBuckets([...remaining, nextMoment].sort((a, b) => a.label.localeCompare(b.label)));
+    resetMomentComposer();
+  }
+
   function resetConnectionDraft() {
     setConnectionType(resolvedPerson.partnerId ? "child" : "partner");
     setConnectionName("");
@@ -420,24 +570,9 @@ export default function PersonDetail({}: {}) {
     setSelectedConnectionId(null);
   }
 
-  function openAddConnection() {
+  function openAddConnection(startType: "child" | "partner" | "familyMember" = "familyMember") {
     resetConnectionDraft();
-    setIsAddConnectionOpen(true);
-  }
-
-  function openEditConnection(connection: EditableConnection) {
-    const birthdayMoment = (connection.person.moments ?? []).find((moment) => moment.type === "birthday") ?? null;
-    const draft = connectionDraftFromIso(birthdayMoment?.date);
-    setEditingConnection(connection);
-    setConnectionType(connection.type === "partner" || connection.type === "child" ? connection.type : "familyMember");
-    setConnectionName(connection.person.name ?? "");
-    setConnectionPhone(connection.person.phone ?? "");
-    setConnectionPhoneError(false);
-    setConnectionBirthdayMonthDay(draft.monthDay);
-    setConnectionBirthdayYear(draft.year);
-    setIsConnectionBirthdayOpen(false);
-    setConnectionSearch("");
-    setSelectedConnectionId(connection.person.id);
+    setConnectionType(startType);
     setIsAddConnectionOpen(true);
   }
 
@@ -456,15 +591,15 @@ export default function PersonDetail({}: {}) {
       const existingMoments = [...(editingConnection.person.moments ?? [])];
       const existingBirthdayIndex = existingMoments.findIndex((moment) => moment.type === "birthday");
       if (birthdayIso) {
-        const birthdayMoment = {
+        const nextBirthdayMoment = {
           id: existingBirthdayIndex >= 0 ? existingMoments[existingBirthdayIndex].id : makeId(),
           type: "birthday" as const,
           label: "Birthday",
           date: birthdayIso,
           recurring: true,
         };
-        if (existingBirthdayIndex >= 0) existingMoments[existingBirthdayIndex] = birthdayMoment;
-        else existingMoments.unshift(birthdayMoment);
+        if (existingBirthdayIndex >= 0) existingMoments[existingBirthdayIndex] = nextBirthdayMoment;
+        else existingMoments.unshift(nextBirthdayMoment);
       } else if (existingBirthdayIndex >= 0) {
         existingMoments.splice(existingBirthdayIndex, 1);
       }
@@ -477,6 +612,7 @@ export default function PersonDetail({}: {}) {
         name: trimmedName,
         phone: normalizedPhone || undefined,
         moments: existingMoments,
+        importantDates: existingMoments.filter((moment) => moment.type === "custom"),
         partnerId:
           relationshipType === "partner"
             ? resolvedPerson.id
@@ -508,13 +644,7 @@ export default function PersonDetail({}: {}) {
     }
 
     if (!selectedConnection) return;
-
-    if (people.some((candidate) => candidate.id === selectedConnection.id) === false) return;
-    if (relatedPeople.some((item) => item.person.id === selectedConnection.id)) {
-      setIsAddConnectionOpen(false);
-      resetConnectionDraft();
-      return;
-    }
+    if (!people.some((candidate) => candidate.id === selectedConnection.id)) return;
 
     const relationshipType: Relationship["type"] =
       connectionType === "partner" ? "partner" : connectionType === "child" ? "child" : "other";
@@ -523,12 +653,14 @@ export default function PersonDetail({}: {}) {
       ...resolvedPerson,
       partnerId: relationshipType === "partner" ? selectedConnection.id : resolvedPerson.partnerId,
     });
+
     if (relationshipType === "partner") {
       updatePerson({
         ...selectedConnection,
         partnerId: resolvedPerson.id,
       });
     }
+
     upsertRelationship({
       id: makeId(),
       fromId: resolvedPerson.id,
@@ -559,420 +691,741 @@ export default function PersonDetail({}: {}) {
     setIsEditOpen(true);
   }
 
+  function openPhoneEditor() {
+    setPhoneDraft(resolvedPerson.phone ?? "");
+    setPhoneDraftError(false);
+    setIsPhoneEditorOpen(true);
+  }
+
+  function savePhone() {
+    const normalizedPhone = phoneDraft.trim() ? normalizePhone(phoneDraft) : null;
+    if (phoneDraft.trim() && !normalizedPhone) {
+      setPhoneDraftError(true);
+      return;
+    }
+    updatePersonFields(resolvedPerson.id, { phone: normalizedPhone || undefined });
+    setIsPhoneEditorOpen(false);
+  }
+
+  const promptCards = useMemo(() => {
+    const cards: Array<{ title: string; action: string; onClick: () => void }> = [];
+    if (!anniversaryDisplay) {
+      cards.push({
+        title: "Add an anniversary while you're here",
+        action: "Add anniversary",
+        onClick: openAnniversaryEditor,
+      });
+    }
+    if (!children.length) {
+      cards.push({
+        title: "Someone else connected might matter too",
+        action: "Add child",
+        onClick: openAddChildEditor,
+      });
+    }
+    if (!relatedPeople.some((item) => item.type === "partner") && !resolvedPerson.partnerId) {
+      cards.push({
+        title: "A partner can make this page feel fuller",
+        action: "Add partner",
+        onClick: () => openAddConnection("partner"),
+      });
+    }
+    if (!resolvedPerson.phone) {
+      cards.push({
+        title: "Make reaching out easier from reminders",
+        action: "Add phone number",
+        onClick: openPhoneEditor,
+      });
+    }
+    return cards.slice(0, 2);
+  }, [anniversaryDisplay, children.length, relatedPeople, resolvedPerson.partnerId, resolvedPerson.phone]);
+
+  const pageBackground =
+    "radial-gradient(circle at top, rgba(243, 232, 209, 0.95) 0%, rgba(247, 244, 238, 0.96) 36%, rgba(244, 239, 231, 1) 100%)";
+
   return (
-    <div style={{ background: "var(--paper)", color: "var(--ink)", minHeight: "100vh" }}>
+    <div style={{ background: pageBackground, color: "var(--ink)", minHeight: "100vh" }}>
       <div
         style={{
-          maxWidth: "920px",
+          maxWidth: "760px",
           margin: "0 auto",
-          padding: "env(safe-area-inset-top) var(--space-16) var(--space-16)",
+          padding:
+            "calc(env(safe-area-inset-top) + 24px) 16px calc(32px + env(safe-area-inset-bottom)) 16px",
           boxSizing: "border-box",
-          minHeight: "100vh",
         }}
       >
-        <div style={{ maxWidth: "700px", margin: "0 auto", paddingTop: "32px" }}>
-          <div style={{ marginBottom: "1.75rem", display: "flex", justifyContent: "space-between" }}>
+        <div style={{ display: "grid", gap: "1rem" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "1rem",
+            }}
+          >
             <button
+              type="button"
               onClick={navigateBack}
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                color: "var(--muted)",
-                padding: 0,
-              }}
+              style={{ border: "none", background: "none", color: "var(--muted)", padding: 0 }}
             >
-              ← Back
+              Back
             </button>
             <button
+              type="button"
               onClick={openPersonEditor}
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                color: "var(--muted)",
-                padding: 0,
-              }}
+              style={{ border: "none", background: "none", color: "var(--muted)", padding: 0 }}
             >
-              Edit
+              Edit details
             </button>
           </div>
 
-          <div style={{ maxWidth: "560px", margin: "0 auto" }}>
-            <section aria-label="Header">
+          <SurfaceCard style={{ padding: "1.2rem 1.2rem 1.3rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
               <div
+                aria-hidden="true"
                 style={{
-                  width: "100%",
-                  background: "var(--paper)",
-                  borderRadius: "16px",
-                  padding: "16px",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                  width: "64px",
+                  height: "64px",
+                  borderRadius: "22px",
+                  background: "linear-gradient(145deg, rgba(240,225,196,0.95), rgba(222,196,145,0.95))",
+                  display: "grid",
+                  placeItems: "center",
+                  color: "var(--ink)",
+                  fontSize: "1.2rem",
+                  fontWeight: 700,
                 }}
               >
+                {(resolvedPerson.name.trim()[0] ?? "?").toUpperCase()}
+              </div>
+              <div style={{ minWidth: 0 }}>
                 <div
                   style={{
                     fontFamily: "var(--font-serif)",
-                    fontSize: "30px",
-                    fontWeight: 600,
-                    letterSpacing: "-0.01em",
+                    fontSize: "2rem",
+                    lineHeight: 1,
+                    letterSpacing: "-0.03em",
+                  }}
+                >
+                  {resolvedPerson.name.trim()}
+                </div>
+                <div style={{ marginTop: "0.4rem", color: "var(--muted)", fontSize: "0.95rem" }}>
+                  {portraitSubtitle}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: "1rem", display: "flex", flexWrap: "wrap", gap: "0.7rem" }}>
+              <ActionPill label="Add a moment" onClick={() => setMomentComposer({ kind: "chooser" })} />
+              <ActionPill label="Add family" onClick={() => openAddConnection("child")} />
+              <ActionPill label="Make reaching out easier" onClick={openPhoneEditor} />
+            </div>
+          </SurfaceCard>
+
+          <SurfaceCard>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "baseline" }}>
+              <div>
+                <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>Important moments</div>
+                <div style={{ marginTop: "0.25rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                  What helps you remember {resolvedPerson.name.trim()} well.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMomentComposer({ kind: "chooser" })}
+                style={{ border: "none", background: "none", color: "var(--ink)", padding: 0, fontWeight: 600 }}
+              >
+                Add
+              </button>
+            </div>
+
+            <div style={{ marginTop: "1rem", display: "grid", gap: "0.85rem" }}>
+              <button
+                type="button"
+                onClick={openBirthdayEditor}
+                style={{
+                  border: "1px solid rgba(10, 27, 42, 0.08)",
+                  background: "rgba(255,255,255,0.84)",
+                  borderRadius: "20px",
+                  padding: "1rem",
+                  textAlign: "left",
+                  color: "var(--ink)",
+                }}
+              >
+                <div style={{ fontWeight: 600 }}>🎂 {possessive(resolvedPerson.name)} birthday</div>
+                <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                  {birthdayInfo
+                    ? birthdayInfo.isToday
+                      ? `${birthdayInfo.formattedDate} · today`
+                      : `${birthdayInfo.formattedDate} · in ${birthdayInfo.daysUntil} days`
+                    : "Add a date"}
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={openAnniversaryEditor}
+                style={{
+                  border: "1px solid rgba(10, 27, 42, 0.08)",
+                  background: "rgba(255,255,255,0.84)",
+                  borderRadius: "20px",
+                  padding: "1rem",
+                  textAlign: "left",
+                  color: "var(--ink)",
+                }}
+              >
+                <div style={{ fontWeight: 600 }}>💕 Anniversary</div>
+                <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                  {anniversaryDisplay ?? "Add a date"}
+                </div>
+              </button>
+
+              {otherMoments.map((moment) => (
+                <button
+                  key={moment.id}
+                  type="button"
+                  onClick={() => openCustomMomentEditor(moment)}
+                  style={{
+                    border: "1px solid rgba(10, 27, 42, 0.08)",
+                    background: "rgba(255,255,255,0.84)",
+                    borderRadius: "20px",
+                    padding: "1rem",
+                    textAlign: "left",
                     color: "var(--ink)",
                   }}
                 >
-                  {person.name.trim()}
+                  <div style={{ fontWeight: 600 }}>✨ {moment.label}</div>
+                  <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                    {parseIsoDate(moment.date)
+                      ? Number(moment.date.split("-")[0] ?? 0) > 0
+                        ? fullDateFormatter.format(parseIsoDate(moment.date) as Date)
+                        : monthDayFormatter.format(parseIsoDate(moment.date) as Date)
+                      : moment.date}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </SurfaceCard>
+
+          <SurfaceCard>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "baseline" }}>
+              <div>
+                <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>People around {resolvedPerson.name.trim()}</div>
+                <div style={{ marginTop: "0.25rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                  The people connected to this page.
                 </div>
-                {person.phone ? (
-                  <div style={{ marginTop: "10px", color: "var(--muted)", lineHeight: 1.5, fontSize: "16px" }}>
-                    {person.phone}
-                  </div>
-                ) : null}
               </div>
-            </section>
+              <button
+                type="button"
+                onClick={() => openAddConnection("familyMember")}
+                style={{ border: "none", background: "none", color: "var(--ink)", padding: 0, fontWeight: 600 }}
+              >
+                Add
+              </button>
+            </div>
 
-            <section aria-label="Important dates" style={{ marginTop: "32px" }}>
-              <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>Important dates</div>
-
-              {!hasAnyImportantDates ? (
-                <div
-                  style={{
-                    marginTop: "16px",
-                    border: "1px solid var(--border)",
-                    borderRadius: "14px",
-                    background: "rgba(255,255,255,0.6)",
-                    padding: "14px 16px",
-                    display: "grid",
-                    gap: "6px",
-                  }}
-                >
-                  <div style={{ color: "var(--ink)", fontSize: "1rem", fontWeight: 600 }}>
-                    Add your first important date
-                  </div>
-                  <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
-                    We’ll be ready when you are.
-                  </div>
+            <div style={{ marginTop: "1rem", display: "grid", gap: "0.85rem" }}>
+              {children.map((child) => {
+                const birthday = formatBirthday(child.birthday ?? child.birthdate ?? undefined, monthDayFormatter, fullDateFormatter);
+                return (
                   <button
+                    key={child.id}
                     type="button"
-                    onClick={openPersonEditor}
+                    onClick={() => openChildEditor(child.id)}
                     style={{
-                      marginTop: "4px",
-                      padding: 0,
-                      border: "none",
-                      background: "none",
-                      cursor: "pointer",
+                      border: "1px solid rgba(10, 27, 42, 0.08)",
+                      background: "rgba(255,255,255,0.84)",
+                      borderRadius: "20px",
+                      padding: "1rem",
+                      textAlign: "left",
                       color: "var(--ink)",
-                      textDecoration: "underline",
-                      textUnderlineOffset: "3px",
-                      fontSize: "0.95rem",
-                      justifySelf: "start",
                     }}
                   >
-                    Add date
+                    <div style={{ fontWeight: 600 }}>{child.name?.trim() || "Unnamed child"}</div>
+                    <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                      {birthday ? `Birthday: ${birthday}` : "Child in your circle"}
+                    </div>
                   </button>
+                );
+              })}
+
+              {groupedRelatedPeople.map((group) =>
+                group.items.map((item) => (
+                  <button
+                    key={`${group.type}-${item.person.id}`}
+                    type="button"
+                    onClick={() => navigate(`/person/${item.person.id}`)}
+                    style={{
+                      border: "1px solid rgba(10, 27, 42, 0.08)",
+                      background: "rgba(255,255,255,0.84)",
+                      borderRadius: "20px",
+                      padding: "1rem",
+                      textAlign: "left",
+                      color: "var(--ink)",
+                    }}
+                  >
+                    <div style={{ fontWeight: 600 }}>{item.person.name}</div>
+                    <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                      {formatRelationshipType(group.type)}
+                    </div>
+                  </button>
+                ))
+              )}
+
+              {!children.length && groupedRelatedPeople.length === 0 ? (
+                <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>No one else is connected yet.</div>
+              ) : null}
+            </div>
+          </SurfaceCard>
+
+          <SurfaceCard>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "baseline" }}>
+              <div>
+                <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>Ways to show up</div>
+                <div style={{ marginTop: "0.25rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                  Small things that make reminders easier to act on.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={openPhoneEditor}
+                style={{ border: "none", background: "none", color: "var(--ink)", padding: 0, fontWeight: 600 }}
+              >
+                Edit
+              </button>
+            </div>
+
+            <div style={{ marginTop: "1rem", display: "grid", gap: "0.85rem" }}>
+              <button
+                type="button"
+                onClick={openPhoneEditor}
+                style={{
+                  border: "1px solid rgba(10, 27, 42, 0.08)",
+                  background: "rgba(255,255,255,0.84)",
+                  borderRadius: "20px",
+                  padding: "1rem",
+                  textAlign: "left",
+                  color: "var(--ink)",
+                }}
+              >
+                <div style={{ fontWeight: 600 }}>📱 Phone number</div>
+                <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                  {resolvedPerson.phone
+                    ? `${resolvedPerson.phone} · ready for quick texting from reminders`
+                    : "Add a number if you'd like to text directly from reminders"}
+                </div>
+              </button>
+
+              {selectedHolidays.length ? (
+                <div
+                  style={{
+                    border: "1px solid rgba(10, 27, 42, 0.08)",
+                    background: "rgba(255,255,255,0.84)",
+                    borderRadius: "20px",
+                    padding: "1rem",
+                    color: "var(--ink)",
+                  }}
+                >
+                  <div style={{ fontWeight: 600 }}>🎉 Holidays that matter</div>
+                  <div style={{ marginTop: "0.5rem", display: "flex", flexWrap: "wrap", gap: "0.55rem" }}>
+                    {selectedHolidays.map((holidayId) => (
+                      <span
+                        key={holidayId}
+                        style={{
+                          borderRadius: "999px",
+                          background: "rgba(242,231,210,0.95)",
+                          padding: "0.5rem 0.7rem",
+                          fontSize: "0.88rem",
+                        }}
+                      >
+                        {holidayOptionLabel(holidayId)}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               ) : null}
 
-              <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
-                <div>
-                  <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Birthday</div>
-                  <div style={{ marginTop: "4px", color: "var(--ink)", fontSize: "1rem" }}>
-                    {birthdayInfo?.formattedDate ?? "Add date"}
-                  </div>
-                  {birthdayInfo?.age !== undefined ? (
-                    <div style={{ marginTop: "4px", color: "var(--muted)", fontSize: "0.95rem" }}>
-                      {birthdayInfo.isToday ? `Turns ${birthdayInfo.age} today 🎂` : `Age ${birthdayInfo.age}`}
-                    </div>
-                  ) : null}
-                </div>
-
-                <div>
-                  <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Anniversary</div>
-                  <div style={{ marginTop: "4px", color: "var(--ink)", fontSize: "1rem" }}>
-                    {anniversaryDisplay ?? "Add date"}
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Other important dates</div>
-                  {otherMoments.length ? (
-                    <div style={{ marginTop: "8px", display: "grid", gap: "8px" }}>
-                      {otherMoments.map((moment) => (
-                        <div key={moment.id} style={{ color: "var(--ink)" }}>
-                          <div>{moment.label}</div>
-                          <div style={{ color: "var(--muted)", fontSize: "0.95rem", marginTop: "2px" }}>
-                            {parseIsoDate(moment.date)
-                              ? Number(moment.date.split("-")[0] ?? 0) > 0
-                                ? fullDateFormatter.format(parseIsoDate(moment.date) as Date)
-                                : monthDayFormatter.format(parseIsoDate(moment.date) as Date)
-                              : moment.date}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={{ marginTop: "8px", color: "var(--muted)", fontSize: "0.95rem" }}>
-                      No dates yet
-                    </div>
-                  )}
-                  <button
-                    onClick={openPersonEditor}
-                    style={{
-                      marginTop: "10px",
-                      padding: 0,
-                      border: "none",
-                      background: "none",
-                      cursor: "pointer",
-                      color: "var(--ink)",
-                      textDecoration: "underline",
-                      textUnderlineOffset: "3px",
-                      fontSize: "0.95rem",
-                    }}
-                  >
-                    Add moment
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            <section aria-label="Children" style={{ marginTop: "32px" }}>
-              <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>Children</div>
-
-              {children.length ? (
-                <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
-                  {children.map((child) => {
-                    const birthday = formatBirthday(
-                      child.birthday ?? child.birthdate ?? undefined,
-                      monthDayFormatter,
-                      fullDateFormatter
-                    );
-
-                    return (
-                      <button
-                        key={child.id}
-                        onClick={() => openChildEditor(child.id)}
-                        style={{
-                          border: "1px solid var(--border)",
-                          borderRadius: "14px",
-                          background: "rgba(255,255,255,0.6)",
-                          padding: "16px",
-                          textAlign: "left",
-                          cursor: "pointer",
-                          color: "var(--ink)",
-                        }}
-                      >
-                        <div style={{ fontWeight: 500 }}>{child.name?.trim() || "Unnamed child"}</div>
-                        <div style={{ marginTop: "4px", color: "var(--muted)", fontSize: "0.95rem" }}>
-                          {birthday || "Add date"}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div style={{ marginTop: "16px", color: "var(--muted)", lineHeight: 1.6 }}>
-                  No children added yet.
-                </div>
-              )}
-
-              <button
-                onClick={openAddChildEditor}
-                style={{
-                  marginTop: "16px",
-                  padding: 0,
-                  border: "none",
-                  background: "none",
-                  cursor: "pointer",
-                  color: "var(--ink)",
-                  textDecoration: "underline",
-                  textUnderlineOffset: "3px",
-                  fontSize: "0.95rem",
-                }}
-              >
-                + Add child
-              </button>
-            </section>
-
-            <section aria-label="Connections" style={{ marginTop: "32px" }}>
-              <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>
-                Connections
-              </div>
-
-              {groupedRelatedPeople.length ? (
-                <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
-                  {groupedRelatedPeople.map((group) => (
-                    <div key={group.type}>
-                      <div style={{ color: "var(--muted)", fontSize: "14px", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.02em" }}>
-                        {formatRelationshipType(group.type)}
+              {careHistory.length ? (
+                <div
+                  style={{
+                    border: "1px solid rgba(10, 27, 42, 0.08)",
+                    background: "rgba(255,255,255,0.84)",
+                    borderRadius: "20px",
+                    padding: "1rem",
+                    color: "var(--ink)",
+                  }}
+                >
+                  <div style={{ fontWeight: 600 }}>Recent care</div>
+                  <div style={{ marginTop: "0.7rem", display: "grid", gap: "0.6rem" }}>
+                    {careHistory.map((event) => (
+                      <div key={event.id} style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
+                        <span style={{ color: "var(--ink)" }}>{formatCareEventDate(event.timestamp)}</span> ·{" "}
+                        {describeCareEvent(event)}
                       </div>
-                      <div style={{ display: "grid", gap: "12px" }}>
-                        {group.items.map((item) => (
-                          <button
-                            key={item.person.id}
-                            onClick={() => openEditConnection(item)}
-                            style={{
-                              border: "1px solid var(--border)",
-                              borderRadius: "14px",
-                              background: "rgba(255,255,255,0.6)",
-                              padding: "12px 14px",
-                              textAlign: "left",
-                              cursor: "pointer",
-                              color: "var(--ink)",
-                            }}
-                          >
-                            <div style={{ fontWeight: 500 }}>{item.person.name}</div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              ) : (
-                <div style={{ marginTop: "16px", color: "var(--muted)", lineHeight: 1.6 }}>
-                  No connections yet — link someone to unlock shared reminders
-                </div>
-              )}
+              ) : null}
+            </div>
+          </SurfaceCard>
 
-              <button
-                onClick={openAddConnection}
-                style={{
-                  marginTop: "16px",
-                  width: "100%",
-                  border: "1px solid var(--border-strong)",
-                  background: "transparent",
-                  color: "var(--ink)",
-                  cursor: "pointer",
-                  textAlign: "center",
-                  fontWeight: 500,
-                  letterSpacing: "0.01em",
-                  borderRadius: "12px",
-                  padding: "0.8rem 1rem",
-                  fontSize: "0.95rem",
-                }}
-              >
-                Link a person
-              </button>
-            </section>
-
-            <section aria-label="Family timeline" style={{ marginTop: "32px" }}>
-              <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>Family Timeline</div>
+          {familyTimeline.length || promptCards.length ? (
+            <SurfaceCard>
+              <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>While you're here</div>
+              <div style={{ marginTop: "0.25rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                One more small thing could make this page even more helpful.
+              </div>
 
               {familyTimeline.length ? (
-                <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
+                <div style={{ marginTop: "1rem", display: "grid", gap: "0.7rem" }}>
                   {familyTimeline.map((event) => (
                     <div
                       key={event.id}
                       style={{
-                        display: "grid",
-                        gap: "4px",
-                        padding: "16px",
-                        border: "1px solid var(--border)",
-                        borderRadius: "14px",
-                        background: "rgba(255,255,255,0.6)",
+                        border: "1px solid rgba(10, 27, 42, 0.08)",
+                        background: "rgba(255,255,255,0.84)",
+                        borderRadius: "18px",
+                        padding: "0.95rem 1rem",
+                        color: "var(--ink)",
                       }}
                     >
-                      <div style={{ color: "var(--ink)", fontSize: "0.98rem" }}>
-                        {event.personName} — {event.label}{" "}
+                      <div style={{ fontWeight: 600 }}>{event.label}</div>
+                      <div style={{ marginTop: "0.22rem", color: "var(--muted)", fontSize: "0.9rem" }}>
                         {monthDayFormatter.format(event.targetDate)}
                       </div>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div style={{ marginTop: "16px", color: "var(--muted)", lineHeight: 1.6 }}>
-                  No upcoming family moments.
-                </div>
-              )}
-            </section>
+              ) : null}
 
-            <section aria-label="Details" style={{ marginTop: "32px" }}>
-              <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>Details</div>
-              <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
-                <div>
-                  <div style={{ color: "var(--muted)", fontSize: "0.9rem", marginBottom: "8px" }}>Important Holidays</div>
-                  {selectedHolidays.length ? (
-                    <div style={{ display: "grid", gap: "0.6rem" }}>
-                      {selectedHolidays.map((holidayId) => (
-                        <label
-                          key={holidayId}
-                          style={{ display: "flex", alignItems: "center", gap: "0.65rem", color: "var(--ink)" }}
-                        >
-                          <input type="checkbox" checked readOnly />
-                          {holidayOptionLabel(holidayId)}
-                        </label>
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={{ color: "var(--muted)", lineHeight: 1.6 }}>No holidays selected.</div>
-                  )}
-                </div>
-              </div>
-            </section>
-
-            <section aria-label="Care history" style={{ marginTop: "32px" }}>
-              <div style={{ fontSize: "20px", fontWeight: 500, color: "var(--ink)" }}>Care History</div>
-
-              {careHistory.length ? (
-                <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
-                  {careHistory.map((event) => (
-                    <div
-                      key={event.id}
+              {promptCards.length ? (
+                <div style={{ marginTop: familyTimeline.length ? "1rem" : "1rem", display: "grid", gap: "0.7rem" }}>
+                  {promptCards.map((card, index) => (
+                    <button
+                      key={`${card.title}-${index}`}
+                      type="button"
+                      onClick={card.onClick}
                       style={{
-                        display: "grid",
-                        gap: "4px",
-                        padding: "16px",
-                        border: "1px solid var(--border)",
-                        borderRadius: "14px",
-                        background: "rgba(255,255,255,0.6)",
+                        border: "1px dashed rgba(10, 27, 42, 0.16)",
+                        background: "rgba(255,255,255,0.7)",
+                        borderRadius: "18px",
+                        padding: "0.95rem 1rem",
+                        textAlign: "left",
+                        color: "var(--ink)",
                       }}
                     >
-                      <div style={{ color: "var(--ink)", fontSize: "0.98rem" }}>
-                        {formatCareEventDate(event.timestamp)} — {describeCareEvent(event)}
+                      <div style={{ fontWeight: 600 }}>{card.title}</div>
+                      <div style={{ marginTop: "0.22rem", color: "var(--muted)", fontSize: "0.9rem" }}>
+                        {card.action}
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
-              ) : (
-                <div style={{ marginTop: "16px", color: "var(--muted)", lineHeight: 1.6 }}>
-                  No interactions recorded yet.
-                </div>
-              )}
-            </section>
+              ) : null}
+            </SurfaceCard>
+          ) : null}
 
-            <div
+          <div
+            style={{
+              paddingTop: "0.4rem",
+              paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                const ok = window.confirm("Are you sure you want to delete this contact?\nThis cannot be undone.");
+                if (!ok) return;
+                deletePerson(resolvedPerson.id);
+                navigateBack();
+              }}
               style={{
-                marginTop: "34px",
-                paddingTop: "18px",
-                paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)",
-                borderTop: "1px solid var(--border)",
+                padding: 0,
+                border: "none",
+                background: "none",
+                cursor: "pointer",
+                color: "#b42318",
+                fontSize: "14px",
+                fontWeight: 500,
+                textDecoration: "underline",
+                textUnderlineOffset: "3px",
               }}
             >
+              Delete contact
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {momentComposer.kind === "chooser" ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Add a moment"
+          onClick={resetMomentComposer}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10, 14, 20, 0.22)",
+            display: "grid",
+            placeItems: "center",
+            padding: "1.25rem",
+            zIndex: 80,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "520px",
+              borderRadius: "26px",
+              border: "1px solid rgba(10, 27, 42, 0.08)",
+              background: "rgba(255,255,255,0.98)",
+              boxShadow: "0 24px 60px rgba(20, 16, 10, 0.16)",
+              padding: "1.2rem",
+              display: "grid",
+              gap: "0.8rem",
+            }}
+          >
+            <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>What should we remember for {resolvedPerson.name.trim()}?</div>
+            <ActionPill label="🎂 Birthday" onClick={openBirthdayEditor} />
+            <ActionPill label="💕 Anniversary" onClick={openAnniversaryEditor} />
+            <ActionPill label="✨ Important date" onClick={() => openCustomMomentEditor()} />
+            <button
+              type="button"
+              onClick={resetMomentComposer}
+              style={{ border: "none", background: "none", color: "var(--muted)", padding: 0, justifySelf: "start" }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <MomentDatePicker
+        isOpen={momentComposer.kind === "birthday"}
+        title={`${possessive(resolvedPerson.name)} birthday`}
+        mode="birthday"
+        monthDay={birthdayDraftMonthDay}
+        setMonthDay={setBirthdayDraftMonthDay}
+        year={birthdayDraftYear}
+        setYear={setBirthdayDraftYear}
+        yearHelperText="The year helps with milestone birthdays, but it's okay if you don't know it."
+        onSave={saveBirthdayFromDraft}
+        onCancel={resetMomentComposer}
+        onClear={() => {
+          setBirthdayDraftMonthDay("");
+          setBirthdayDraftYear("");
+          if (birthdayMoment) {
+            updateMomentBuckets(resolvedPerson.moments.filter((moment) => moment.id !== birthdayMoment.id));
+          }
+          setMomentComposer({ kind: "hidden" });
+        }}
+      />
+
+      <MomentDatePicker
+        isOpen={momentComposer.kind === "anniversary"}
+        title={`${resolvedPerson.name.trim()}'s anniversary`}
+        mode="anniversary"
+        monthDay={anniversaryDraftMonthDay}
+        setMonthDay={setAnniversaryDraftMonthDay}
+        year={anniversaryDraftYear}
+        setYear={setAnniversaryDraftYear}
+        yearHelperText=""
+        onSave={saveAnniversaryFromDraft}
+        onCancel={resetMomentComposer}
+        onClear={() => {
+          setAnniversaryDraftMonthDay("");
+          setAnniversaryDraftYear("");
+          updatePerson({
+            ...resolvedPerson,
+            anniversary: undefined,
+            moments: resolvedPerson.moments.filter((moment) => moment.type !== "anniversary"),
+          });
+          setMomentComposer({ kind: "hidden" });
+        }}
+      />
+
+      {momentComposer.kind === "custom" ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Important date"
+          onClick={resetMomentComposer}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10, 14, 20, 0.22)",
+            display: "grid",
+            placeItems: "center",
+            padding: "1.25rem",
+            zIndex: 80,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "540px",
+              borderRadius: "26px",
+              border: "1px solid rgba(10, 27, 42, 0.08)",
+              background: "rgba(255,255,255,0.98)",
+              boxShadow: "0 24px 60px rgba(20, 16, 10, 0.16)",
+              padding: "1.2rem",
+              display: "grid",
+              gap: "0.9rem",
+            }}
+          >
+            <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>What should we remember for {resolvedPerson.name.trim()}?</div>
+            <input
+              value={customMomentTitle}
+              onChange={(e) => setCustomMomentTitle(e.target.value)}
+              placeholder="Birthday dinner, anniversary, important date..."
+              style={{
+                width: "100%",
+                padding: "0.95rem 1rem",
+                borderRadius: "16px",
+                border: "1px solid rgba(10, 27, 42, 0.1)",
+                background: "rgba(255,255,255,0.95)",
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const draft = connectionDraftFromIso(customMomentDate);
+                setCustomDraftMonthDay(draft.monthDay);
+                setCustomDraftYear(draft.year);
+                setIsCustomDatePickerOpen(true);
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "1rem",
+                borderRadius: "16px",
+                border: "1px solid rgba(10, 27, 42, 0.1)",
+                background: "rgba(255,255,255,0.95)",
+                color: "var(--ink)",
+              }}
+            >
+              <span>Choose the date</span>
+              <span style={{ color: "var(--muted)" }}>
+                {customMomentDate ? formatBirthday(customMomentDate, monthDayFormatter, fullDateFormatter) : "Month and day"}
+              </span>
+            </button>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
               <button
                 type="button"
-                onClick={() => {
-                  const ok = window.confirm(
-                    "Are you sure you want to delete this contact?\nThis cannot be undone."
-                  );
-                  if (!ok) return;
-                  deletePerson(resolvedPerson.id);
-                  navigateBack();
-                }}
-                style={{
-                  padding: 0,
-                  border: "none",
-                  background: "none",
-                  cursor: "pointer",
-                  color: "#b42318",
-                  fontSize: "14px",
-                  fontFamily: "var(--font-sans)",
-                  fontWeight: 500,
-                  textDecoration: "underline",
-                  textUnderlineOffset: "3px",
-                }}
+                onClick={resetMomentComposer}
+                style={{ border: "none", background: "none", padding: 0, color: "var(--muted)", fontSize: "0.92rem" }}
               >
-                Delete contact
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveCustomMoment}
+                style={{ border: "none", background: "none", padding: 0, color: "var(--ink)", fontSize: "0.95rem", fontWeight: 700 }}
+              >
+                Save date
               </button>
             </div>
           </div>
         </div>
-      </div>
+      ) : null}
+
+      <MomentDatePicker
+        isOpen={isCustomDatePickerOpen}
+        title="Important date"
+        mode="custom"
+        monthDay={customDraftMonthDay}
+        setMonthDay={setCustomDraftMonthDay}
+        year={customDraftYear}
+        setYear={setCustomDraftYear}
+        yearHelperText="Add the year only if it helps."
+        onSave={() => {
+          const iso = buildMomentIso(customDraftMonthDay, customDraftYear, false);
+          if (!iso) return;
+          setCustomMomentDate(iso);
+          setIsCustomDatePickerOpen(false);
+        }}
+        onCancel={() => setIsCustomDatePickerOpen(false)}
+        onClear={() => {
+          setCustomDraftMonthDay("");
+          setCustomDraftYear("");
+          setCustomMomentDate("");
+        }}
+      />
+
+      {isPhoneEditorOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Phone number"
+          onClick={() => setIsPhoneEditorOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10, 14, 20, 0.22)",
+            display: "grid",
+            placeItems: "center",
+            padding: "1.25rem",
+            zIndex: 80,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "520px",
+              borderRadius: "26px",
+              border: "1px solid rgba(10, 27, 42, 0.08)",
+              background: "rgba(255,255,255,0.98)",
+              boxShadow: "0 24px 60px rgba(20, 16, 10, 0.16)",
+              padding: "1.2rem",
+              display: "grid",
+              gap: "0.8rem",
+            }}
+          >
+            <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>Make reaching out easier</div>
+            <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
+              If you'd like to text {resolvedPerson.name.trim()} directly from reminders, add a phone number.
+            </div>
+            <input
+              type="tel"
+              value={phoneDraft}
+              onChange={(e) => {
+                setPhoneDraft(e.target.value);
+                if (!e.target.value.trim()) setPhoneDraftError(false);
+                else if (normalizePhone(e.target.value)) setPhoneDraftError(false);
+              }}
+              placeholder="Phone number"
+              style={{
+                width: "100%",
+                padding: "0.95rem 1rem",
+                borderRadius: "16px",
+                border: "1px solid rgba(10, 27, 42, 0.1)",
+                background: "rgba(255,255,255,0.95)",
+              }}
+            />
+            {phoneDraftError ? <div style={{ color: "#b42318", fontSize: "0.86rem" }}>Enter a valid phone number.</div> : null}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+              <button
+                type="button"
+                onClick={() => setIsPhoneEditorOpen(false)}
+                style={{ border: "none", background: "none", padding: 0, color: "var(--muted)", fontSize: "0.92rem" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={savePhone}
+                style={{ border: "none", background: "none", padding: 0, color: "var(--ink)", fontSize: "0.95rem", fontWeight: 700 }}
+              >
+                Save number
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isAddConnectionOpen ? (
         <div
@@ -1014,7 +1467,7 @@ export default function PersonDetail({}: {}) {
             <div className="modalContent" style={{ fontFamily: "var(--font-sans)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "1rem" }}>
                 <div style={{ fontFamily: "var(--font-serif)", fontSize: "1.25rem", fontWeight: 600, color: "var(--ink)" }}>
-                  {editingConnection ? "Edit connection" : "Link a person"}
+                  {editingConnection ? "Edit connection" : "Add someone connected"}
                 </div>
                 <button
                   onClick={() => {
@@ -1037,7 +1490,7 @@ export default function PersonDetail({}: {}) {
 
               <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
                 <div>
-                  <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Relationship type</div>
+                  <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Connection</div>
                   <select
                     value={connectionType}
                     onChange={(e) => setConnectionType(e.target.value as typeof connectionType)}
@@ -1052,15 +1505,12 @@ export default function PersonDetail({}: {}) {
                       marginTop: "6px",
                     }}
                   >
-                    <option
-                      value="partner"
-                      disabled={Boolean(person.partnerId && person.partnerId !== editingConnection?.person.id)}
-                    >
+                    <option value="partner" disabled={Boolean(person.partnerId && person.partnerId !== editingConnection?.person.id)}>
                       Partner
                     </option>
                     <option value="child">Child</option>
                     <option value="grandchild">Grandchild</option>
-                    <option value="familyMember">Family member</option>
+                    <option value="familyMember">Someone important</option>
                   </select>
                 </div>
 
@@ -1136,7 +1586,10 @@ export default function PersonDetail({}: {}) {
                       <span style={{ color: "var(--muted)" }}>
                         {buildMomentIso(connectionBirthdayMonthDay, connectionBirthdayYear, false)
                           ? formatMonthDay(
-                              buildMomentIso(connectionBirthdayMonthDay, connectionBirthdayYear, false).split("-").slice(1).join("-"),
+                              buildMomentIso(connectionBirthdayMonthDay, connectionBirthdayYear, false)
+                                .split("-")
+                                .slice(1)
+                                .join("-"),
                               monthDayFormatter
                             )
                           : "Select date"}
@@ -1160,16 +1613,16 @@ export default function PersonDetail({}: {}) {
                           justifySelf: "start",
                         }}
                       >
-                        + Create new child
+                        Create a new child
                       </button>
                     ) : null}
 
                     <div>
-                      <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Choose a contact</div>
+                      <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Choose someone already in your circle</div>
                       <input
                         value={connectionSearch}
                         onChange={(e) => setConnectionSearch(e.target.value)}
-                        placeholder="Search existing contacts"
+                        placeholder="Search your circle"
                         autoFocus
                         style={{
                           width: "100%",
@@ -1206,8 +1659,22 @@ export default function PersonDetail({}: {}) {
                   style={{
                     border: "1px solid var(--border-strong)",
                     background: "transparent",
-                    color: editingConnection ? (connectionName.trim() ? "var(--ink)" : "var(--muted)") : selectedConnectionId ? "var(--ink)" : "var(--muted)",
-                    cursor: editingConnection ? (connectionName.trim() ? "pointer" : "default") : selectedConnectionId ? "pointer" : "default",
+                    color:
+                      editingConnection
+                        ? connectionName.trim()
+                          ? "var(--ink)"
+                          : "var(--muted)"
+                        : selectedConnectionId
+                          ? "var(--ink)"
+                          : "var(--muted)",
+                    cursor:
+                      editingConnection
+                        ? connectionName.trim()
+                          ? "pointer"
+                          : "default"
+                        : selectedConnectionId
+                          ? "pointer"
+                          : "default",
                     textAlign: "center",
                     fontWeight: 500,
                     letterSpacing: "0.01em",
@@ -1217,7 +1684,7 @@ export default function PersonDetail({}: {}) {
                     boxShadow: "none",
                   }}
                 >
-                  {editingConnection ? "Save connection" : "Link contact"}
+                  {editingConnection ? "Save connection" : "Add to the page"}
                 </button>
               </div>
             </div>
