@@ -170,13 +170,25 @@ export default function Settings() {
           Settings
         </h1>
 
+        <div
+          style={{
+            marginTop: "10px",
+            color: "var(--muted)",
+            fontSize: "0.98rem",
+            lineHeight: 1.55,
+            maxWidth: "32rem",
+          }}
+        >
+          We&apos;ll remind you quietly, so you can focus on being present.
+        </div>
+
         <section
           style={{
-            marginTop: "24px",
+            marginTop: "28px",
             border: "1px solid var(--border)",
             borderRadius: "16px",
             background: "var(--card)",
-            padding: "16px",
+            padding: "18px 16px",
           }}
         >
           <div
@@ -268,7 +280,7 @@ export default function Settings() {
               fontFamily: "var(--font-sans)",
             }}
           >
-            Choose the time of day when local reminder notifications should fire.
+            Pick the time that feels right for a gentle nudge.
           </div>
           <div
             style={{
@@ -279,7 +291,7 @@ export default function Settings() {
               fontFamily: "var(--font-sans)",
             }}
           >
-            {notificationStatus === "on" ? "Notifications: On" : "Notifications are off — enable in Settings"}
+            {notificationStatus === "on" ? "Notifications are on." : "Notifications are off right now."}
           </div>
           <div
             style={{
@@ -327,7 +339,7 @@ export default function Settings() {
             fontFamily: "var(--font-sans)",
           }}
         >
-          <div>Your people. On time.</div>
+          <div>Gentle reminders for the people who matter most.</div>
           <div style={{ fontSize: "0.92rem", color: "var(--ink)", fontWeight: 500 }}>{appVersionLabel}</div>
         </div>
       </div>

@@ -154,7 +154,7 @@ export default function Contacts() {
 
         <main style={{ marginTop: "28px" }}>
           <div>
-            <div className="search-label">Search your contacts</div>
+            <div className="search-label">Search your circle</div>
             <input
               type="search"
               value={query}
@@ -178,6 +178,23 @@ export default function Contacts() {
 
           {query.trim() ? (
             <ContactsSearchResults results={filtered} onSelect={(person) => navigate(`/person/${person.id}`)} />
+          ) : people.length === 0 ? (
+            <div style={{ marginTop: "1.5rem" }}>
+              <div
+                style={{
+                  color: "var(--ink)",
+                  fontSize: "1.45rem",
+                  fontWeight: 600,
+                  fontFamily: "var(--font-serif)",
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                Your circle starts with one person.
+              </div>
+              <div style={{ marginTop: "0.55rem", color: "var(--muted)", fontSize: "0.98rem", lineHeight: 1.55, maxWidth: "32rem" }}>
+                Add the first person who comes to mind.
+              </div>
+            </div>
           ) : grouped.length === 0 ? (
             <div style={{ marginTop: "1.5rem" }}>
               <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>No matches found.</div>
@@ -187,7 +204,7 @@ export default function Contacts() {
             </div>
           ) : (
             <div style={{ marginTop: "2rem" }}>
-              <div className="contacts-section-header">Your contacts</div>
+              <div className="contacts-section-header">Your circle</div>
               {grouped.map((group) => (
                 <section key={group.key} aria-label={`Contacts ${group.key}`}>
                   <div className="contacts-alpha-header">

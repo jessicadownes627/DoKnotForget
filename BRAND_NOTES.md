@@ -4,6 +4,7 @@
 
 - Thoughtfulness without relying on your memory.
 - Every important person has a story. Help users remember it, one thoughtful detail at a time.
+- Every important relationship deserves to be remembered.
 
 ## Positioning
 
@@ -28,9 +29,20 @@ Help people remember it, one thoughtful detail at a time.
 - If a design decision makes the app feel more like a database, it is probably the wrong decision.
 - If it makes the app feel more human, it is probably the right one.
 
+## Screen Questions
+
+Every screen should answer one question.
+
+- Opening screen: Do I feel understood?
+- First person: Do I immediately think of someone?
+- Entering details: Does this feel like building a relationship rather than filling out a form?
+- Leaving the app: Do I already want to come back?
+
 ## Beliefs
 
 We believe every important person has a story.
+
+We believe every important relationship deserves to be remembered.
 
 We believe thoughtful people aren't born, they're supported.
 

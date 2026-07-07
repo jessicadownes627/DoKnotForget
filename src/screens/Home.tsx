@@ -2101,14 +2101,27 @@ export default function Home({
           {isSearching ? null : activeTab === "contacts" ? (
             <section aria-label="Circle" style={{ marginTop: "24px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
               <div style={{ display: "grid", gap: "8px" }}>
-                <div style={{ color: "var(--muted)", lineHeight: 1.55 }}>
-                  Build your circle
+                <div style={{ display: "grid", gap: "6px" }}>
+                  <div
+                    style={{
+                      color: "var(--ink)",
+                      fontFamily: "var(--font-serif)",
+                      fontSize: "1.45rem",
+                      lineHeight: 1.02,
+                      letterSpacing: "-0.02em",
+                    }}
+                  >
+                    Who comes to mind?
+                  </div>
+                  <div style={{ color: "var(--muted)", lineHeight: 1.55, fontSize: "0.98rem", maxWidth: "34rem" }}>
+                    Add someone you care about. A birthday, milestone, or meaningful detail is enough to begin.
+                  </div>
                 </div>
               </div>
 
               <div style={{ marginTop: "24px", display: "grid", gap: "12px" }}>
                 <button
-                  onClick={navigateToImportContacts}
+                  onClick={navigateToAddPerson}
                   style={{
                     width: "100%",
                     border: "1px solid var(--ink)",
@@ -2124,28 +2137,38 @@ export default function Home({
                     fontFamily: "var(--font-sans)",
                   }}
                 >
-                  Choose from contacts
+                  Add a Person
                 </button>
-                <button
-                  onClick={navigateToAddPerson}
+                <div
                   style={{
-                    border: "1px solid var(--border-strong)",
-                    background: "transparent",
-                    color: "var(--ink)",
-                    cursor: "pointer",
-                    textAlign: "center",
-                    fontWeight: 500,
-                    letterSpacing: "0.01em",
-                    borderRadius: "12px",
-                    padding: "0.75rem 1rem",
-                    fontSize: "0.95rem",
-                    fontFamily: "var(--font-sans)",
+                    marginTop: "6px",
+                    paddingTop: "16px",
+                    borderTop: "1px solid var(--border)",
+                    display: "grid",
+                    gap: "10px",
                   }}
                 >
-                  Add someone manually
-                </button>
-                <div style={{ color: "var(--muted)", fontSize: "0.88rem", lineHeight: 1.5, padding: "0 4px" }}>
-                  We’ll access your contacts so you can choose who matters.
+                  <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5, textAlign: "center" }}>
+                    Building a bigger circle? Import your contacts to get started faster.
+                  </div>
+                  <button
+                    onClick={navigateToImportContacts}
+                    style={{
+                      border: "1px solid var(--border-strong)",
+                      background: "transparent",
+                      color: "var(--ink)",
+                      cursor: "pointer",
+                      textAlign: "center",
+                      fontWeight: 500,
+                      letterSpacing: "0.01em",
+                      borderRadius: "12px",
+                      padding: "0.75rem 1rem",
+                      fontSize: "0.95rem",
+                      fontFamily: "var(--font-sans)",
+                    }}
+                  >
+                    Import from Contacts
+                  </button>
                 </div>
               </div>
 
@@ -2160,9 +2183,7 @@ export default function Home({
                   {hasContacts ? (
                     <div style={{ color: "var(--ink)", fontSize: "1.05rem", fontWeight: 600 }}>No match found.</div>
                   ) : (
-                    <div style={{ color: "var(--muted)", lineHeight: 1.55 }}>
-                      Add a few people you don’t want to forget.
-                    </div>
+                    <div style={{ display: "none" }} aria-hidden="true" />
                   )}
                 </div>
               ) : (
@@ -2406,14 +2427,31 @@ export default function Home({
                             fontFamily: "var(--font-serif)",
                           }}
                         >
-                          Nothing coming up
-                        </div>
-                        <div style={{ color: "var(--ink)", fontSize: "1rem", lineHeight: 1.5 }}>
-                          You&apos;re all caught up for now.
+                          Every important person has a story worth remembering.
                         </div>
                         <div style={{ color: "var(--muted)", fontSize: "0.98rem", lineHeight: 1.55 }}>
-                          Add more people or dates to stay ahead.
+                          Birthdays are just the beginning. We&apos;ll help you remember the people, moments, and little details that make someone feel truly remembered.
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => navigate("/contacts")}
+                          style={{
+                            marginTop: "4px",
+                            border: "1px solid var(--ink)",
+                            background: "var(--ink)",
+                            color: "var(--paper)",
+                            cursor: "pointer",
+                            textAlign: "center",
+                            fontWeight: 600,
+                            letterSpacing: "0.01em",
+                            borderRadius: "12px",
+                            padding: "0.85rem 1.2rem",
+                            fontSize: "1rem",
+                            fontFamily: "var(--font-sans)",
+                          }}
+                        >
+                          Start with someone
+                        </button>
                       </div>
                     );
                   };
