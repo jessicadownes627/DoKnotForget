@@ -3,6 +3,7 @@ import type { Person } from "./models/Person";
 import type { CareEvent, CareEventType } from "./models/CareEvent";
 import type { Relationship } from "./models/Relationship";
 import { normalizePhone } from "./utils/phone";
+import { canonicalizeRelationship, normalizeRelationships } from "./utils/relationshipModel";
 import {
   loadUserSettings,
   normalizeUserSettings,
@@ -86,7 +87,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       const rawRelationships = window.localStorage.getItem(RELATIONSHIPS_STORAGE_KEY);
       if (rawRelationships) {
         const parsed = JSON.parse(rawRelationships);
-        if (Array.isArray(parsed)) setRelationships(parsed as Relationship[]);
+        if (Array.isArray(parsed)) setRelationships(normalizeRelationships(parsed as Relationship[]));
       }
     } catch {
       // ignore
@@ -260,7 +261,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           }
           return next;
         });
-        setRelationships((prev) => [...prev, ...payload.createdRelationships]);
+        setRelationships((prev) => normalizeRelationships([...prev, ...payload.createdRelationships.map(canonicalizeRelationship)]));
       },
       updatePerson: (person: Person) => {
         setPeople((prev) =>
@@ -268,12 +269,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         );
       },
       upsertRelationship: (relationship: Relationship) => {
+        const canonical = canonicalizeRelationship(relationship);
         setRelationships((prev) => {
-          const existingIndex = prev.findIndex((item) => item.id === relationship.id);
+          const existingIndex = prev.findIndex((item) => item.id === canonical.id);
           if (existingIndex >= 0) {
-            return prev.map((item) => (item.id === relationship.id ? relationship : item));
+            return normalizeRelationships(prev.map((item) => (item.id === canonical.id ? canonical : item)));
           }
-          return [...prev, relationship];
+          return normalizeRelationships([...prev, canonical]);
         });
       },
       updatePersonFields: (id: string, patch: Partial<Person>) => {

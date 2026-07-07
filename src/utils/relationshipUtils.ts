@@ -1,5 +1,6 @@
 import type { Person } from "../models/Person";
 import type { Relationship, RelationshipType } from "../models/Relationship";
+import { buildCanonicalRelationship, normalizeRelationships } from "./relationshipModel";
 
 const PEOPLE_STORAGE_KEY = "doknotforget_people";
 const RELATIONSHIPS_STORAGE_KEY = "doknotforget_relationships";
@@ -27,7 +28,7 @@ function loadRelationships(): Relationship[] {
 }
 
 function saveRelationships(relationships: Relationship[]) {
-  window.localStorage.setItem(RELATIONSHIPS_STORAGE_KEY, JSON.stringify(relationships));
+  window.localStorage.setItem(RELATIONSHIPS_STORAGE_KEY, JSON.stringify(normalizeRelationships(relationships)));
 }
 
 function makeId() {
@@ -47,7 +48,7 @@ export function getRelatedPeople(personId: string): Person[] {
 
 export function addRelationship(fromId: string, toId: string, type: RelationshipType): Relationship {
   const relationships = loadRelationships();
-  const relationship: Relationship = { id: makeId(), fromId, toId, type };
+  const relationship = buildCanonicalRelationship({ id: makeId(), fromId, toId, type });
   relationships.push(relationship);
   saveRelationships(relationships);
   return relationship;
@@ -57,4 +58,3 @@ export function removeRelationship(id: string): void {
   const relationships = loadRelationships().filter((rel) => rel.id !== id);
   saveRelationships(relationships);
 }
-

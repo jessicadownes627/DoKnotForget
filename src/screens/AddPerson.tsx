@@ -6,6 +6,7 @@ import { useAppState } from "../appState";
 import { useLocation, useNavigate } from "../router";
 import { normalizePhone } from "../utils/phone";
 import { getSelectedHolidays } from "../utils/personHolidays";
+import { buildCanonicalRelationship } from "../utils/relationshipModel";
 
 const FREE_LIMIT = 3;
 
@@ -496,12 +497,29 @@ export default function AddPerson() {
     const createdRelationships: Relationship[] = [];
 
     if (selectedConnectionId) {
-      createdRelationships.push({
-        id: makeId(),
-        fromId: personId,
-        toId: selectedConnectionId,
-        type: connectionRelationship,
-      });
+      const canonicalRelationship =
+        connectionRelationship === "child"
+          ? buildCanonicalRelationship({
+              id: makeId(),
+              fromId: selectedConnectionId,
+              toId: personId,
+              type: "child",
+            })
+          : connectionRelationship === "parent"
+            ? buildCanonicalRelationship({
+                id: makeId(),
+                fromId: personId,
+                toId: selectedConnectionId,
+                type: "child",
+              })
+            : buildCanonicalRelationship({
+                id: makeId(),
+                fromId: personId,
+                toId: selectedConnectionId,
+                type: connectionRelationship,
+              });
+
+      createdRelationships.push(canonicalRelationship);
     }
 
     const partnerId =

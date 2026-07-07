@@ -122,14 +122,14 @@ function possessive(name: string) {
   return name.endsWith("s") ? `${name}'` : `${name}'s`;
 }
 
-function formatRelationshipType(type: Relationship["type"]) {
+function formatRelationshipType(type: Relationship["type"] | "parent") {
   if (type === "other") return "Someone important";
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
 type EditableConnection = {
   person: Person;
-  type: Relationship["type"];
+  type: Relationship["type"] | "parent";
   relationshipId: string | null;
 };
 
@@ -304,7 +304,13 @@ export default function PersonDetail() {
         const otherId = rel.fromId === person.id ? rel.toId : rel.fromId;
         const otherPerson = (people ?? []).find((p) => p.id === otherId) ?? null;
         if (!otherPerson) return null;
-        return { person: otherPerson, type: rel.type, relationshipId: rel.id };
+        const displayType: EditableConnection["type"] =
+          rel.type === "child"
+            ? rel.fromId === person.id
+              ? "child"
+              : "parent"
+            : rel.type;
+        return { person: otherPerson, type: displayType, relationshipId: rel.id };
       })
       .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
