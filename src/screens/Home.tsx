@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChildParentContact, Person } from "../models/Person";
-import type { Relationship } from "../models/Relationship";
 import { openSmsComposer } from "../components/SoonReminderCard";
 import Brand from "../components/Brand";
 import BowIcon from "../components/BowIcon";
@@ -29,6 +28,12 @@ import SmartMessageSuggestionsModal from "../components/SmartMessageSuggestionsM
 import { displayNameOrFallback } from "../utils/displayName";
 import { formatLocalYmd, parseLocalDate } from "../utils/date";
 import { buildHomeSections } from "../utils/homeSections";
+import { buildRelationshipV2Links } from "../utils/relationshipV2.js";
+import {
+  buildResolvedReminderLabel,
+  reminderEventDate,
+  resolveReminderContext,
+} from "../utils/reminderRelationshipContext.js";
 import {
   cancelScheduledReminderNotificationByReminderId,
   isNativeNotificationsSupported,
@@ -205,19 +210,6 @@ function careEventReminderNote(reminder: ReminderEvent) {
   return `Checked in with ${personName}`;
 }
 
-function reminderRelativeLabel(reminderType: ReminderEvent["reminderType"]) {
-  if (reminderType === "dayOf") return "today";
-  if (reminderType === "oneDay") return "tomorrow";
-  return "in 7 days";
-}
-
-function reminderEventDate(reminder: ReminderEvent) {
-  const parsed = parseLocalDate(reminder.date);
-  if (!parsed) return null;
-  const offset = reminder.reminderType === "dayOf" ? 0 : reminder.reminderType === "oneDay" ? 1 : 7;
-  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate() + offset);
-}
-
 function formatGiftTypeLabel(value: string) {
   const normalized = (value ?? "").trim().toLowerCase();
   if (!normalized) return "Gift";
@@ -358,151 +350,6 @@ function resolveChildParentContacts(person: Person, people: Person[], parents?: 
 function contactFirstName(name: string) {
   const trimmed = name.trim();
   return trimmed.split(" ")[0] || trimmed;
-}
-
-type ResolvedReminderRecipient = {
-  id: string;
-  name: string;
-  phone: string;
-};
-
-type ResolvedReminderContext = {
-  kind: "self" | "childThroughRelationship" | "childBirthday" | "anniversary";
-  subjectName: string;
-  subjectAge?: number;
-  recipients: ResolvedReminderRecipient[];
-  actionHeading: string | null;
-};
-
-function joinRecipientFirstNames(recipients: ResolvedReminderRecipient[]) {
-  return recipients.map((recipient) => contactFirstName(recipient.name)).join(" & ");
-}
-
-function getBirthdayRelationshipContext(
-  reminder: ReminderEvent,
-  people: Person[],
-  relationships: Relationship[]
-) {
-  if (reminder.momentType !== "birthday") return null;
-
-  const subject = people.find((candidate) => candidate.id === reminder.personId) ?? null;
-  if (!subject) return null;
-
-  const incomingParentRelationships = relationships.filter(
-    (relationship) => relationship.type === "child" && relationship.toId === subject.id
-  );
-  if (incomingParentRelationships.length === 0) return null;
-
-  const recipients = incomingParentRelationships
-    .map((relationship) => people.find((candidate) => candidate.id === relationship.fromId) ?? null)
-    .filter((person): person is Person => Boolean(person))
-    .map((person) => ({
-      id: person.id,
-      name: person.name.trim(),
-      phone: (person.phone ?? "").trim(),
-    }))
-    .filter((recipient) => recipient.name);
-
-  if (recipients.length === 0) return null;
-
-  const eventDate = reminderEventDate(reminder);
-  const birthdayMoment = (subject.moments ?? []).find((moment) => moment.type === "birthday") ?? null;
-  const birthdayIso = (birthdayMoment?.date ?? "").trim() || undefined;
-  const subjectAge = birthdayIso && eventDate ? calculateAge(birthdayIso, eventDate) : undefined;
-
-  return {
-    kind: "childThroughRelationship" as const,
-    subject,
-    subjectName: subject.name.trim() || reminder.personName,
-    subjectAge,
-    recipients,
-  };
-}
-
-function resolveReminderContext(
-  reminder: ReminderEvent,
-  people: Person[],
-  relationships: Relationship[],
-  today: Date
-): ResolvedReminderContext | null {
-  const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
-  const personName = (person?.name ?? reminder.personName).trim();
-
-  if (reminder.momentType === "childBirthday") {
-    const childContext = getChildBirthdayContext(reminder, people, today);
-    if (!childContext) return null;
-
-    return {
-      kind: "childBirthday",
-      subjectName: childContext.childName,
-      subjectAge: childContext.age,
-      recipients: childContext.parentContacts,
-      actionHeading:
-        childContext.parentContacts.length > 0
-          ? `Help ${joinRecipientFirstNames(childContext.parentContacts)} celebrate ${childContext.childName}`
-          : null,
-    };
-  }
-
-  if (reminder.momentType === "birthday") {
-    const relationalContext = getBirthdayRelationshipContext(reminder, people, relationships);
-    if (relationalContext?.kind === "childThroughRelationship") {
-      return {
-        kind: "childThroughRelationship",
-        subjectName: relationalContext.subjectName,
-        subjectAge: relationalContext.subjectAge,
-        recipients: relationalContext.recipients,
-        actionHeading: `Help ${joinRecipientFirstNames(relationalContext.recipients)} celebrate ${relationalContext.subjectName}`,
-      };
-    }
-
-    if (!personName) return null;
-    return {
-      kind: "self",
-      subjectName: personName,
-      recipients: [
-        {
-          id: person?.id ?? reminder.personId,
-          name: personName,
-          phone: (person?.phone ?? "").trim(),
-        },
-      ],
-      actionHeading: null,
-    };
-  }
-
-  if (reminder.momentType === "anniversary") {
-    if (!personName) return null;
-    const partner = person?.partnerId ? people.find((candidate) => candidate.id === person.partnerId) ?? null : null;
-    const subjectName = partner ? `${personName} & ${partner.name}` : personName;
-
-    return {
-      kind: "anniversary",
-      subjectName,
-      recipients: [
-        {
-          id: person?.id ?? reminder.personId,
-          name: personName,
-          phone: (person?.phone ?? "").trim(),
-        },
-      ],
-      actionHeading: null,
-    };
-  }
-
-  if (!personName) return null;
-  return {
-    kind: "self",
-    subjectName: personName,
-    recipients: [
-      {
-        id: person?.id ?? reminder.personId,
-        name: personName,
-        phone: (person?.phone ?? "").trim(),
-      },
-    ],
-    actionHeading: null,
-  };
 }
 
 function pickRandomRecommendations(recommendations: SheetRecommendation[]) {
@@ -757,6 +604,10 @@ export default function Home({
     if (activeTab !== "home") return [];
     return generateCareSuggestions(filteredPeople, today);
   }, [activeTab, filteredPeople, today, questionTick]);
+  const relationshipV2Links = useMemo(
+    () => buildRelationshipV2Links({ people, relationships }),
+    [people, relationships]
+  );
 
   const reminders = useMemo(() => {
     if (activeTab !== "home") return [];
@@ -914,23 +765,19 @@ export default function Home({
   function formatReminderCard(reminder: ReminderEvent) {
     const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
     const personName = person?.name ?? reminder.personName;
-    const relative = reminderRelativeLabel(reminder.reminderType);
-    const reminderContext = resolveReminderContext(reminder, people, relationships, today);
+    const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
+    const resolvedLabel = buildResolvedReminderLabel(reminder, people, relationships, today, relationshipV2Links);
 
     if (reminder.momentType === "birthday") {
       if (reminderContext?.kind === "childThroughRelationship") {
-        const ageText =
-          reminderContext.subjectAge !== undefined && reminderContext.subjectAge > 0
-            ? `${reminderContext.subjectName} turns ${reminderContext.subjectAge} ${relative}`
-            : `${possessive(reminderContext.subjectName)} birthday ${relative}`;
         return {
           title: reminderContext.subjectName,
-          label: ageText,
+          label: resolvedLabel,
         };
       }
       return {
         title: personName,
-        label: `${possessive(personName)} birthday ${relative}`,
+        label: resolvedLabel,
       };
     }
 
@@ -938,7 +785,7 @@ export default function Home({
       const combinedNames = reminderContext?.kind === "anniversary" ? reminderContext.subjectName : null;
       return {
         title: combinedNames ?? personName,
-        label: combinedNames ? `${combinedNames} anniversary ${relative}` : `${possessive(personName)} anniversary ${relative}`,
+        label: resolvedLabel,
       };
     }
 
@@ -952,10 +799,7 @@ export default function Home({
 
       return {
         title: reminderContext.subjectName,
-        label:
-          reminderContext.subjectAge !== undefined && reminderContext.subjectAge > 0
-            ? `${reminderContext.subjectName} turns ${reminderContext.subjectAge} ${relative}`
-            : `${reminderContext.subjectName}'s birthday ${relative}`,
+        label: resolvedLabel,
       };
     }
 
@@ -974,7 +818,7 @@ export default function Home({
     const display = formatReminderCard(reminder);
     const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
     const childContext = getChildBirthdayContext(reminder, people, today);
-    const reminderContext = resolveReminderContext(reminder, people, relationships, today);
+    const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
     const latestGift = person?.giftHistory?.length ? person.giftHistory[person.giftHistory.length - 1] : null;
     const personName = (person?.name ?? reminder.personName).trim();
     const firstName = personName.split(" ")[0] || reminder.personName || "them";
@@ -1083,7 +927,7 @@ export default function Home({
   function recordGiftHistoryAction(reminder: ReminderEvent, type: "coffee" | "ecard" | "gift") {
     const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
     if (!person) return;
-    const reminderContext = resolveReminderContext(reminder, people, relationships, today);
+    const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
     const primaryRecipient = reminderContext?.recipients[0] ?? null;
 
     const timestamp = new Date().toISOString();
@@ -1122,7 +966,7 @@ export default function Home({
 
   function careEventNoteForReminderText(reminder: ReminderEvent, contactName?: string) {
     const personName = careEventDisplayName(contactName ?? reminder.personName);
-    const reminderContext = resolveReminderContext(reminder, people, relationships, today);
+    const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
     if (reminderContext?.kind === "childBirthday" || reminderContext?.kind === "childThroughRelationship") {
       return `Texted ${personName} about ${reminderContext.subjectName}'s birthday`;
     }
@@ -1133,7 +977,7 @@ export default function Home({
 
   function reminderTextActionLabel(reminder: ReminderEvent, person: Person | null) {
     const first = ((person?.name ?? reminder.personName).trim().split(" ")[0] || reminder.personName || "them").trim();
-    const reminderContext = resolveReminderContext(reminder, people, relationships, today);
+    const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
 
     if (
       (reminderContext?.kind === "childBirthday" || reminderContext?.kind === "childThroughRelationship") &&
@@ -1226,7 +1070,7 @@ export default function Home({
   function buildReminderActions(reminder: ReminderEvent) {
     const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
     const first = ((person?.name ?? reminder.personName).trim().split(" ")[0] || reminder.personName || "them").trim();
-    const reminderContext = resolveReminderContext(reminder, people, relationships, today);
+    const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
     const relationalRecipients =
       reminderContext?.kind === "childThroughRelationship" || reminderContext?.kind === "childBirthday"
         ? reminderContext.recipients

@@ -22,7 +22,7 @@ function startOfToday() {
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { people, userSettings, updateUserSettings } = useAppState();
+  const { people, relationships, userSettings, updateUserSettings } = useAppState();
   const [notificationStatus, setNotificationStatus] = useState<"on" | "off">("off");
   const [appVersionLabel, setAppVersionLabel] = useState<string>("");
 
@@ -94,7 +94,7 @@ export default function Settings() {
     if (permission.display !== "granted") return;
 
     const reminders = getUpcomingReminders(people, startOfToday());
-    await scheduleReminderNotifications(reminders, new Date(), nextSettings);
+    await scheduleReminderNotifications(reminders, new Date(), nextSettings, people, relationships);
   }
 
   async function handleNotificationsToggle(enabled: boolean) {
@@ -129,7 +129,7 @@ export default function Settings() {
     await scheduleReminderNotifications(reminders, new Date(), {
       ...userSettings,
       notificationsEnabled: true,
-    });
+    }, people, relationships);
   }
 
   return (

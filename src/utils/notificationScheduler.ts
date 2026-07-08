@@ -6,10 +6,14 @@ import {
   type LocalNotificationSchema,
   type PermissionStatus,
 } from "@capacitor/local-notifications";
+import type { Person } from "../models/Person.js";
+import type { Relationship } from "../models/Relationship.js";
 import type { ReminderEvent } from "../engine/reminderEngine";
-import { getReminderId, hasReminderFired } from "../engine/reminderRegistry";
-import { formatLocalYmd, parseLocalDate } from "./date";
-import { DEFAULT_USER_SETTINGS, type UserSettings } from "./userSettings";
+import { getReminderId, hasReminderFired } from "../engine/reminderRegistry.js";
+import { formatLocalYmd, parseLocalDate } from "./date.js";
+import { buildRelationshipV2Links } from "./relationshipV2.js";
+import { buildResolvedReminderLabel } from "./reminderRelationshipContext.js";
+import { DEFAULT_USER_SETTINGS, type UserSettings } from "./userSettings.js";
 
 const REMINDER_NOTIFICATION_SOURCE = "dkf-reminder";
 const TEST_NOTIFICATION_SOURCE = "dkf-test-reminder";
@@ -72,7 +76,9 @@ function hasReminderBeenHandled(reminderId: string) {
 export function buildReminderNotification(
   reminder: ReminderEvent,
   now = new Date(),
-  userSettings: UserSettings = DEFAULT_USER_SETTINGS
+  userSettings: UserSettings = DEFAULT_USER_SETTINGS,
+  people: Person[] = [],
+  relationships: Relationship[] = []
 ): LocalNotificationSchema | null {
   if (hasReminderFired(getReminderId(reminder))) return null;
 
@@ -103,9 +109,19 @@ export function buildReminderNotification(
     handledKey: getReminderId(reminder),
     scheduledForLocal: formatLocalYmd(effectiveAt),
   });
+  const reminderTitle =
+    people.length > 0
+      ? buildResolvedReminderLabel(
+          reminder,
+          people,
+          relationships,
+          new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+          buildRelationshipV2Links({ people, relationships })
+        )
+      : reminder.label;
   return {
     id: getReminderNotificationId(reminder),
-    title: reminder.label,
+    title: reminderTitle,
     body: "Don’t forget to send a quick message or plan something thoughtful.",
     sound: "default",
     actionTypeId: REMINDER_NOTIFICATION_CATEGORY,
@@ -129,7 +145,9 @@ export function buildReminderNotification(
 
 export function buildReminderNudgeNotification(
   reminder: ReminderEvent,
-  userSettings: UserSettings = DEFAULT_USER_SETTINGS
+  userSettings: UserSettings = DEFAULT_USER_SETTINGS,
+  people: Person[] = [],
+  relationships: Relationship[] = []
 ): LocalNotificationSchema | null {
   const reminderId = getReminderNotificationKey(reminder);
   if (reminder.reminderType !== "dayOf") return null;
@@ -153,7 +171,16 @@ export function buildReminderNudgeNotification(
 
   return {
     id: getReminderNudgeNotificationId(reminder),
-    title: reminder.label,
+    title:
+      people.length > 0
+        ? buildResolvedReminderLabel(
+            reminder,
+            people,
+            relationships,
+            new Date(),
+            buildRelationshipV2Links({ people, relationships })
+          )
+        : reminder.label,
     body: "Still time to send a quick message or do something thoughtful.",
     sound: "default",
     actionTypeId: REMINDER_NOTIFICATION_CATEGORY,
@@ -233,14 +260,16 @@ export async function cancelScheduledReminderNotificationByReminderId(reminderId
 export async function scheduleReminderNotifications(
   reminders: ReminderEvent[],
   now = new Date(),
-  userSettings: UserSettings = DEFAULT_USER_SETTINGS
+  userSettings: UserSettings = DEFAULT_USER_SETTINGS,
+  people: Person[] = [],
+  relationships: Relationship[] = []
 ) {
   if (!isNativeNotificationsSupported()) return;
 
   const notifications = reminders
     .flatMap((reminder) => [
-      buildReminderNotification(reminder, now, userSettings),
-      buildReminderNudgeNotification(reminder, userSettings),
+      buildReminderNotification(reminder, now, userSettings, people, relationships),
+      buildReminderNudgeNotification(reminder, userSettings, people, relationships),
     ])
     .filter((notification): notification is LocalNotificationSchema => Boolean(notification))
     .sort((left, right) => {

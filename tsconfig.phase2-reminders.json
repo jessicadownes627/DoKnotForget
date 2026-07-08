@@ -1,0 +1,28 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
+    "outDir": "./.tmp/phase2-reminders",
+    "rootDir": ".",
+    "module": "ESNext",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": [
+    "src/models/Person.ts",
+    "src/models/Relationship.ts",
+    "src/models/RelationshipV2.ts",
+    "src/engine/reminderEngine.ts",
+    "src/utils/date.ts",
+    "src/utils/birthdayUtils.ts",
+    "src/utils/relationshipModel.ts",
+    "src/utils/relationshipV2.ts",
+    "src/utils/reminderRelationshipContext.ts",
+    "src/utils/notificationScheduler.ts",
+    "src/utils/userSettings.ts",
+    "src/engine/reminderRegistry.ts",
+    "src/utils/phase2ReminderVerification.ts"
+  ]
+}

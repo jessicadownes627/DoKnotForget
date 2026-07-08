@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "validate:phase2-reminders": "tsc -p tsconfig.phase2-reminders.json && node --experimental-specifier-resolution=node ./.tmp/phase2-reminders/src/utils/phase2ReminderVerification.js",
     "validate:relationship-v2": "tsc -p tsconfig.relationship-v2.json && node --experimental-specifier-resolution=node ./.tmp/relationship-v2/src/utils/relationshipV2Validation.js",
     "lint": "eslint .",
     "preview": "vite preview"
