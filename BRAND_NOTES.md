@@ -38,6 +38,43 @@ Every screen should answer one question.
 - Entering details: Does this feel like building a relationship rather than filling out a form?
 - Leaving the app: Do I already want to come back?
 
+## Home As Discovery Engine
+
+DoKnotForget should not expect users to understand its full capabilities during onboarding.
+
+Many users will import contacts, add a few important people, and leave. The product must gradually reveal its value over time.
+
+### Product Principle
+
+Home is the primary place where users discover what DoKnotForget can do.
+
+Reminders prove the app's value.
+
+Thoughtful coaching helps users unlock even more value.
+
+### Rules
+
+- Home remains reminder-first.
+- When there are no urgent reminders, Home may surface one thoughtful suggestion.
+- Every suggestion must begin with the benefit, not the missing information.
+- Suggestions should never feel like profile completion or setup.
+- Suggestions should be dismissible and should not repeatedly nag the user.
+- Home teaches capabilities gradually rather than all at once.
+
+### Examples
+
+- Add Ryan's children so birthday reminders know to remind you to reach out to Ryan.
+- Add Ryan's phone number so you can text him directly from reminders.
+- Add an anniversary so DoKnotForget can help you celebrate it.
+
+### Guiding Question
+
+Before adding any coaching suggestion, ask:
+
+`Does this help the user discover another meaningful capability of DoKnotForget?`
+
+If the answer is no, it probably does not belong on Home.
+
 ## UI Principles
 
 DoKnotForget UI Principles
@@ -102,6 +139,10 @@ We believe every important relationship deserves to be remembered.
 We believe thoughtful people aren't born, they're supported.
 
 DoKnotForget exists to help people remember the little things that make others feel remembered.
+
+Users will not love DoKnotForget because they entered information beautifully.
+
+They will love it because, over time, the app keeps revealing thoughtful things it can do for them.
 
 We never design for data.
 
