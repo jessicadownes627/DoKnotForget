@@ -1,4 +1,4 @@
-import type { Relationship, RelationshipType } from "../models/Relationship";
+import type { Relationship, RelationshipType } from "../models/Relationship.js";
 
 function sortIds(a: string, b: string) {
   return a.localeCompare(b, undefined, { sensitivity: "base" }) <= 0 ? [a, b] : [b, a];
