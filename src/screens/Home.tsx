@@ -2434,7 +2434,7 @@ export default function Home({
                         </div>
                         <button
                           type="button"
-                          onClick={() => navigate("/contacts")}
+                          onClick={navigateToAddPerson}
                           style={{
                             marginTop: "4px",
                             border: "1px solid var(--ink)",

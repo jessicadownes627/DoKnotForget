@@ -38,6 +38,61 @@ Every screen should answer one question.
 - Entering details: Does this feel like building a relationship rather than filling out a form?
 - Leaving the app: Do I already want to come back?
 
+## UI Principles
+
+DoKnotForget UI Principles
+
+This app should feel worthy of an Apple Design Award.
+
+Not because it is flashy.
+
+Because it is crafted.
+
+### Visual goals
+
+- Editorial typography over app typography.
+- Luxury fashion campaign, not productivity software.
+- Warmth over efficiency.
+- Emotion over decoration.
+- Large, confident whitespace.
+- One memorable visual moment per screen.
+- Motion should reward interaction, never distract from it.
+
+### Inspiration
+
+Think:
+
+- Apple keynote slides
+- Apple Wallet onboarding
+- Calm
+- Headspace
+- Notion's restraint
+- Linear's polish
+- Arc Browser's delight
+
+Not:
+
+- Material UI examples
+- Bootstrap
+- Generic SaaS dashboards
+- Dribbble gradients
+- Gamification
+- Standard
+
+Every screen should make someone think:
+
+"This feels expensive."
+
+without using expensive-looking effects.
+
+Do not optimize for implementation speed. Optimize for visual craftsmanship.
+
+You do not want easy CSS, simple layouts, or standard components by default.
+
+You want someone to open the app and think:
+
+"I've never seen a relationship app feel like this."
+
 ## Beliefs
 
 We believe every important person has a story.

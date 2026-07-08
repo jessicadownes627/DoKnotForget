@@ -1,4 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  OnboardingBody,
+  OnboardingEyebrow,
+  OnboardingHeroInvite,
+  OnboardingHeroTitle,
+  PremiumInput,
+  PrimaryButton,
+} from "../components/onboarding/OnboardingPrimitives";
 import type { Moment, Person } from "../models/Person";
 import type { Relationship, RelationshipType } from "../models/Relationship";
 import MomentDatePicker from "../components/MomentDatePicker";
@@ -144,114 +152,18 @@ function findMoment(person: Person | null, type: Moment["type"]) {
   return (person?.moments ?? []).find((moment) => moment.type === type) ?? null;
 }
 
-function CirclePreview({
-  name,
-  relationshipLabel,
-  birthdayLabel,
-  anniversaryLabel,
-  customMoments,
-  phone,
-}: {
-  name: string;
-  relationshipLabel: string | null;
-  birthdayLabel: string | null;
-  anniversaryLabel: string | null;
-  customMoments: Array<{ title: string; date: string }>;
-  phone: string;
-}) {
-  const promptPossessive = possessive(name);
-  const hasAnyDetails =
-    Boolean(relationshipLabel) ||
-    Boolean(birthdayLabel) ||
-    Boolean(anniversaryLabel) ||
-    customMoments.length > 0 ||
-    Boolean(phone.trim());
-
-  if (!name.trim()) return null;
-
-  return (
-    <div
-      className="dkf-enter"
-      style={{
-        marginTop: "1rem",
-        borderRadius: "24px",
-        border: "1px solid rgba(10, 27, 42, 0.09)",
-        background:
-          "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248,245,239,0.92) 100%)",
-        boxShadow: "0 22px 60px rgba(38, 33, 21, 0.08)",
-        padding: "1rem 1rem 1.1rem",
-        display: "grid",
-        gap: "0.8rem",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: "0.9rem" }}>
-        <div
-          aria-hidden="true"
-          style={{
-            width: "56px",
-            height: "56px",
-            borderRadius: "20px",
-            background: "linear-gradient(145deg, rgba(240,225,196,0.95), rgba(222,196,145,0.95))",
-            display: "grid",
-            placeItems: "center",
-            color: "var(--ink)",
-            fontSize: "1.08rem",
-            fontWeight: 700,
-          }}
-        >
-          {(name.trim()[0] ?? "?").toUpperCase()}
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <div
-            style={{
-              fontFamily: "var(--font-serif)",
-              fontSize: "1.65rem",
-              lineHeight: 1.02,
-              color: "var(--ink)",
-              letterSpacing: "-0.02em",
-            }}
-          >
-            {name.trim()}
-          </div>
-          <div style={{ marginTop: "0.2rem", color: "var(--muted)", fontSize: "0.9rem" }}>
-            {hasAnyDetails ? "Part of your circle." : "Someone worth remembering well."}
-          </div>
-        </div>
-      </div>
-
-      {hasAnyDetails ? (
-        <div style={{ display: "grid", gap: "0.55rem" }}>
-          {relationshipLabel ? (
-            <div style={{ color: "var(--ink)", fontSize: "1rem", fontWeight: 500 }}>❤️ {relationshipLabel}</div>
-          ) : null}
-          {birthdayLabel ? (
-            <div style={{ color: "var(--ink)", fontSize: "1rem", fontWeight: 500 }}>🎂 {promptPossessive} birthday: {birthdayLabel}</div>
-          ) : null}
-          {anniversaryLabel ? (
-            <div style={{ color: "var(--ink)", fontSize: "1rem", fontWeight: 500 }}>💕 Anniversary: {anniversaryLabel}</div>
-          ) : null}
-          {customMoments.slice(0, 3).map((moment, index) => (
-            <div key={`${moment.title}-${moment.date}-${index}`} style={{ color: "var(--ink)", fontSize: "1rem", fontWeight: 500 }}>
-              ✨ {moment.title}: {formatMomentDate(moment.date)}
-            </div>
-          ))}
-          {phone.trim() ? <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>📱 Phone added</div> : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 function SurfaceCard({
   children,
+  className,
   style,
 }: {
   children: React.ReactNode;
+  className?: string;
   style?: React.CSSProperties;
 }) {
   return (
     <section
-      className="dkf-enter"
+      className={className ? `dkf-enter ${className}` : "dkf-enter"}
       style={{
         borderRadius: "28px",
         border: "1px solid rgba(10, 27, 42, 0.08)",
@@ -336,6 +248,69 @@ function ChoiceCard({
   );
 }
 
+function JourneyIntro({ shimmer, awake }: { shimmer: boolean; awake: boolean }) {
+  return (
+    <div
+      className={awake ? "dkf-journey-intro dkf-journey-intro-awake" : "dkf-journey-intro"}
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        inset: 0,
+        pointerEvents: "none",
+        overflow: "hidden",
+      }}
+    >
+      <div className="dkf-journey-glow dkf-journey-glow-left" />
+      <div className="dkf-journey-glow dkf-journey-glow-right" />
+      <svg
+        className={`dkf-journey-path${shimmer ? " dkf-journey-path-shimmer" : ""}`}
+        viewBox="0 0 720 520"
+        preserveAspectRatio="none"
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+        }}
+      >
+        <defs>
+          <linearGradient id="dkfJourneyStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="rgba(248,219,146,0.04)" />
+            <stop offset="18%" stopColor="rgba(244,208,124,0.18)" />
+            <stop offset="52%" stopColor="rgba(255,245,225,0.94)" />
+            <stop offset="100%" stopColor="rgba(241,192,86,0.14)" />
+          </linearGradient>
+          <filter id="dkfJourneyBlur">
+            <feGaussianBlur stdDeviation="5" />
+          </filter>
+        </defs>
+        <path
+          d="M642 28C676 76 650 138 592 188C530 244 458 294 374 326C292 358 182 388 84 434"
+          fill="none"
+          stroke="url(#dkfJourneyStroke)"
+          strokeWidth="12"
+          strokeLinecap="round"
+          filter="url(#dkfJourneyBlur)"
+          opacity="0.28"
+        />
+        <path
+          d="M642 28C676 76 650 138 592 188C530 244 458 294 374 326C292 358 182 388 84 434"
+          fill="none"
+          stroke="url(#dkfJourneyStroke)"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          opacity="0.58"
+        />
+      </svg>
+      <span className="dkf-journey-sparkle dkf-journey-sparkle-1">✦</span>
+      <span className="dkf-journey-sparkle dkf-journey-sparkle-2">✦</span>
+      <span className="dkf-journey-sparkle dkf-journey-sparkle-3">✦</span>
+      <span className="dkf-journey-orb" />
+      <span className="dkf-journey-orb dkf-journey-orb-secondary" />
+    </div>
+  );
+}
+
 export default function AddPerson() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -350,6 +325,9 @@ export default function AddPerson() {
 
   const birthdayMoment = findMoment(editingPerson, "birthday");
   const [name, setName] = useState(editingPerson?.name ?? "");
+  const [hasAdvancedFromName, setHasAdvancedFromName] = useState(Boolean(editingPerson?.name?.trim()));
+  const [isNameFocused, setIsNameFocused] = useState(false);
+  const [trailPulse, setTrailPulse] = useState(false);
   const [phone, setPhone] = useState(editingPerson?.phone ?? "");
   const [phoneError, setPhoneError] = useState(false);
   const [selectedRelationship, setSelectedRelationship] = useState<DisplayRelationship | null>(null);
@@ -389,6 +367,7 @@ export default function AddPerson() {
     Boolean(birthdayMoment?.date || anniversary || customMoments.length)
   );
   const lastPrefilledPersonIdRef = useRef<string | null>(null);
+  const previousHasNameRef = useRef(Boolean((editingPerson?.name ?? "").trim()));
 
   useEffect(() => {
     if (!editingPerson?.id) {
@@ -398,6 +377,7 @@ export default function AddPerson() {
     if (lastPrefilledPersonIdRef.current === editingPerson.id) return;
     lastPrefilledPersonIdRef.current = editingPerson.id;
     setName(editingPerson.name || "");
+    setHasAdvancedFromName(Boolean(editingPerson.name?.trim()));
     setPhone(editingPerson.phone || "");
     setPhoneError(false);
   }, [editingPerson]);
@@ -424,13 +404,40 @@ export default function AddPerson() {
   const hasAnyReminder = Boolean(
     buildBirthdayIso(birthdayMonthDay, birthdayYear) || anniversary || customMoments.length
   );
-  const canShowReminderCard = hasName && hasRelationship;
+  const canShowReminderCard = hasAdvancedFromName && hasName && hasRelationship;
   const canShowSupportCard = canShowReminderCard && hasAnyReminder;
-  const canSave = hasName && hasRelationship && hasAnyReminder;
+  const canSave = hasAdvancedFromName && hasName && hasRelationship && hasAnyReminder;
+  const canContinueFromName = hasName;
+  const introStage = !hasAdvancedFromName;
   const savedBirthdayLabel = buildBirthdayIso(birthdayMonthDay, birthdayYear)
     ? formatMomentDate(buildBirthdayIso(birthdayMonthDay, birthdayYear))
     : null;
   const savedAnniversaryLabel = anniversary ? formatMonthDay(anniversary) : null;
+
+  useEffect(() => {
+    if (!introStage || hasName) return;
+    const startTimer = window.setTimeout(() => {
+      setTrailPulse(true);
+    }, 650);
+    const stopTimer = window.setTimeout(() => {
+      setTrailPulse(false);
+    }, 1850);
+    return () => {
+      window.clearTimeout(startTimer);
+      window.clearTimeout(stopTimer);
+    };
+  }, [hasName, introStage]);
+
+  useEffect(() => {
+    if (!previousHasNameRef.current && hasName) {
+      setTrailPulse(true);
+      const timer = window.setTimeout(() => setTrailPulse(false), 1150);
+      previousHasNameRef.current = true;
+      return () => window.clearTimeout(timer);
+    }
+    previousHasNameRef.current = hasName;
+    return;
+  }, [hasName]);
 
   function resetCustomDraft() {
     setActiveCustomSuggestion(null);
@@ -575,8 +582,14 @@ export default function AddPerson() {
     });
   }
 
-  const pageBackground =
-    "radial-gradient(circle at top, rgba(243, 232, 209, 0.95) 0%, rgba(247, 244, 238, 0.96) 36%, rgba(244, 239, 231, 1) 100%)";
+  const pageBackground = introStage
+    ? [
+        "radial-gradient(circle at 18% 16%, rgba(255, 250, 239, 0.98) 0%, rgba(255, 243, 221, 0.62) 16%, rgba(255, 243, 221, 0) 34%)",
+        "radial-gradient(circle at 86% 10%, rgba(255, 245, 226, 0.95) 0%, rgba(252, 233, 188, 0.36) 18%, rgba(252, 233, 188, 0) 38%)",
+        "radial-gradient(circle at 68% 82%, rgba(255, 241, 208, 0.58) 0%, rgba(255, 241, 208, 0) 28%)",
+        "linear-gradient(180deg, rgba(251,246,238,1) 0%, rgba(245,236,221,1) 100%)",
+      ].join(", ")
+    : "radial-gradient(circle at 28% 18%, rgba(255, 248, 233, 0.98) 0%, rgba(247, 239, 224, 0.96) 28%, rgba(242, 233, 217, 0.98) 64%, rgba(238, 228, 210, 1) 100%)";
 
   return (
     <div style={{ background: pageBackground, color: "var(--ink)", minHeight: "100vh" }}>
@@ -585,90 +598,88 @@ export default function AddPerson() {
           maxWidth: "760px",
           margin: "0 auto",
           padding:
-            "calc(env(safe-area-inset-top) + 24px) 16px calc(120px + env(safe-area-inset-bottom)) 16px",
+            "calc(env(safe-area-inset-top) + 28px) 16px calc(120px + env(safe-area-inset-bottom)) 16px",
           boxSizing: "border-box",
         }}
       >
-        <div style={{ display: "grid", gap: "1rem" }}>
-          <header className="dkf-enter" style={{ paddingTop: "0.5rem" }}>
-            <div
+        <div style={{ display: "grid", gap: introStage ? "1.8rem" : "1.35rem" }}>
+          {introStage ? (
+            <section
+              className="dkf-enter"
               style={{
-                color: "rgba(10, 27, 42, 0.68)",
-                fontSize: "0.78rem",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                fontWeight: 700,
+                position: "relative",
+                overflow: "hidden",
+                borderRadius: "34px",
+                padding: "0.95rem 0 1.4rem",
+                minHeight: "760px",
               }}
             >
-              DoKnotForget
-            </div>
-            <h1
-              style={{
-                margin: "0.45rem 0 0",
-                fontFamily: "var(--font-serif)",
-                fontSize: "clamp(1.85rem, 5.8vw, 2.85rem)",
-                lineHeight: 0.98,
-                letterSpacing: "-0.03em",
-              }}
-            >
-              Build your circle
-            </h1>
-            <p
-              style={{
-                margin: "0.7rem 0 0",
-                color: "var(--muted)",
-                fontSize: "0.98rem",
-                maxWidth: "28rem",
-              }}
-            >
-              Start with someone who's on your mind.
-            </p>
-          </header>
+              <JourneyIntro shimmer={trailPulse} awake={isNameFocused || hasName} />
+              <header
+                style={{
+                  position: "relative",
+                  zIndex: 1,
+                  paddingTop: "1.2rem",
+                  maxWidth: "66%",
+                }}
+              >
+                <OnboardingEyebrow>DoKnotForget</OnboardingEyebrow>
+                <OnboardingHeroTitle>
+                  <>
+                    <span style={{ display: "block", whiteSpace: "nowrap" }}>Every meaningful connection</span>
+                    <span style={{ display: "block" }}>starts with a person.</span>
+                  </>
+                </OnboardingHeroTitle>
+                <OnboardingHeroInvite>Let&apos;s begin their story.</OnboardingHeroInvite>
+              </header>
 
-          <SurfaceCard>
-            <div style={{ display: "grid", gap: "0.9rem" }}>
-              <div>
-                <input
+              <div
+                style={{
+                  position: "relative",
+                  zIndex: 1,
+                  marginTop: "4.25rem",
+                }}
+              >
+                <PremiumInput
+                  shellClassName="dkf-journey-input-hero"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  onFocus={() => setIsNameFocused(true)}
+                  onBlur={() => setIsNameFocused(false)}
                   autoFocus
-                  placeholder="Enter a name..."
-                  style={{
-                    width: "100%",
-                    padding: "0.1rem 0 0.2rem",
-                    border: "none",
-                    background: "transparent",
-                    outline: "none",
-                    fontFamily: "var(--font-serif)",
-                    fontSize: "clamp(2rem, 8vw, 3rem)",
-                    lineHeight: 1,
-                    color: "var(--ink)",
-                  }}
+                  placeholder="Enter their name"
+                  icon={
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="8" r="3.75" stroke="currentColor" strokeWidth="1.8" />
+                      <path
+                        d="M5.5 19.25C6.2 16.55 8.58 14.75 12 14.75C15.42 14.75 17.8 16.55 18.5 19.25"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  }
                 />
               </div>
 
-              {hasName ? (
-                <div className="dkf-fade-in-140" style={{ color: "var(--muted)", fontSize: "0.98rem" }}>
-                  {promptName} matters. Let’s make sure the important moments don’t slip by.
-                </div>
-              ) : (
-                <div style={{ color: "var(--muted)", fontSize: "0.98rem" }}>
-                  You can always add more later.
-                </div>
-              )}
-            </div>
-          </SurfaceCard>
+              <div
+                style={{
+                  position: "relative",
+                  zIndex: 1,
+                  marginTop: "2.35rem",
+                  marginLeft: "1.75rem",
+                }}
+              >
+                <OnboardingBody>
+                  Just one name to start.
+                  <br />
+                  We&apos;ll build it together. ♡
+                </OnboardingBody>
+              </div>
+            </section>
+          ) : null}
 
-          <CirclePreview
-            name={name}
-            relationshipLabel={relationshipLabel}
-            birthdayLabel={savedBirthdayLabel}
-            anniversaryLabel={savedAnniversaryLabel}
-            customMoments={customMoments}
-            phone={phone}
-          />
-
-          {hasName ? (
+          {hasAdvancedFromName ? (
             <SurfaceCard>
               <div style={{ display: "grid", gap: "0.95rem" }}>
                 <div>
@@ -1209,13 +1220,17 @@ export default function AddPerson() {
       </div>
 
       <div
-        style={{
-          position: "fixed",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          padding: "12px 16px calc(12px + env(safe-area-inset-bottom))",
-          background: "linear-gradient(180deg, rgba(244,239,231,0) 0%, rgba(244,239,231,0.92) 22%, rgba(244,239,231,0.98) 100%)",
+          style={{
+            position: "fixed",
+            left: 0,
+            right: 0,
+            bottom: 0,
+          padding: introStage
+            ? "16px 16px calc(18px + env(safe-area-inset-bottom))"
+            : "12px 16px calc(12px + env(safe-area-inset-bottom))",
+          background: introStage
+            ? "linear-gradient(180deg, rgba(247,241,232,0) 0%, rgba(247,241,232,0.86) 20%, rgba(247,241,232,0.97) 100%)"
+            : "linear-gradient(180deg, rgba(244,239,231,0) 0%, rgba(244,239,231,0.92) 22%, rgba(244,239,231,0.98) 100%)",
           backdropFilter: "blur(14px)",
         }}
       >
@@ -1225,46 +1240,72 @@ export default function AddPerson() {
             margin: "0 auto",
             display: "flex",
             alignItems: "center",
-            gap: "0.85rem",
+            gap: introStage ? "1rem" : "0.85rem",
           }}
         >
           <button
             type="button"
             onClick={() => navigate("/home")}
             style={{
-              padding: "0.95rem 1rem",
-              background: "rgba(255,255,255,0.84)",
-              color: "var(--muted)",
-              border: "1px solid rgba(10, 27, 42, 0.08)",
-              borderRadius: "18px",
-              minWidth: "96px",
+              padding: introStage ? "1.28rem 1.5rem" : "0.95rem 1rem",
+              background: introStage
+                ? "linear-gradient(180deg, rgba(252,247,239,0.96) 0%, rgba(245,234,214,0.86) 100%)"
+                : "rgba(255,255,255,0.84)",
+              color: introStage ? "var(--ink)" : "var(--muted)",
+              border: introStage
+                ? "1px solid rgba(232, 214, 180, 0.82)"
+                : "1px solid rgba(10, 27, 42, 0.08)",
+              borderRadius: introStage ? "28px" : "18px",
+              minWidth: introStage ? "140px" : "96px",
+              boxShadow: introStage ? "0 16px 32px rgba(188, 160, 111, 0.12)" : "none",
+              fontSize: introStage ? "1.02rem" : "1rem",
+              fontWeight: introStage ? 600 : 500,
             }}
           >
             Cancel
           </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={!canSave}
+          <PrimaryButton
+            onClick={() => {
+              if (!hasAdvancedFromName) {
+                if (!canContinueFromName) return;
+                setHasAdvancedFromName(true);
+                return;
+              }
+              handleSave();
+            }}
+            disabled={hasAdvancedFromName ? !canSave : !canContinueFromName}
+            quietDisabled
             style={{
               flex: 1,
-              padding: "1rem 1.2rem",
-              background: canSave
-                ? "linear-gradient(180deg, rgba(16,31,42,1) 0%, rgba(10,27,42,1) 100%)"
-                : "rgba(10, 27, 42, 0.28)",
-              color: "var(--paper)",
-              border: "1px solid rgba(10, 27, 42, 0.15)",
-              borderRadius: "20px",
-              boxShadow: canSave ? "0 16px 36px rgba(10, 27, 42, 0.18)" : "none",
-              fontSize: "1rem",
-              fontWeight: 700,
-              cursor: canSave ? "pointer" : "default",
+              padding: introStage ? "1.34rem 1.4rem" : "1rem 1.2rem",
+              borderRadius: introStage ? "999px" : "20px",
+              transform: "scale(1)",
             }}
           >
-            {editingPerson ? `Keep ${promptName} in your circle` : `Add ${promptName} to My Circle`}
-          </button>
+            Continue
+          </PrimaryButton>
         </div>
-        {!canSave && hasName ? (
+        {introStage ? (
+          <div
+            style={{
+              maxWidth: "760px",
+              margin: "1rem auto 0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.45rem",
+              color: "rgba(10, 27, 42, 0.56)",
+              fontSize: "0.92rem",
+              textAlign: "center",
+            }}
+          >
+            <span aria-hidden="true" style={{ color: "rgba(197, 144, 51, 0.94)" }}>
+              🔒
+            </span>
+            <span>Your memories are always private and secure.</span>
+          </div>
+        ) : null}
+        {hasAdvancedFromName && !canSave && hasName ? (
           <div
             style={{
               maxWidth: "760px",
