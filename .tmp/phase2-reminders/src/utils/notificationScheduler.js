@@ -1,0 +1,268 @@
+import { Capacitor } from "@capacitor/core";
+import { LocalNotifications, } from "@capacitor/local-notifications";
+import { getReminderId, hasReminderFired } from "../engine/reminderRegistry.js";
+import { formatLocalYmd, parseLocalDate } from "./date.js";
+import { buildRelationshipV2Links } from "./relationshipV2.js";
+import { buildResolvedReminderLabel } from "./reminderRelationshipContext.js";
+import { DEFAULT_USER_SETTINGS } from "./userSettings.js";
+const REMINDER_NOTIFICATION_SOURCE = "dkf-reminder";
+const TEST_NOTIFICATION_SOURCE = "dkf-test-reminder";
+const HANDLED_REMINDER_ACTIONS_STORAGE_KEY = "doknotforget_handled_reminder_actions_v1";
+const SCHEDULED_REMINDER_SIGNATURE_STORAGE_KEY = "doknotforget_scheduled_reminder_signature_v1";
+export const REMINDER_NOTIFICATION_CATEGORY = "reminder";
+const REMINDER_NOTIFICATION_CHANNEL = {
+    id: REMINDER_NOTIFICATION_CATEGORY,
+    name: "Reminders",
+    description: "Birthday, anniversary, and important date reminders",
+    importance: 5,
+    vibration: true,
+};
+function hashReminderId(value) {
+    let hash = 0;
+    for (let i = 0; i < value.length; i += 1) {
+        hash = (hash * 31 + value.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash) || 1;
+}
+export function isNativeNotificationsSupported() {
+    return Capacitor.getPlatform() !== "web";
+}
+export function getReminderNotificationId(reminder) {
+    return hashReminderId(getReminderNotificationKey(reminder));
+}
+export function getReminderNotificationIdForReminderId(reminderId) {
+    return hashReminderId(reminderId);
+}
+export function getReminderNudgeNotificationId(reminder) {
+    return hashReminderId(`${getReminderNotificationKey(reminder)}_nudge`);
+}
+export function getReminderNudgeNotificationIdForReminderId(reminderId) {
+    return hashReminderId(`${reminderId}_nudge`);
+}
+export function getReminderNotificationKey(reminder) {
+    return getReminderId(reminder);
+}
+function hasReminderBeenHandled(reminderId) {
+    try {
+        const raw = window.localStorage.getItem(HANDLED_REMINDER_ACTIONS_STORAGE_KEY);
+        if (!raw)
+            return false;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object")
+            return false;
+        return parsed[reminderId] === true;
+    }
+    catch {
+        return false;
+    }
+}
+export function buildReminderNotification(reminder, now = new Date(), userSettings = DEFAULT_USER_SETTINGS, people = [], relationships = [], relationshipLinksV2 = []) {
+    if (hasReminderFired(getReminderId(reminder)))
+        return null;
+    const triggerDate = parseLocalDate(reminder.triggerDate || reminder.date);
+    if (!triggerDate)
+        return null;
+    const reminderHour = userSettings.reminderHour ?? DEFAULT_USER_SETTINGS.reminderHour;
+    const reminderMinute = userSettings.reminderMinute ?? DEFAULT_USER_SETTINGS.reminderMinute;
+    const scheduledAt = new Date(triggerDate.getFullYear(), triggerDate.getMonth(), triggerDate.getDate(), reminderHour, reminderMinute, 0, 0);
+    const effectiveAt = scheduledAt <= now ? new Date(now.getTime() + 5000) : scheduledAt;
+    // eslint-disable-next-line no-console
+    console.log("[DKF DEBUG] Build reminder notification", {
+        todayLocal: formatLocalYmd(now),
+        personId: reminder.personId,
+        personName: reminder.personName,
+        birthdayEventDateLocal: reminder.eventDate,
+        reminderTriggerDateLocal: reminder.triggerDate || reminder.date,
+        handledKey: getReminderId(reminder),
+        scheduledForLocal: formatLocalYmd(effectiveAt),
+    });
+    const reminderTitle = people.length > 0
+        ? buildResolvedReminderLabel(reminder, people, relationships, new Date(now.getFullYear(), now.getMonth(), now.getDate()), buildRelationshipV2Links({ people, relationships, persistedLinks: relationshipLinksV2 }))
+        : reminder.label;
+    return {
+        id: getReminderNotificationId(reminder),
+        title: reminderTitle,
+        body: "Don’t forget to send a quick message or plan something thoughtful.",
+        sound: "default",
+        actionTypeId: REMINDER_NOTIFICATION_CATEGORY,
+        channelId: REMINDER_NOTIFICATION_CATEGORY,
+        threadIdentifier: REMINDER_NOTIFICATION_CATEGORY,
+        schedule: {
+            at: effectiveAt,
+        },
+        extra: {
+            source: REMINDER_NOTIFICATION_SOURCE,
+            variant: "primary",
+            reminderId: getReminderNotificationKey(reminder),
+            personId: reminder.personId,
+            momentType: reminder.momentType,
+            reminderType: reminder.reminderType,
+            triggerDate: reminder.triggerDate,
+            eventDate: reminder.eventDate,
+        },
+    };
+}
+export function buildReminderNudgeNotification(reminder, userSettings = DEFAULT_USER_SETTINGS, people = [], relationships = [], relationshipLinksV2 = []) {
+    const reminderId = getReminderNotificationKey(reminder);
+    if (reminder.reminderType !== "dayOf")
+        return null;
+    if (hasReminderBeenHandled(reminderId))
+        return null;
+    const triggerDate = parseLocalDate(reminder.triggerDate || reminder.date);
+    if (!triggerDate)
+        return null;
+    const reminderHour = userSettings.reminderHour ?? DEFAULT_USER_SETTINGS.reminderHour;
+    const reminderMinute = userSettings.reminderMinute ?? DEFAULT_USER_SETTINGS.reminderMinute;
+    const scheduledAt = new Date(triggerDate.getFullYear(), triggerDate.getMonth(), triggerDate.getDate(), reminderHour, reminderMinute, 0, 0);
+    return {
+        id: getReminderNudgeNotificationId(reminder),
+        title: people.length > 0
+            ? buildResolvedReminderLabel(reminder, people, relationships, new Date(), buildRelationshipV2Links({ people, relationships, persistedLinks: relationshipLinksV2 }))
+            : reminder.label,
+        body: "Still time to send a quick message or do something thoughtful.",
+        sound: "default",
+        actionTypeId: REMINDER_NOTIFICATION_CATEGORY,
+        channelId: REMINDER_NOTIFICATION_CATEGORY,
+        threadIdentifier: REMINDER_NOTIFICATION_CATEGORY,
+        schedule: {
+            at: new Date(scheduledAt.getTime() + 8 * 60 * 60 * 1000),
+        },
+        extra: {
+            source: REMINDER_NOTIFICATION_SOURCE,
+            variant: "nudge",
+            reminderId,
+            personId: reminder.personId,
+            momentType: reminder.momentType,
+            reminderType: reminder.reminderType,
+            triggerDate: reminder.triggerDate,
+            eventDate: reminder.eventDate,
+        },
+    };
+}
+export async function requestReminderNotificationPermission() {
+    if (!isNativeNotificationsSupported())
+        return null;
+    const current = await LocalNotifications.checkPermissions();
+    if (current.display === "granted")
+        return current;
+    return LocalNotifications.requestPermissions();
+}
+export async function configureReminderNotifications() {
+    if (!isNativeNotificationsSupported())
+        return;
+    await LocalNotifications.registerActionTypes({
+        types: [{ id: REMINDER_NOTIFICATION_CATEGORY }],
+    });
+    if (Capacitor.getPlatform() === "android") {
+        await LocalNotifications.createChannel(REMINDER_NOTIFICATION_CHANNEL);
+    }
+}
+export async function cancelScheduledReminderNotifications(reminders) {
+    if (!isNativeNotificationsSupported())
+        return;
+    let notifications;
+    if (reminders?.length) {
+        notifications = reminders.flatMap((reminder) => [
+            { id: getReminderNotificationId(reminder) },
+            { id: getReminderNudgeNotificationId(reminder) },
+        ]);
+    }
+    else {
+        const pending = await LocalNotifications.getPending();
+        notifications = pending.notifications
+            .filter((notification) => notification.extra?.source === REMINDER_NOTIFICATION_SOURCE)
+            .map((notification) => ({ id: notification.id }));
+    }
+    if (!notifications.length)
+        return;
+    await LocalNotifications.cancel({ notifications });
+    try {
+        window.localStorage.removeItem(SCHEDULED_REMINDER_SIGNATURE_STORAGE_KEY);
+    }
+    catch {
+        // ignore
+    }
+}
+export async function cancelScheduledReminderNotificationByReminderId(reminderId) {
+    if (!isNativeNotificationsSupported())
+        return;
+    await LocalNotifications.cancel({
+        notifications: [
+            { id: getReminderNotificationIdForReminderId(reminderId) },
+            { id: getReminderNudgeNotificationIdForReminderId(reminderId) },
+        ],
+    });
+}
+export async function scheduleReminderNotifications(reminders, now = new Date(), userSettings = DEFAULT_USER_SETTINGS, people = [], relationships = [], relationshipLinksV2 = []) {
+    if (!isNativeNotificationsSupported())
+        return;
+    const notifications = reminders
+        .flatMap((reminder) => [
+        buildReminderNotification(reminder, now, userSettings, people, relationships, relationshipLinksV2),
+        buildReminderNudgeNotification(reminder, userSettings, people, relationships, relationshipLinksV2),
+    ])
+        .filter((notification) => Boolean(notification))
+        .sort((left, right) => {
+        const leftAt = left.schedule?.at instanceof Date ? left.schedule.at.getTime() : Number.MAX_SAFE_INTEGER;
+        const rightAt = right.schedule?.at instanceof Date ? right.schedule.at.getTime() : Number.MAX_SAFE_INTEGER;
+        return leftAt - rightAt;
+    });
+    const nextNotification = notifications[0] ?? null;
+    if (!nextNotification) {
+        await cancelScheduledReminderNotifications();
+        return;
+    }
+    const scheduledAt = nextNotification.schedule?.at instanceof Date ? nextNotification.schedule.at.toISOString() : "";
+    const signature = `${nextNotification.id}:${scheduledAt}`;
+    try {
+        const existingSignature = window.localStorage.getItem(SCHEDULED_REMINDER_SIGNATURE_STORAGE_KEY);
+        if (existingSignature === signature)
+            return;
+    }
+    catch {
+        // ignore
+    }
+    await cancelScheduledReminderNotifications();
+    // eslint-disable-next-line no-console
+    console.log("[DKF DEBUG] Schedule reminder notification", {
+        todayLocal: formatLocalYmd(now),
+        notificationId: nextNotification.id,
+        scheduledForLocal: nextNotification.schedule?.at instanceof Date ? formatLocalYmd(nextNotification.schedule.at) : "",
+        reminderId: nextNotification.extra?.reminderId ?? "",
+        eventDateLocal: nextNotification.extra?.eventDate ?? "",
+        triggerDateLocal: nextNotification.extra?.triggerDate ?? "",
+    });
+    await LocalNotifications.schedule({ notifications: [nextNotification] });
+    try {
+        window.localStorage.setItem(SCHEDULED_REMINDER_SIGNATURE_STORAGE_KEY, signature);
+    }
+    catch {
+        // ignore
+    }
+}
+export async function scheduleTestReminderNotification() {
+    if (!isNativeNotificationsSupported())
+        return;
+    const now = new Date();
+    const notificationId = hashReminderId(`${TEST_NOTIFICATION_SOURCE}:${now.getTime()}`);
+    await LocalNotifications.schedule({
+        notifications: [
+            {
+                id: notificationId,
+                title: "Test Reminder",
+                body: "Notification system is working.",
+                sound: "default",
+                actionTypeId: REMINDER_NOTIFICATION_CATEGORY,
+                channelId: REMINDER_NOTIFICATION_CATEGORY,
+                threadIdentifier: REMINDER_NOTIFICATION_CATEGORY,
+                schedule: {
+                    at: new Date(now.getTime() + 60_000),
+                },
+                extra: {
+                    source: TEST_NOTIFICATION_SOURCE,
+                    scheduledAt: now.toISOString(),
+                },
+            },
+        ],
+    });
+}

@@ -137,6 +137,35 @@ function formatMomentDate(value: string) {
   return parts.y > 0 ? dateWithYearFormatter.format(parsed) : dateFormatter.format(parsed);
 }
 
+function joinNaturalLanguage(parts: string[]) {
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
+  return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
+}
+
+function buildMilestoneConfirmation({
+  possessiveName,
+  hasBirthday,
+  hasAnniversary,
+  customMomentCount,
+}: {
+  possessiveName: string;
+  hasBirthday: boolean;
+  hasAnniversary: boolean;
+  customMomentCount: number;
+}) {
+  const selected: string[] = [];
+
+  if (hasBirthday) selected.push(`${possessiveName} birthday`);
+  if (hasAnniversary) selected.push(`${possessiveName} anniversary`);
+  if (customMomentCount === 1) selected.push("important date");
+  if (customMomentCount > 1) selected.push("important dates");
+
+  if (!selected.length) return "";
+  return `We'll remember ${joinNaturalLanguage(selected)}.`;
+}
+
 function formatPromptName(name: string) {
   const trimmed = name.trim();
   return trimmed || "this person";
@@ -288,18 +317,18 @@ function JourneyIntro({ shimmer, awake }: { shimmer: boolean; awake: boolean }) 
           d="M642 28C676 76 650 138 592 188C530 244 458 294 374 326C292 358 182 388 84 434"
           fill="none"
           stroke="url(#dkfJourneyStroke)"
-          strokeWidth="12"
+          strokeWidth="9"
           strokeLinecap="round"
           filter="url(#dkfJourneyBlur)"
-          opacity="0.28"
+          opacity="0.22"
         />
         <path
           d="M642 28C676 76 650 138 592 188C530 244 458 294 374 326C292 358 182 388 84 434"
           fill="none"
           stroke="url(#dkfJourneyStroke)"
-          strokeWidth="2.2"
+          strokeWidth="1.65"
           strokeLinecap="round"
-          opacity="0.58"
+          opacity="0.46"
         />
       </svg>
       <span className="dkf-journey-sparkle dkf-journey-sparkle-1">✦</span>
@@ -325,7 +354,7 @@ export default function AddPerson() {
 
   const birthdayMoment = findMoment(editingPerson, "birthday");
   const [name, setName] = useState(editingPerson?.name ?? "");
-  const [hasAdvancedFromName, setHasAdvancedFromName] = useState(Boolean(editingPerson?.name?.trim()));
+  const [isNameSettled, setIsNameSettled] = useState(Boolean(editingPerson?.name?.trim()));
   const [isNameFocused, setIsNameFocused] = useState(false);
   const [trailPulse, setTrailPulse] = useState(false);
   const [phone, setPhone] = useState(editingPerson?.phone ?? "");
@@ -368,6 +397,7 @@ export default function AddPerson() {
   );
   const lastPrefilledPersonIdRef = useRef<string | null>(null);
   const previousHasNameRef = useRef(Boolean((editingPerson?.name ?? "").trim()));
+  const relationshipStepRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!editingPerson?.id) {
@@ -377,7 +407,7 @@ export default function AddPerson() {
     if (lastPrefilledPersonIdRef.current === editingPerson.id) return;
     lastPrefilledPersonIdRef.current = editingPerson.id;
     setName(editingPerson.name || "");
-    setHasAdvancedFromName(Boolean(editingPerson.name?.trim()));
+    setIsNameSettled(Boolean(editingPerson.name?.trim()));
     setPhone(editingPerson.phone || "");
     setPhoneError(false);
   }, [editingPerson]);
@@ -404,24 +434,30 @@ export default function AddPerson() {
   const hasAnyReminder = Boolean(
     buildBirthdayIso(birthdayMonthDay, birthdayYear) || anniversary || customMoments.length
   );
-  const canShowReminderCard = hasAdvancedFromName && hasName && hasRelationship;
+  const showRelationshipStep = isNameSettled;
+  const canShowReminderCard = hasName && hasRelationship;
   const canShowSupportCard = canShowReminderCard && hasAnyReminder;
-  const canSave = hasAdvancedFromName && hasName && hasRelationship && hasAnyReminder;
-  const canContinueFromName = hasName;
-  const introStage = !hasAdvancedFromName;
+  const canSave = hasName && hasRelationship && hasAnyReminder;
+  const introStage = !showRelationshipStep;
   const savedBirthdayLabel = buildBirthdayIso(birthdayMonthDay, birthdayYear)
     ? formatMomentDate(buildBirthdayIso(birthdayMonthDay, birthdayYear))
     : null;
   const savedAnniversaryLabel = anniversary ? formatMonthDay(anniversary) : null;
+  const milestoneConfirmation = buildMilestoneConfirmation({
+    possessiveName: promptPossessive,
+    hasBirthday: Boolean(savedBirthdayLabel),
+    hasAnniversary: Boolean(savedAnniversaryLabel),
+    customMomentCount: customMoments.length,
+  });
 
   useEffect(() => {
     if (!introStage || hasName) return;
     const startTimer = window.setTimeout(() => {
       setTrailPulse(true);
-    }, 650);
+    }, 700);
     const stopTimer = window.setTimeout(() => {
       setTrailPulse(false);
-    }, 1850);
+    }, 1600);
     return () => {
       window.clearTimeout(startTimer);
       window.clearTimeout(stopTimer);
@@ -438,6 +474,19 @@ export default function AddPerson() {
     previousHasNameRef.current = hasName;
     return;
   }, [hasName]);
+
+  useEffect(() => {
+    if (!hasName) {
+      setIsNameSettled(false);
+      return;
+    }
+    if (name.trim().length < 2) {
+      setIsNameSettled(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setIsNameSettled(true), 700);
+    return () => window.clearTimeout(timer);
+  }, [hasName, name]);
 
   function resetCustomDraft() {
     setActiveCustomSuggestion(null);
@@ -563,9 +612,8 @@ export default function AddPerson() {
 
   const pageBackground = introStage
     ? [
-        "radial-gradient(circle at 18% 16%, rgba(255, 250, 239, 0.98) 0%, rgba(255, 243, 221, 0.62) 16%, rgba(255, 243, 221, 0) 34%)",
-        "radial-gradient(circle at 86% 10%, rgba(255, 245, 226, 0.95) 0%, rgba(252, 233, 188, 0.36) 18%, rgba(252, 233, 188, 0) 38%)",
-        "radial-gradient(circle at 68% 82%, rgba(255, 241, 208, 0.58) 0%, rgba(255, 241, 208, 0) 28%)",
+        "radial-gradient(circle at 19% 13%, rgba(255, 247, 231, 0.9) 0%, rgba(255, 239, 205, 0.34) 20%, rgba(255, 239, 205, 0) 44%)",
+        "radial-gradient(circle at 46% 42%, rgba(255, 246, 226, 0.54) 0%, rgba(252, 232, 188, 0.16) 20%, rgba(252, 232, 188, 0) 42%)",
         "linear-gradient(180deg, rgba(251,246,238,1) 0%, rgba(245,236,221,1) 100%)",
       ].join(", ")
     : "radial-gradient(circle at 28% 18%, rgba(255, 248, 233, 0.98) 0%, rgba(247, 239, 224, 0.96) 28%, rgba(242, 233, 217, 0.98) 64%, rgba(238, 228, 210, 1) 100%)";
@@ -581,25 +629,24 @@ export default function AddPerson() {
           boxSizing: "border-box",
         }}
       >
-        <div style={{ display: "grid", gap: introStage ? "1.8rem" : "1.35rem" }}>
-          {introStage ? (
-            <section
-              className="dkf-enter"
-              style={{
-                position: "relative",
-                overflow: "hidden",
-                borderRadius: "34px",
-                padding: "0.95rem 0 1.4rem",
-                minHeight: "760px",
-              }}
-            >
+        <div style={{ display: "grid", gap: showRelationshipStep ? "1.35rem" : "1.8rem" }}>
+          <section
+            className={hasName ? "dkf-enter dkf-journey-stage-ready" : "dkf-enter"}
+            style={{
+              position: "relative",
+              overflow: "hidden",
+              borderRadius: "34px",
+              padding: "0.95rem 0 1.4rem",
+              minHeight: showRelationshipStep ? "auto" : "760px",
+            }}
+          >
               <JourneyIntro shimmer={trailPulse} awake={isNameFocused || hasName} />
               <header
                 style={{
                   position: "relative",
                   zIndex: 1,
                   paddingTop: "1.2rem",
-                  maxWidth: "66%",
+                  maxWidth: "420px",
                 }}
               >
                 <OnboardingEyebrow>DoKnotForget</OnboardingEyebrow>
@@ -616,11 +663,11 @@ export default function AddPerson() {
                 style={{
                   position: "relative",
                   zIndex: 1,
-                  marginTop: "4.25rem",
+                  marginTop: "32px",
                 }}
               >
                 <PremiumInput
-                  shellClassName="dkf-journey-input-hero"
+                  shellClassName={hasName ? "dkf-journey-input-hero dkf-journey-input-ready" : "dkf-journey-input-hero"}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   onFocus={() => setIsNameFocused(true)}
@@ -642,10 +689,11 @@ export default function AddPerson() {
               </div>
 
               <div
+                className="dkf-journey-note"
                 style={{
                   position: "relative",
                   zIndex: 1,
-                  marginTop: "2.35rem",
+                  marginTop: "3.6rem",
                   marginLeft: "1.75rem",
                 }}
               >
@@ -655,15 +703,44 @@ export default function AddPerson() {
                   We&apos;ll build it together. ♡
                 </OnboardingBody>
               </div>
-            </section>
-          ) : null}
 
-          {hasAdvancedFromName ? (
-            <SurfaceCard>
+              {showRelationshipStep ? (
+                <div
+                  className="dkf-story-bridge"
+                  style={{
+                    position: "relative",
+                    zIndex: 1,
+                    marginTop: "2.2rem",
+                    marginLeft: "1.75rem",
+                  }}
+                >
+                  Tell us a little about {promptName}.
+                </div>
+              ) : null}
+          </section>
+
+          {showRelationshipStep ? (
+            <SurfaceCard
+              className="dkf-story-step-card"
+              style={{ scrollMarginTop: "120px" }}
+            >
               <div style={{ display: "grid", gap: "0.95rem" }}>
-                <div>
+                <div ref={relationshipStepRef}>
                   <div
                     style={{
+                      fontFamily: "var(--font-serif)",
+                      fontSize: "1.36rem",
+                      fontWeight: 400,
+                      color: "rgba(10, 27, 42, 0.94)",
+                      letterSpacing: "-0.02em",
+                      lineHeight: 1.14,
+                    }}
+                  >
+                    Tell us a little about {promptName}.
+                  </div>
+                  <div
+                    style={{
+                      marginTop: "0.5rem",
                       fontSize: "1.1rem",
                       fontWeight: 600,
                       color: "var(--ink)",
@@ -672,7 +749,7 @@ export default function AddPerson() {
                     How does {promptName} fit into your life?
                   </div>
                   <div style={{ marginTop: "0.32rem", color: "var(--muted)", fontSize: "0.95rem" }}>
-                    Choose what fits best.
+                    Choose what feels right.
                   </div>
                 </div>
 
@@ -867,7 +944,7 @@ export default function AddPerson() {
                         option.value === "birthday"
                           ? `We'll remember ${promptPossessive} birthday.`
                           : option.value === "anniversary"
-                            ? "We'll remember this."
+                            ? `We'll remember ${promptPossessive} anniversary.`
                             : "Important date added."
                       }
                       onClick={() => {
@@ -898,20 +975,16 @@ export default function AddPerson() {
                       <div style={{ color: "var(--ink)", fontSize: "0.95rem" }}>🎂 {promptPossessive} birthday: {savedBirthdayLabel}</div>
                     ) : null}
                     {savedAnniversaryLabel ? (
-                      <div style={{ color: "var(--ink)", fontSize: "0.95rem" }}>💕 Anniversary: {savedAnniversaryLabel}</div>
+                      <div style={{ color: "var(--ink)", fontSize: "0.95rem" }}>💕 {promptPossessive} anniversary: {savedAnniversaryLabel}</div>
                     ) : null}
                     {customMoments.slice(0, 2).map((moment, index) => (
                       <div key={`inline-${moment.title}-${index}`} style={{ color: "var(--ink)", fontSize: "0.95rem" }}>
                         ✨ {moment.title}: {formatMomentDate(moment.date)}
                       </div>
                     ))}
-                    <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
-                      {savedBirthdayLabel
-                        ? `We'll remember ${promptPossessive} birthday.`
-                        : savedAnniversaryLabel
-                          ? "We'll remember this."
-                          : "Important date added."}
-                    </div>
+                    {milestoneConfirmation ? (
+                      <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>{milestoneConfirmation}</div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -1244,24 +1317,17 @@ export default function AddPerson() {
             Cancel
           </button>
           <PrimaryButton
-            onClick={() => {
-              if (!hasAdvancedFromName) {
-                if (!canContinueFromName) return;
-                setHasAdvancedFromName(true);
-                return;
-              }
-              handleSave();
-            }}
-            disabled={hasAdvancedFromName ? !canSave : !canContinueFromName}
+            onClick={handleSave}
+            disabled={!canSave}
             quietDisabled
             style={{
               flex: 1,
-              padding: introStage ? "1.34rem 1.4rem" : "1rem 1.2rem",
-              borderRadius: introStage ? "999px" : "20px",
+              padding: showRelationshipStep ? "1rem 1.2rem" : "1.34rem 1.4rem",
+              borderRadius: showRelationshipStep ? "20px" : "999px",
               transform: "scale(1)",
             }}
           >
-            Continue
+            {hasName ? `Add ${promptName} to My Circle` : "Add to My Circle"}
           </PrimaryButton>
         </div>
         {introStage ? (
@@ -1284,7 +1350,7 @@ export default function AddPerson() {
             <span>Your memories are always private and secure.</span>
           </div>
         ) : null}
-        {hasAdvancedFromName && !canSave && hasName ? (
+        {hasName && !canSave ? (
           <div
             style={{
               maxWidth: "760px",
@@ -1293,7 +1359,9 @@ export default function AddPerson() {
               fontSize: "0.9rem",
             }}
           >
-            {hasRelationship ? "Start with one moment that matters." : "Choose the relationship, then add one moment that matters."}
+            {!hasRelationship
+              ? `Add a little context so we can help you show up well for ${promptName}.`
+              : "Start with one moment that matters."}
           </div>
         ) : null}
       </div>
