@@ -22,10 +22,10 @@ type DisplayRelationship =
   | "partner"
   | "friend"
   | "child"
+  | "someoneElsesChild"
   | "parent"
   | "sibling"
-  | "neighbor"
-  | "someoneImportant";
+  | "neighbor";
 
 type ReminderChoice = "birthday" | "anniversary" | "custom";
 
@@ -38,11 +38,11 @@ const RELATIONSHIP_OPTIONS: Array<{
 }> = [
   { value: "partner", label: "Partner", saveType: "partner" },
   { value: "friend", label: "Friend", saveType: "friend" },
-  { value: "child", label: "Child", saveType: "child" },
+  { value: "child", label: "My child", saveType: "child" },
+  { value: "someoneElsesChild", label: "Someone else's child", saveType: "child" },
   { value: "parent", label: "Parent", saveType: "parent" },
   { value: "sibling", label: "Sibling", saveType: "sibling" },
   { value: "neighbor", label: "Neighbor", saveType: "other" },
-  { value: "someoneImportant", label: "Someone important", saveType: "other" },
 ];
 
 const REMINDER_OPTIONS: Array<{ value: ReminderChoice; label: string }> = [
@@ -137,35 +137,6 @@ function formatMomentDate(value: string) {
   return parts.y > 0 ? dateWithYearFormatter.format(parsed) : dateFormatter.format(parsed);
 }
 
-function joinNaturalLanguage(parts: string[]) {
-  if (parts.length === 0) return "";
-  if (parts.length === 1) return parts[0];
-  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
-  return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
-}
-
-function buildMilestoneConfirmation({
-  possessiveName,
-  hasBirthday,
-  hasAnniversary,
-  customMomentCount,
-}: {
-  possessiveName: string;
-  hasBirthday: boolean;
-  hasAnniversary: boolean;
-  customMomentCount: number;
-}) {
-  const selected: string[] = [];
-
-  if (hasBirthday) selected.push(`${possessiveName} birthday`);
-  if (hasAnniversary) selected.push(`${possessiveName} anniversary`);
-  if (customMomentCount === 1) selected.push("important date");
-  if (customMomentCount > 1) selected.push("important dates");
-
-  if (!selected.length) return "";
-  return `We'll remember ${joinNaturalLanguage(selected)}.`;
-}
-
 function formatPromptName(name: string) {
   const trimmed = name.trim();
   return trimmed || "this person";
@@ -181,6 +152,17 @@ function findMoment(person: Person | null, type: Moment["type"]) {
   return (person?.moments ?? []).find((moment) => moment.type === type) ?? null;
 }
 
+const PENDING_CHILD_DRAFT_STORAGE_KEY = "dkf_pending_child_relationship_draft";
+
+type PendingChildRelationshipDraft = {
+  name: string;
+  phone: string;
+  birthdayMonthDay: string;
+  birthdayYear: string;
+  anniversary: string;
+  customMoments: Array<{ title: string; date: string }>;
+};
+
 function SurfaceCard({
   children,
   className,
@@ -192,14 +174,16 @@ function SurfaceCard({
 }) {
   return (
     <section
-      className={className ? `dkf-enter ${className}` : "dkf-enter"}
+      className={className ? `dkf-enter dkf-memory-section ${className}` : "dkf-enter dkf-memory-section"}
       style={{
-        borderRadius: "28px",
-        border: "1px solid rgba(10, 27, 42, 0.08)",
-        background: "rgba(255,255,255,0.86)",
-        boxShadow: "0 16px 45px rgba(32, 26, 17, 0.06)",
-        padding: "1.2rem",
-        backdropFilter: "blur(18px)",
+        borderRadius: "26px",
+        border: "1px solid rgba(10, 27, 42, 0.05)",
+        background:
+          "linear-gradient(180deg, rgba(255,255,255,0.4) 0%, rgba(255,251,247,0.26) 100%)",
+        boxShadow:
+          "0 10px 28px rgba(10, 27, 42, 0.035), inset 0 1px 0 rgba(255,255,255,0.52)",
+        padding: "1.35rem 1.1rem 1.05rem",
+        backdropFilter: "blur(12px)",
         ...style,
       }}
     >
@@ -223,16 +207,16 @@ function ChipButton({
       onClick={onClick}
       style={{
         borderRadius: "999px",
-        border: active ? "1px solid rgba(10, 27, 42, 0.18)" : "1px solid rgba(10, 27, 42, 0.1)",
+        border: active ? "1px solid rgba(10, 27, 42, 0.16)" : "1px solid rgba(10, 27, 42, 0.08)",
         background: active
-          ? "linear-gradient(145deg, rgba(242,231,210,0.95), rgba(226,204,162,0.92))"
-          : "rgba(255,255,255,0.9)",
-        color: "var(--ink)",
-        padding: "0.85rem 1rem",
+          ? "linear-gradient(180deg, rgba(247, 239, 240, 0.98) 0%, rgba(250, 244, 236, 0.96) 100%)"
+          : "rgba(255,255,255,0.52)",
+        color: active ? "rgba(10, 27, 42, 0.96)" : "var(--ink)",
+        padding: "0.82rem 1rem",
         fontSize: "0.96rem",
-        fontWeight: 600,
+        fontWeight: active ? 700 : 600,
         textAlign: "center",
-        boxShadow: active ? "0 10px 22px rgba(82, 62, 32, 0.08)" : "none",
+        boxShadow: active ? "0 8px 18px rgba(10, 27, 42, 0.06)" : "none",
       }}
     >
       {label}
@@ -244,13 +228,11 @@ function ChoiceCard({
   active,
   label,
   inactiveCopy,
-  activeCopy,
   onClick,
 }: {
   active: boolean;
   label: string;
   inactiveCopy: string;
-  activeCopy: string;
   onClick: () => void;
 }) {
   return (
@@ -260,19 +242,20 @@ function ChoiceCard({
       style={{
         textAlign: "left",
         borderRadius: "22px",
-        border: active ? "1px solid rgba(10, 27, 42, 0.18)" : "1px solid rgba(10, 27, 42, 0.1)",
+        border: active ? "1px solid rgba(10, 27, 42, 0.16)" : "1px solid rgba(10, 27, 42, 0.07)",
         background: active
-          ? "linear-gradient(180deg, rgba(247,241,232,0.96) 0%, rgba(238,224,197,0.92) 100%)"
-          : "rgba(255,255,255,0.92)",
+          ? "linear-gradient(180deg, rgba(244, 228, 232, 0.96) 0%, rgba(248, 240, 231, 0.94) 100%)"
+          : "rgba(255,255,255,0.46)",
         color: "var(--ink)",
-        padding: "1rem",
+        padding: "1.08rem 1rem",
         display: "grid",
-        gap: "0.28rem",
-        minHeight: "82px",
+        gap: "0.32rem",
+        minHeight: "88px",
+        boxShadow: active ? "0 12px 24px rgba(10, 27, 42, 0.08)" : "none",
       }}
     >
       <span style={{ fontSize: "1.02rem", fontWeight: 600 }}>{label}</span>
-      <span style={{ color: "var(--muted)", fontSize: "0.88rem" }}>{active ? activeCopy : inactiveCopy}</span>
+      <span style={{ color: "var(--muted)", fontSize: "0.88rem" }}>{inactiveCopy}</span>
     </button>
   );
 }
@@ -347,6 +330,8 @@ export default function AddPerson() {
 
   const editPersonId =
     (location.state as any)?.personId ?? (location.state as any)?.editPersonId ?? null;
+  const resumeLinkedChildDraft = (location.state as any)?.resumeLinkedChildDraft === true;
+  const linkedChildParentId = String((location.state as any)?.linkedChildParentId ?? "").trim();
   const editingPerson =
     (editPersonId ? people.find((p) => p.id === editPersonId) : null) ??
     ((location.state as any)?.person as Person | undefined) ??
@@ -360,12 +345,8 @@ export default function AddPerson() {
   const [phone, setPhone] = useState(editingPerson?.phone ?? "");
   const [phoneError, setPhoneError] = useState(false);
   const [selectedRelationship, setSelectedRelationship] = useState<DisplayRelationship | null>(null);
-  const [linkMode, setLinkMode] = useState<"hidden" | "prompt" | "picker">(
-    people.length > (editingPerson ? 1 : 0) ? "prompt" : "hidden"
-  );
   const [selectedConnectionId, setSelectedConnectionId] = useState("");
   const [connectionRelationship, setConnectionRelationship] = useState<RelationshipType>("friend");
-  const [connectionSearch, setConnectionSearch] = useState("");
   const [birthdayMonthDay, setBirthdayMonthDay] = useState(
     birthdayMoment?.date ? toDraftFromIso(birthdayMoment.date).monthDay : ""
   );
@@ -397,7 +378,7 @@ export default function AddPerson() {
   );
   const lastPrefilledPersonIdRef = useRef<string | null>(null);
   const previousHasNameRef = useRef(Boolean((editingPerson?.name ?? "").trim()));
-  const relationshipStepRef = useRef<HTMLDivElement | null>(null);
+  const hasHydratedPendingChildDraftRef = useRef(false);
 
   useEffect(() => {
     if (!editingPerson?.id) {
@@ -412,43 +393,78 @@ export default function AddPerson() {
     setPhoneError(false);
   }, [editingPerson]);
 
+  useEffect(() => {
+    if (!resumeLinkedChildDraft || hasHydratedPendingChildDraftRef.current || editingPerson) return;
+    hasHydratedPendingChildDraftRef.current = true;
+    try {
+      const rawDraft = window.sessionStorage.getItem(PENDING_CHILD_DRAFT_STORAGE_KEY);
+      if (!rawDraft) return;
+      const draft = JSON.parse(rawDraft) as PendingChildRelationshipDraft;
+      setName(draft.name ?? "");
+      setPhone(draft.phone ?? "");
+      setPhoneError(false);
+      setBirthdayMonthDay(draft.birthdayMonthDay ?? "");
+      setBirthdayYear(draft.birthdayYear ?? "");
+      setBirthdayDraftMonthDay(draft.birthdayMonthDay ?? "");
+      setBirthdayDraftYear(draft.birthdayYear ?? "");
+      setAnniversary(draft.anniversary ?? "");
+      setAnniversaryDraftMonthDay(
+        draft.anniversary ? toDraftFromIso(`0000-${draft.anniversary}`).monthDay : ""
+      );
+      setAnniversaryDraftYear("");
+      setCustomMoments(Array.isArray(draft.customMoments) ? draft.customMoments : []);
+      setSelectedRelationship("someoneElsesChild");
+      setSelectedConnectionId(linkedChildParentId);
+      setConnectionRelationship("child");
+      setHasInteractedWithReminderArea(
+        Boolean(
+          buildBirthdayIso(draft.birthdayMonthDay ?? "", draft.birthdayYear ?? "") ||
+            (draft.anniversary ?? "").trim() ||
+            (draft.customMoments ?? []).length
+        )
+      );
+      window.sessionStorage.removeItem(PENDING_CHILD_DRAFT_STORAGE_KEY);
+    } catch {
+      window.sessionStorage.removeItem(PENDING_CHILD_DRAFT_STORAGE_KEY);
+    }
+  }, [editingPerson, linkedChildParentId, resumeLinkedChildDraft]);
+
   const selectedRelationshipOption = useMemo(
     () => RELATIONSHIP_OPTIONS.find((option) => option.value === selectedRelationship) ?? null,
     [selectedRelationship]
   );
-
-  const relationshipLabel = selectedRelationshipOption?.label ?? null;
-
-  const availableConnectionPeople = useMemo(() => {
-    return people.filter((person) => {
-      if (person.id === editingPerson?.id) return false;
-      if (!connectionSearch.trim()) return true;
-      return person.name.toLowerCase().includes(connectionSearch.trim().toLowerCase());
-    });
-  }, [connectionSearch, editingPerson?.id, people]);
+  const availableParentConnections = useMemo(
+    () =>
+      [...people]
+        .filter((person) => person.id !== editPersonId && person.name.trim())
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })),
+    [editPersonId, people]
+  );
+  const selectedParentConnection = useMemo(
+    () => availableParentConnections.find((person) => person.id === selectedConnectionId) ?? null,
+    [availableParentConnections, selectedConnectionId]
+  );
 
   const promptName = formatPromptName(name);
   const promptPossessive = possessive(name);
   const hasName = Boolean(name.trim());
-  const hasRelationship = Boolean(selectedRelationshipOption);
+  const requiresParentSelection = selectedRelationship === "someoneElsesChild";
+  const hasRelationship = requiresParentSelection
+    ? Boolean(selectedRelationshipOption && selectedConnectionId.trim())
+    : Boolean(selectedRelationshipOption);
   const hasAnyReminder = Boolean(
     buildBirthdayIso(birthdayMonthDay, birthdayYear) || anniversary || customMoments.length
   );
-  const showRelationshipStep = isNameSettled;
-  const canShowReminderCard = hasName && hasRelationship;
-  const canShowSupportCard = canShowReminderCard && hasAnyReminder;
+  const showStorySteps = isNameSettled;
+  const canShowReminderCard = hasName;
+  const canShowPhoneCard = canShowReminderCard && hasAnyReminder;
+  const canShowRelationshipCard = canShowPhoneCard;
   const canSave = hasName && hasRelationship && hasAnyReminder;
-  const introStage = !showRelationshipStep;
+  const introStage = !showStorySteps;
   const savedBirthdayLabel = buildBirthdayIso(birthdayMonthDay, birthdayYear)
     ? formatMomentDate(buildBirthdayIso(birthdayMonthDay, birthdayYear))
     : null;
   const savedAnniversaryLabel = anniversary ? formatMonthDay(anniversary) : null;
-  const milestoneConfirmation = buildMilestoneConfirmation({
-    possessiveName: promptPossessive,
-    hasBirthday: Boolean(savedBirthdayLabel),
-    hasAnniversary: Boolean(savedAnniversaryLabel),
-    customMomentCount: customMoments.length,
-  });
 
   useEffect(() => {
     if (!introStage || hasName) return;
@@ -506,6 +522,27 @@ export default function AddPerson() {
 
   function deleteCustomMomentByIndex(index: number) {
     setCustomMoments((prev) => prev.filter((_, idx) => idx !== index));
+  }
+
+  function startAddParentFirst() {
+    const draft: PendingChildRelationshipDraft = {
+      name,
+      phone,
+      birthdayMonthDay,
+      birthdayYear,
+      anniversary,
+      customMoments,
+    };
+    try {
+      window.sessionStorage.setItem(PENDING_CHILD_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    } catch {
+      // ignore
+    }
+    navigate("/add", {
+      state: {
+        addParentForLinkedChild: true,
+      },
+    });
   }
 
   function handleSave() {
@@ -603,20 +640,36 @@ export default function AddPerson() {
       return;
     }
 
+    if ((location.state as any)?.addParentForLinkedChild === true) {
+      navigate("/add", {
+        state: {
+          resumeLinkedChildDraft: true,
+          linkedChildParentId: person.id,
+        },
+      });
+      return;
+    }
+
     navigate("/contacts", {
       state: {
         circleSuccessMessage: `${person.name.trim() || "Someone"} is in your circle.`,
+        addedPersonId: person.id,
       },
     });
   }
 
   const pageBackground = introStage
     ? [
-        "radial-gradient(circle at 19% 13%, rgba(255, 247, 231, 0.9) 0%, rgba(255, 239, 205, 0.34) 20%, rgba(255, 239, 205, 0) 44%)",
-        "radial-gradient(circle at 46% 42%, rgba(255, 246, 226, 0.54) 0%, rgba(252, 232, 188, 0.16) 20%, rgba(252, 232, 188, 0) 42%)",
-        "linear-gradient(180deg, rgba(251,246,238,1) 0%, rgba(245,236,221,1) 100%)",
+        "radial-gradient(circle at 18% 16%, rgba(255, 247, 236, 0.9) 0%, rgba(255, 238, 212, 0.26) 22%, rgba(255, 238, 212, 0) 46%)",
+        "radial-gradient(circle at 78% 22%, rgba(241, 223, 226, 0.32) 0%, rgba(241, 223, 226, 0.08) 20%, rgba(241, 223, 226, 0) 42%)",
+        "radial-gradient(circle at 42% 44%, rgba(250, 234, 198, 0.18) 0%, rgba(250, 234, 198, 0) 36%)",
+        "linear-gradient(180deg, rgba(249,244,238,1) 0%, rgba(243,235,226,1) 100%)",
       ].join(", ")
-    : "radial-gradient(circle at 28% 18%, rgba(255, 248, 233, 0.98) 0%, rgba(247, 239, 224, 0.96) 28%, rgba(242, 233, 217, 0.98) 64%, rgba(238, 228, 210, 1) 100%)";
+    : [
+        "radial-gradient(circle at 20% 16%, rgba(255, 246, 234, 0.74) 0%, rgba(255, 246, 234, 0) 30%)",
+        "radial-gradient(circle at 82% 18%, rgba(236, 214, 218, 0.26) 0%, rgba(236, 214, 218, 0) 28%)",
+        "linear-gradient(180deg, rgba(246,239,232,1) 0%, rgba(241,233,224,1) 100%)",
+      ].join(", ");
 
   return (
     <div style={{ background: pageBackground, color: "var(--ink)", minHeight: "100vh" }}>
@@ -629,7 +682,7 @@ export default function AddPerson() {
           boxSizing: "border-box",
         }}
       >
-        <div style={{ display: "grid", gap: showRelationshipStep ? "1.35rem" : "1.8rem" }}>
+        <div style={{ display: "grid", gap: showStorySteps ? "2rem" : "1.8rem" }}>
           <section
             className={hasName ? "dkf-enter dkf-journey-stage-ready" : "dkf-enter"}
             style={{
@@ -637,7 +690,7 @@ export default function AddPerson() {
               overflow: "hidden",
               borderRadius: "34px",
               padding: "0.95rem 0 1.4rem",
-              minHeight: showRelationshipStep ? "auto" : "760px",
+              minHeight: showStorySteps ? "auto" : "760px",
             }}
           >
               <JourneyIntro shimmer={trailPulse} awake={isNameFocused || hasName} />
@@ -663,7 +716,7 @@ export default function AddPerson() {
                 style={{
                   position: "relative",
                   zIndex: 1,
-                  marginTop: "32px",
+                  marginTop: "28px",
                 }}
               >
                 <PremiumInput
@@ -693,7 +746,7 @@ export default function AddPerson() {
                 style={{
                   position: "relative",
                   zIndex: 1,
-                  marginTop: "3.6rem",
+                  marginTop: "4.4rem",
                   marginLeft: "1.75rem",
                 }}
               >
@@ -704,208 +757,14 @@ export default function AddPerson() {
                 </OnboardingBody>
               </div>
 
-              {showRelationshipStep ? (
-                <div
-                  className="dkf-story-bridge"
-                  style={{
-                    position: "relative",
-                    zIndex: 1,
-                    marginTop: "2.2rem",
-                    marginLeft: "1.75rem",
-                  }}
-                >
-                  Tell us a little about {promptName}.
-                </div>
-              ) : null}
           </section>
-
-          {showRelationshipStep ? (
-            <SurfaceCard
-              className="dkf-story-step-card"
-              style={{ scrollMarginTop: "120px" }}
-            >
-              <div style={{ display: "grid", gap: "0.95rem" }}>
-                <div ref={relationshipStepRef}>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-serif)",
-                      fontSize: "1.36rem",
-                      fontWeight: 400,
-                      color: "rgba(10, 27, 42, 0.94)",
-                      letterSpacing: "-0.02em",
-                      lineHeight: 1.14,
-                    }}
-                  >
-                    Tell us a little about {promptName}.
-                  </div>
-                  <div
-                    style={{
-                      marginTop: "0.5rem",
-                      fontSize: "1.1rem",
-                      fontWeight: 600,
-                      color: "var(--ink)",
-                    }}
-                  >
-                    How does {promptName} fit into your life?
-                  </div>
-                  <div style={{ marginTop: "0.32rem", color: "var(--muted)", fontSize: "0.95rem" }}>
-                    Choose what feels right.
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))",
-                    gap: "0.72rem",
-                  }}
-                >
-                  {RELATIONSHIP_OPTIONS.map((option) => (
-                    <ChipButton
-                      key={option.value}
-                      active={selectedRelationship === option.value}
-                      label={option.label}
-                      onClick={() => {
-                        setSelectedRelationship(option.value);
-                        if (!selectedConnectionId) setConnectionRelationship(option.saveType);
-                      }}
-                    />
-                  ))}
-                </div>
-
-                {relationshipLabel ? (
-                  <div className="dkf-fade-in-140" style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
-                    {promptName} is your {relationshipLabel.toLowerCase()}.
-                  </div>
-                ) : null}
-
-                {hasRelationship && people.length > (editingPerson ? 1 : 0) ? (
-                  <div
-                    style={{
-                      marginTop: "0.25rem",
-                      paddingTop: "1rem",
-                      borderTop: "1px solid rgba(10, 27, 42, 0.08)",
-                      display: "grid",
-                      gap: "0.8rem",
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: "0.98rem", fontWeight: 600, color: "var(--ink)" }}>
-                        Is {promptName} connected to someone already in your circle?
-                      </div>
-                      <div style={{ marginTop: "0.25rem", color: "var(--muted)", fontSize: "0.9rem" }}>
-                        Optional.
-                      </div>
-                    </div>
-
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.7rem" }}>
-                      <ChipButton
-                        active={linkMode !== "picker"}
-                        label="No, not now"
-                        onClick={() => {
-                          setLinkMode("prompt");
-                          setSelectedConnectionId("");
-                        }}
-                      />
-                      <ChipButton
-                        active={linkMode === "picker"}
-                        label="Yes, connect someone"
-                        onClick={() => setLinkMode("picker")}
-                      />
-                    </div>
-
-                    {linkMode === "picker" ? (
-                      <div className="dkf-enter" style={{ display: "grid", gap: "0.8rem" }}>
-                        <input
-                          value={connectionSearch}
-                          onChange={(e) => setConnectionSearch(e.target.value)}
-                          placeholder="Search your circle"
-                          style={{
-                            width: "100%",
-                            padding: "0.95rem 1rem",
-                            borderRadius: "18px",
-                            border: "1px solid rgba(10, 27, 42, 0.1)",
-                            background: "rgba(255,255,255,0.95)",
-                          }}
-                        />
-                        <div style={{ display: "grid", gap: "0.65rem", maxHeight: "260px", overflowY: "auto" }}>
-                          {availableConnectionPeople.slice(0, 6).map((person) => {
-                            const selected = selectedConnectionId === person.id;
-                            return (
-                              <button
-                                key={person.id}
-                                type="button"
-                                onClick={() => setSelectedConnectionId(person.id)}
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "0.9rem",
-                                  textAlign: "left",
-                                  padding: "0.9rem 1rem",
-                                  borderRadius: "18px",
-                                  border: selected
-                                    ? "1px solid rgba(10, 27, 42, 0.18)"
-                                    : "1px solid rgba(10, 27, 42, 0.08)",
-                                  background: selected
-                                    ? "linear-gradient(180deg, rgba(247,241,232,0.96), rgba(238,224,197,0.9))"
-                                    : "rgba(255,255,255,0.92)",
-                                  color: "var(--ink)",
-                                }}
-                              >
-                                <div
-                                  aria-hidden="true"
-                                  style={{
-                                    width: "36px",
-                                    height: "36px",
-                                    borderRadius: "14px",
-                                    background: "rgba(229, 211, 177, 0.8)",
-                                    display: "grid",
-                                    placeItems: "center",
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  {(person.name.trim()[0] ?? "?").toUpperCase()}
-                                </div>
-                                <div style={{ minWidth: 0 }}>
-                                  <div style={{ fontSize: "0.98rem", fontWeight: 600 }}>{person.name}</div>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        {selectedConnectionId ? (
-                          <div style={{ display: "grid", gap: "0.6rem" }}>
-                            <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Choose the connection.</div>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.65rem" }}>
-                              {RELATIONSHIP_OPTIONS.filter((option) => option.value !== "neighbor").map((option) => (
-                                <ChipButton
-                                  key={`connection-${option.value}`}
-                                  active={connectionRelationship === option.saveType}
-                                  label={option.label}
-                                  onClick={() => setConnectionRelationship(option.saveType)}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            </SurfaceCard>
-          ) : null}
 
           {canShowReminderCard ? (
             <SurfaceCard>
               <div style={{ display: "grid", gap: "1rem" }}>
                 <div>
                   <div style={{ fontSize: "1.14rem", fontWeight: 600, color: "var(--ink)" }}>
-                    What’s the first thing you’d like us to remember about {promptName}?
-                  </div>
-                  <div style={{ marginTop: "0.3rem", color: "var(--muted)", fontSize: "0.95rem" }}>
-                    Start with what matters most.
+                    What would you like us to remember about {promptName}?
                   </div>
                 </div>
 
@@ -939,13 +798,6 @@ export default function AddPerson() {
                           : option.value === "anniversary"
                             ? "Worth honoring well."
                             : "A moment that matters."
-                      }
-                      activeCopy={
-                        option.value === "birthday"
-                          ? `We'll remember ${promptPossessive} birthday.`
-                          : option.value === "anniversary"
-                            ? `We'll remember ${promptPossessive} anniversary.`
-                            : "Important date added."
                       }
                       onClick={() => {
                         setHasInteractedWithReminderArea(true);
@@ -982,9 +834,6 @@ export default function AddPerson() {
                         ✨ {moment.title}: {formatMomentDate(moment.date)}
                       </div>
                     ))}
-                    {milestoneConfirmation ? (
-                      <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>{milestoneConfirmation}</div>
-                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -1175,18 +1024,9 @@ export default function AddPerson() {
             }}
           />
 
-          {canShowSupportCard ? (
+          {canShowPhoneCard ? (
             <SurfaceCard>
               <div style={{ display: "grid", gap: "1rem" }}>
-                <div>
-                  <div style={{ fontSize: "1.08rem", fontWeight: 600, color: "var(--ink)" }}>
-                    You can stop here, or add one more helpful detail.
-                  </div>
-                  <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.95rem" }}>
-                    {promptName} is already ready to add. Anything below is optional and easy to come back to.
-                  </div>
-                </div>
-
                 {customMoments.length ? (
                   <div style={{ display: "grid", gap: "0.6rem" }}>
                     {customMoments.map((moment, index) => (
@@ -1197,10 +1037,10 @@ export default function AddPerson() {
                           alignItems: "center",
                           justifyContent: "space-between",
                           gap: "1rem",
-                          borderRadius: "16px",
-                          background: "rgba(255,255,255,0.78)",
-                          padding: "0.85rem 0.95rem",
-                          border: "1px solid rgba(10, 27, 42, 0.06)",
+                          borderRadius: "18px",
+                          background: "rgba(245, 233, 234, 0.34)",
+                          padding: "0.95rem 1rem",
+                          border: "1px solid rgba(10, 27, 42, 0.05)",
                         }}
                       >
                         <div style={{ minWidth: 0 }}>
@@ -1232,16 +1072,17 @@ export default function AddPerson() {
                 <div
                   style={{
                     display: "grid",
-                    gap: "0.8rem",
-                    padding: "1rem",
+                    gap: "0.85rem",
+                    padding: "0.85rem 0.95rem",
                     borderRadius: "22px",
-                    border: "1px solid rgba(10, 27, 42, 0.08)",
-                    background: "rgba(255,255,255,0.75)",
+                    border: "1px solid rgba(10, 27, 42, 0.045)",
+                    background:
+                      "linear-gradient(180deg, rgba(248, 238, 239, 0.24) 0%, rgba(255,255,255,0.18) 100%)",
                   }}
                 >
                   <div style={{ color: "var(--ink)", fontWeight: 600 }}>Want to make reaching out easier later?</div>
                   <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
-                    If you have {promptPossessive} number, future reminders can be easier to act on.
+                    Add a phone number so reminders can include quick actions like texting or calling.
                   </div>
                   <input
                     type="tel"
@@ -1255,16 +1096,152 @@ export default function AddPerson() {
                     placeholder="Phone number"
                     style={{
                       width: "100%",
-                      padding: "0.95rem 1rem",
-                      borderRadius: "16px",
-                      border: "1px solid rgba(10, 27, 42, 0.1)",
-                      background: "rgba(255,255,255,0.95)",
+                      padding: "0.98rem 1rem",
+                      borderRadius: "18px",
+                      border: "1px solid rgba(10, 27, 42, 0.08)",
+                      background: "rgba(255,255,255,0.46)",
                     }}
                   />
                   {phoneError ? (
                     <div style={{ color: "#b42318", fontSize: "0.86rem" }}>Enter a valid phone number.</div>
                   ) : null}
                 </div>
+              </div>
+            </SurfaceCard>
+          ) : null}
+
+          {canShowRelationshipCard ? (
+            <SurfaceCard className="dkf-story-step-card" style={{ scrollMarginTop: "120px" }}>
+              <div style={{ display: "grid", gap: "0.95rem" }}>
+                <div>
+                  <div
+                    style={{
+                      fontSize: "1.1rem",
+                      fontWeight: 600,
+                      color: "var(--ink)",
+                    }}
+                  >
+                    How does {promptName} fit into your life?
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))",
+                    gap: "0.72rem",
+                  }}
+                >
+                  {RELATIONSHIP_OPTIONS.map((option) => (
+                    <ChipButton
+                      key={option.value}
+                      active={selectedRelationship === option.value}
+                      label={option.label}
+                      onClick={() => {
+                        setSelectedRelationship(option.value);
+                        if (option.value === "someoneElsesChild") {
+                          setConnectionRelationship("child");
+                          return;
+                        }
+                        setSelectedConnectionId("");
+                        setConnectionRelationship(option.saveType);
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {selectedRelationship === "someoneElsesChild" ? (
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: "0.95rem",
+                      padding: "0.95rem 0 0.15rem",
+                    }}
+                  >
+                    <div style={{ display: "grid", gap: "0.34rem" }}>
+                      <div style={{ color: "var(--ink)", fontWeight: 600 }}>
+                        Whose child is this?
+                      </div>
+                      <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
+                        Choose the parent or guardian already in your circle.
+                      </div>
+                    </div>
+
+                    {availableParentConnections.length ? (
+                      <div style={{ display: "grid", gap: "0.72rem" }}>
+                        <div style={{ color: "rgba(10, 27, 42, 0.62)", fontSize: "0.82rem", fontWeight: 600, letterSpacing: "0.02em", textTransform: "uppercase" }}>
+                          In your circle
+                        </div>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                            gap: "0.72rem",
+                          }}
+                        >
+                        {availableParentConnections.map((person) => (
+                          <ChipButton
+                            key={person.id}
+                            active={selectedConnectionId === person.id}
+                            label={person.name.trim()}
+                            onClick={() => {
+                              setSelectedConnectionId(person.id);
+                              setConnectionRelationship("child");
+                            }}
+                          />
+                        ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          color: "var(--muted)",
+                          fontSize: "0.92rem",
+                          lineHeight: 1.55,
+                          padding: "0.1rem 0 0.15rem",
+                        }}
+                      >
+                        There isn&apos;t anyone in your circle to connect {promptName} through yet.
+                      </div>
+                    )}
+
+                    {selectedParentConnection ? (
+                      <div
+                        style={{
+                          borderRadius: "18px",
+                          border: "1px solid rgba(10, 27, 42, 0.06)",
+                          background: "linear-gradient(180deg, rgba(247, 239, 240, 0.55) 0%, rgba(255,255,255,0.2) 100%)",
+                          padding: "0.9rem 0.95rem",
+                          color: "var(--ink)",
+                          fontSize: "0.92rem",
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        {promptName} will be connected through {selectedParentConnection.name.trim()}.
+                      </div>
+                    ) : null}
+
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
+                      <button
+                        type="button"
+                        onClick={startAddParentFirst}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          color: "rgba(10, 27, 42, 0.92)",
+                          padding: 0,
+                          fontSize: "0.94rem",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Add parent or guardian first
+                      </button>
+                      <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+                        If they&apos;re not here yet, add them first and we&apos;ll bring you right back.
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </SurfaceCard>
           ) : null}
@@ -1322,8 +1299,8 @@ export default function AddPerson() {
             quietDisabled
             style={{
               flex: 1,
-              padding: showRelationshipStep ? "1rem 1.2rem" : "1.34rem 1.4rem",
-              borderRadius: showRelationshipStep ? "20px" : "999px",
+              padding: showStorySteps ? "1rem 1.2rem" : "1.34rem 1.4rem",
+              borderRadius: showStorySteps ? "20px" : "999px",
               transform: "scale(1)",
             }}
           >
@@ -1359,9 +1336,11 @@ export default function AddPerson() {
               fontSize: "0.9rem",
             }}
           >
-            {!hasRelationship
-              ? `Add a little context so we can help you show up well for ${promptName}.`
-              : "Start with one moment that matters."}
+            {!hasAnyReminder
+              ? "Start with one moment that matters."
+              : !hasRelationship
+                ? `Add a little context so we can help you show up well for ${promptName}.`
+                : ""}
           </div>
         ) : null}
       </div>

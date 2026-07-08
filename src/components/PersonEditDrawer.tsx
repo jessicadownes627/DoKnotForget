@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Child, ChildSchoolEventType, Moment, Person } from "../models/Person";
+import type { Moment, Person } from "../models/Person";
 import MomentDatePicker from "./MomentDatePicker";
 import { normalizePhone } from "../utils/phone";
 import {
@@ -12,10 +12,17 @@ import { getSuggestedChildNameFromPersonName } from "../utils/personNameSuggesti
 type Props = {
   isOpen: boolean;
   person: Person;
-  initialChildId?: string | null;
   startWithNewChild?: boolean;
   onClose: () => void;
   onSave: (updated: Person) => void;
+  onAddChildren: (updatedParent: Person, children: FamilyChildDraft[]) => void;
+};
+
+export type FamilyChildDraft = {
+  id: string;
+  name: string;
+  monthDay: string;
+  year: string;
 };
 
 const overlayStyle: React.CSSProperties = {
@@ -122,26 +129,13 @@ function formatMomentDate(value: string) {
   return parts.y > 0 ? dateWithYearFormatter.format(parsed) : dateFormatter.format(parsed);
 }
 
-function schoolEventLabel(type: ChildSchoolEventType) {
-  if (type === "firstDay") return "First day of school";
-  if (type === "kGrad") return "Kindergarten graduation";
-  if (type === "5thMoveUp") return "5th grade moving-up";
-  if (type === "8thGrad") return "8th grade graduation";
-  if (type === "hsGrad") return "High school graduation";
-  if (type === "communion") return "Communion";
-  if (type === "confirmation") return "Confirmation";
-  if (type === "barMitzvah") return "Bar mitzvah";
-  if (type === "batMitzvah") return "Bat mitzvah";
-  return "Custom milestone";
-}
-
 export default function PersonEditDrawer({
   isOpen,
   person,
-  initialChildId = null,
   startWithNewChild = false,
   onClose,
   onSave,
+  onAddChildren,
 }: Props) {
   const birthdayMoment = useMemo(() => person.moments.find((m) => m.type === "birthday") ?? null, [person]);
   const anniversaryMoment = useMemo(
@@ -156,7 +150,6 @@ export default function PersonEditDrawer({
   const [name, setName] = useState(person.name ?? "");
   const [phone, setPhone] = useState(person.phone ?? "");
   const [phoneError, setPhoneError] = useState(false);
-  const [hasKids, setHasKids] = useState(Boolean(person.hasKids || (person.children?.length ?? 0) > 0));
   const [selectedHolidays, setSelectedHolidays] = useState<NonNullable<Person["selectedHolidays"]>>(
     getSelectedHolidays(person)
   );
@@ -166,7 +159,7 @@ export default function PersonEditDrawer({
   const [fathersDayPref, setFathersDayPref] = useState<"" | "include" | "exclude">(
     person.holidayPrefs?.fathersDay === true ? "include" : person.holidayPrefs?.fathersDay === false ? "exclude" : ""
   );
-  const [children, setChildren] = useState<Child[]>(person.children ?? []);
+  const [familyChildren, setFamilyChildren] = useState<FamilyChildDraft[]>([]);
 
   const [openBirthday, setOpenBirthday] = useState(false);
   const [birthdayDraftMonthDay, setBirthdayDraftMonthDay] = useState("");
@@ -179,11 +172,6 @@ export default function PersonEditDrawer({
   const [childEditingIndex, setChildEditingIndex] = useState<number | null>(null);
   const [childDraftMonthDay, setChildDraftMonthDay] = useState("");
   const [childDraftYear, setChildDraftYear] = useState("");
-
-  const [milestoneEditing, setMilestoneEditing] = useState<{ childIndex: number } | null>(null);
-  const [milestoneType, setMilestoneType] = useState<ChildSchoolEventType>("firstDay");
-  const [milestoneCustomTitle, setMilestoneCustomTitle] = useState("");
-  const [milestoneDate, setMilestoneDate] = useState("");
 
   const [sensitiveTitle, setSensitiveTitle] = useState("");
   const [sensitiveDate, setSensitiveDate] = useState("");
@@ -199,21 +187,20 @@ export default function PersonEditDrawer({
     const detectedName = getSuggestedChildNameFromPersonName(name);
     if (!detectedName) return null;
 
-    const alreadyAdded = children.some(
-      (child) => (child.name ?? "").trim().toLowerCase() === detectedName.trim().toLowerCase()
+    const alreadyAdded = familyChildren.some(
+      (child) => child.name.trim().toLowerCase() === detectedName.trim().toLowerCase()
     );
     if (alreadyAdded) return null;
     if (dismissedSuggestedChildName?.toLowerCase() === detectedName.toLowerCase()) return null;
 
     return detectedName;
-  }, [children, dismissedSuggestedChildName, name]);
+  }, [dismissedSuggestedChildName, familyChildren, name]);
 
   useEffect(() => {
     if (!isOpen) return;
     setName(person.name ?? "");
     setPhone(person.phone ?? "");
     setPhoneError(false);
-    setHasKids(Boolean(person.hasKids || (person.children?.length ?? 0) > 0));
     setSelectedHolidays(getSelectedHolidays(person));
     setMothersDayPref(
       person.holidayPrefs?.mothersDay === true ? "include" : person.holidayPrefs?.mothersDay === false ? "exclude" : ""
@@ -221,12 +208,11 @@ export default function PersonEditDrawer({
     setFathersDayPref(
       person.holidayPrefs?.fathersDay === true ? "include" : person.holidayPrefs?.fathersDay === false ? "exclude" : ""
     );
-    setChildren(person.children ?? []);
+    setFamilyChildren([]);
 
     setOpenBirthday(false);
     setOpenAnniversary(false);
     setChildEditingIndex(null);
-    setMilestoneEditing(null);
     setOpenSensitivePicker(false);
 
     setSensitiveTitle("");
@@ -238,15 +224,6 @@ export default function PersonEditDrawer({
     setShowImportantHolidays(Boolean(getSelectedHolidays(person).length));
     setDismissedSuggestedChildName(null);
   }, [isOpen, person]);
-
-  useEffect(() => {
-    if (!isOpen || !initialChildId) return;
-    const element = document.getElementById(`person-child-${initialChildId}`);
-    if (!element) return;
-    requestAnimationFrame(() => {
-      element.scrollIntoView({ block: "center", behavior: "smooth" });
-    });
-  }, [initialChildId, isOpen, children.length]);
 
   useEffect(() => {
     if (!isOpen || !startWithNewChild) return;
@@ -261,8 +238,7 @@ export default function PersonEditDrawer({
 
   function addChildEntry(childName = "") {
     const childId = makeId();
-    setHasKids(true);
-    setChildren((prev) => [...prev, { id: childId, name: childName, birthday: "" }]);
+    setFamilyChildren((prev) => [...prev, { id: childId, name: childName, monthDay: "", year: "" }]);
     requestAnimationFrame(() => {
       const element = document.getElementById(`person-child-${childId}`);
       if (!element) return;
@@ -275,15 +251,15 @@ export default function PersonEditDrawer({
       ...person,
       name: name.trim(),
       phone: phone.trim() ? normalizePhone(phone) || phone.trim() : undefined,
-      hasKids: hasKids ? true : false,
+      hasKids: Boolean((person.children?.length ?? 0) > 0) || familyChildren.length > 0,
       selectedHolidays: selectedHolidays.length ? selectedHolidays : undefined,
-      holidayPrefs: hasKids
+      holidayPrefs: familyChildren.length > 0
         ? {
             mothersDay: mothersDayPref === "" ? undefined : mothersDayPref === "include",
             fathersDay: fathersDayPref === "" ? undefined : fathersDayPref === "include",
           }
         : undefined,
-      children: hasKids ? children : [],
+      children: person.children ?? [],
       moments: momentsOverride ?? person.moments,
     } satisfies Person;
   }
@@ -317,8 +293,11 @@ export default function PersonEditDrawer({
       phone: normalizedPhone || undefined,
     };
 
-    console.log("Saved children:", updated.children ?? []);
     onSave(deriveMomentBuckets(updated));
+    const validChildren = familyChildren.filter((child) => child.name.trim() && child.monthDay);
+    if (validChildren.length) {
+      onAddChildren(deriveMomentBuckets(updated), validChildren);
+    }
     onClose();
   }
 
@@ -707,192 +686,138 @@ export default function PersonEditDrawer({
             </div>
 
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: "16px", marginTop: "16px" }}>
-              <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "8px", marginBottom: "16px" }}>Parent</div>
-              <label style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
-                <input type="checkbox" checked={hasKids} onChange={(e) => setHasKids(e.target.checked)} />
-                Has children
-              </label>
-
-              {hasKids ? (
-                <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
-                  <div style={{ display: "grid", gap: "16px" }}>
-                    <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Children</div>
-
-                    {children.map((child, idx) => (
-                      <div
-                        key={child.id}
-                        id={`person-child-${child.id}`}
-                        style={{
-                          border: "1px solid var(--border)",
-                          background: "var(--paper)",
-                          borderRadius: "12px",
-                          padding: "16px",
-                          display: "grid",
-                          gap: "12px",
-                        }}
-                      >
-                        <input
-                          value={child.name ?? ""}
-                          onChange={(e) => {
-                            const nextName = e.target.value;
-                            setChildren((prev) => prev.map((c, i) => (i === idx ? { ...c, name: nextName } : c)));
-                          }}
-                          placeholder="Child name"
-                          style={{
-                            width: "100%",
-                            padding: "0.65rem 0.75rem",
-                            borderRadius: "12px",
-                            border: "1px solid var(--border-strong)",
-                            background: "var(--card)",
-                            color: "var(--ink)",
-                          }}
-                        />
-
-                        <button
-                          onClick={() => {
-                            const draft = toDraftFromIso(child.birthday ?? child.birthdate ?? "");
-                            setChildEditingIndex(idx);
-                            setChildDraftMonthDay(draft.monthDay);
-                            setChildDraftYear(draft.year);
-                          }}
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            gap: "1rem",
-                            width: "100%",
-                            padding: "0.75rem 0.85rem",
-                            borderRadius: "12px",
-                            border: "1px solid var(--border-strong)",
-                            background: "var(--card)",
-                            cursor: "pointer",
-                            textAlign: "left",
-                            color: "var(--ink)",
-                          }}
-                        >
-                          <span>Birthday</span>
-                          <span style={{ color: "var(--muted)" }}>
-                            {child.birthday || child.birthdate ? formatMomentDate(child.birthday ?? child.birthdate ?? "") : "Select date"}
-                          </span>
-                        </button>
-
-                        <div style={{ display: "grid", gap: "8px" }}>
-                          <div style={{ color: "var(--ink)", fontSize: "1rem", fontWeight: 600 }}>Important moments</div>
-                          {(child.schoolEvents ?? []).length ? (
-                            <div style={{ display: "grid", gap: "6px" }}>
-                              {(child.schoolEvents ?? []).map((ev) => (
-                                <div
-                                  key={`${ev.type}-${ev.label ?? ""}-${ev.date}`}
-                                  style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    gap: "1rem",
-                                    padding: "0.6rem 0.75rem",
-                                    borderRadius: "12px",
-                                    border: "1px solid var(--border)",
-                                    background: "var(--card)",
-                                  }}
-                                >
-                                  <div style={{ color: "var(--ink)" }}>{ev.label?.trim() || schoolEventLabel(ev.type)}</div>
-                                  <button
-                                    onClick={() => {
-                                      setChildren((prev) =>
-                                        prev.map((c, i) => {
-                                          if (i !== idx) return c;
-                                          return {
-                                            ...c,
-                                            schoolEvents: (c.schoolEvents ?? []).filter(
-                                              (s) => !(s.type === ev.type && s.date === ev.date && (s.label ?? "") === (ev.label ?? ""))
-                                            ),
-                                          };
-                                        })
-                                      );
-                                    }}
-                                    title="This removes the moment from your list."
-                                    style={{
-                                      padding: 0,
-                                      border: "none",
-                                      background: "none",
-                                      cursor: "pointer",
-                                      color: "var(--muted)",
-                                      textDecoration: "underline",
-                                      textUnderlineOffset: "3px",
-                                      fontSize: "0.85rem",
-                                    }}
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div style={{ color: "rgba(27, 42, 65, 0.58)", fontSize: "0.85rem" }}>Nothing added yet</div>
-                          )}
-
-                          <button
-                            onClick={() => {
-                              setMilestoneEditing({ childIndex: idx });
-                              setMilestoneType("firstDay");
-                              setMilestoneCustomTitle("");
-                              setMilestoneDate("");
-                            }}
-                            style={{
-                              padding: 0,
-                              border: "none",
-                              background: "none",
-                              cursor: "pointer",
-                              color: "var(--ink)",
-                              textDecoration: "underline",
-                              textUnderlineOffset: "3px",
-                              fontSize: "0.92rem",
-                              justifySelf: "start",
-                            }}
-                          >
-                            + Add a moment
-                          </button>
-                        </div>
-
-                        <button
-                          onClick={() => setChildren((prev) => prev.filter((_, i) => i !== idx))}
-                          title="This removes the moment from your list."
-                          style={{
-                            padding: 0,
-                            border: "none",
-                            background: "none",
-                            cursor: "pointer",
-                            color: "var(--muted)",
-                            textDecoration: "underline",
-                            textUnderlineOffset: "3px",
-                            fontSize: "0.9rem",
-                            justifySelf: "start",
-                            marginTop: "2px",
-                          }}
-                        >
-                          Remove child
-                        </button>
-                      </div>
-                    ))}
-
-                    <button
-                      onClick={() => addChildEntry()}
+              <div className="dkf-fade-in-80" style={{ fontWeight: 600, color: "var(--ink)", marginTop: "8px", marginBottom: "8px" }}>Family</div>
+              {familyChildren.length ? (
+                <div style={{ marginTop: "16px", display: "grid", gap: "14px" }}>
+                  {familyChildren.map((child, idx) => (
+                    <div
+                      key={child.id}
+                      id={`person-child-${child.id}`}
                       style={{
-                        border: "1px solid var(--border-strong)",
-                        background: "transparent",
-                        color: "var(--ink)",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        fontWeight: 500,
-                        letterSpacing: "0.01em",
-                        borderRadius: "12px",
-                        padding: "0.65rem 1rem",
-                        fontSize: "0.95rem",
-                        justifySelf: "start",
+                        border: "1px solid var(--border)",
+                        background: "var(--paper)",
+                        borderRadius: "16px",
+                        padding: "16px",
+                        display: "grid",
+                        gap: "12px",
                       }}
                     >
-                      + Add child
-                    </button>
-                  </div>
+                      <input
+                        value={child.name}
+                        onChange={(e) => {
+                          const nextName = e.target.value;
+                          setFamilyChildren((prev) =>
+                            prev.map((entry, entryIndex) =>
+                              entryIndex === idx ? { ...entry, name: nextName } : entry
+                            )
+                          );
+                        }}
+                        placeholder="Child name"
+                        style={{
+                          width: "100%",
+                          padding: "0.72rem 0.8rem",
+                          borderRadius: "12px",
+                          border: "1px solid var(--border-strong)",
+                          background: "var(--card)",
+                          color: "var(--ink)",
+                        }}
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setChildEditingIndex(idx);
+                          setChildDraftMonthDay(child.monthDay);
+                          setChildDraftYear(child.year);
+                        }}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: "1rem",
+                          width: "100%",
+                          padding: "0.75rem 0.85rem",
+                          borderRadius: "12px",
+                          border: "1px solid var(--border-strong)",
+                          background: "var(--card)",
+                          cursor: "pointer",
+                          textAlign: "left",
+                          color: "var(--ink)",
+                        }}
+                      >
+                        <span>Birthday</span>
+                        <span style={{ color: "var(--muted)" }}>
+                          {child.monthDay ? formatMomentDate(buildMomentIso(child.monthDay, child.year, false)) : "Select date"}
+                        </span>
+                      </button>
+
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={child.year}
+                        onChange={(e) => {
+                          const nextYear = e.target.value.replace(/\D/g, "").slice(0, 4);
+                          setFamilyChildren((prev) =>
+                            prev.map((entry, entryIndex) =>
+                              entryIndex === idx ? { ...entry, year: nextYear } : entry
+                            )
+                          );
+                        }}
+                        placeholder="Birth year"
+                        style={{
+                          width: "100%",
+                          padding: "0.72rem 0.8rem",
+                          borderRadius: "12px",
+                          border: "1px solid var(--border-strong)",
+                          background: "var(--card)",
+                          color: "var(--ink)",
+                        }}
+                      />
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => addChildEntry()}
+                    style={{
+                      border: "1px solid var(--border-strong)",
+                      background: "transparent",
+                      color: "var(--ink)",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontWeight: 500,
+                      letterSpacing: "0.01em",
+                      borderRadius: "12px",
+                      padding: "0.7rem 1rem",
+                      fontSize: "0.95rem",
+                      justifySelf: "start",
+                    }}
+                  >
+                    + Add another child
+                  </button>
                 </div>
-              ) : null}
+              ) : (
+                <div style={{ marginTop: "12px" }}>
+                  <button
+                    type="button"
+                    onClick={() => addChildEntry()}
+                    style={{
+                      border: "1px solid var(--border-strong)",
+                      background: "transparent",
+                      color: "var(--ink)",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontWeight: 500,
+                      letterSpacing: "0.01em",
+                      borderRadius: "12px",
+                      padding: "0.7rem 1rem",
+                      fontSize: "0.95rem",
+                      justifySelf: "start",
+                    }}
+                  >
+                    + Add child
+                  </button>
+                </div>
+              )}
 
               <div style={{ marginTop: "16px" }}>
                 <button
@@ -1035,188 +960,27 @@ export default function PersonEditDrawer({
           setYear={setChildDraftYear}
           yearHelperText=""
           onSave={() => {
-            const iso = buildMomentIso(childDraftMonthDay, childDraftYear, false);
-            setChildren((prev) =>
-              prev.map((c, i) => (i === childEditingIndex ? { ...c, birthday: iso, birthdate: undefined } : c))
+            setFamilyChildren((prev) =>
+              prev.map((child, index) =>
+                index === childEditingIndex
+                  ? { ...child, monthDay: childDraftMonthDay, year: childDraftYear.trim() }
+                  : child
+              )
             );
             setChildEditingIndex(null);
           }}
           onCancel={() => setChildEditingIndex(null)}
           onClear={() => {
-            setChildren((prev) =>
-              prev.map((c, i) => (i === childEditingIndex ? { ...c, birthday: "", birthdate: undefined } : c))
+            setFamilyChildren((prev) =>
+              prev.map((child, index) =>
+                index === childEditingIndex ? { ...child, monthDay: "", year: "" } : child
+              )
             );
             setChildDraftMonthDay("");
             setChildDraftYear("");
+            setChildEditingIndex(null);
           }}
         />
-      ) : null}
-
-      {milestoneEditing ? (
-        <div style={overlayStyle} onMouseDown={(e) => e.target === e.currentTarget && setMilestoneEditing(null)}>
-          <div style={sheetStyle}>
-            <div className="modalContent" style={{ fontFamily: "var(--font-sans)" }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: "1rem" }}>
-                <div style={{ fontFamily: "var(--font-serif)", fontSize: "1.25rem", fontWeight: 600, color: "var(--ink)" }}>
-                  Add milestone
-                </div>
-              </div>
-
-              <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
-                {milestoneType === "custom" ? (
-                  <div style={{ display: "grid", gap: "8px" }}>
-                    <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Title</div>
-                    <input
-                      type="text"
-                      value={milestoneCustomTitle}
-                      onChange={(e) => setMilestoneCustomTitle(e.target.value)}
-                      placeholder="Custom milestone"
-                      style={{
-                        width: "100%",
-                        padding: "0.75rem 0.85rem",
-                        borderRadius: "12px",
-                        border: "1px solid var(--border-strong)",
-                        background: "var(--card)",
-                        color: "var(--ink)",
-                        fontSize: "1rem",
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMilestoneType("firstDay");
-                        setMilestoneCustomTitle("");
-                      }}
-                      style={{
-                        padding: 0,
-                        border: "none",
-                        background: "none",
-                        color: "var(--muted)",
-                        cursor: "pointer",
-                        textDecoration: "underline",
-                        textUnderlineOffset: "3px",
-                        fontSize: "0.9rem",
-                        justifySelf: "start",
-                      }}
-                    >
-                      Choose a preset instead
-                    </button>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Type</div>
-                    <select
-                      value={milestoneType}
-                      onChange={(e) => setMilestoneType(e.target.value as ChildSchoolEventType)}
-                      style={{
-                        width: "100%",
-                        padding: "0.75rem 0.85rem",
-                        borderRadius: "12px",
-                        border: "1px solid var(--border-strong)",
-                        background: "var(--card)",
-                        color: "var(--ink)",
-                        fontSize: "1rem",
-                      }}
-                    >
-                      <option value="firstDay">First day of school</option>
-                      <option value="kGrad">Kindergarten graduation</option>
-                      <option value="5thMoveUp">5th grade moving-up</option>
-                      <option value="8thGrad">8th grade graduation</option>
-                      <option value="hsGrad">High school graduation</option>
-                      <option value="communion">Communion</option>
-                      <option value="confirmation">Confirmation</option>
-                      <option value="barMitzvah">Bar mitzvah</option>
-                      <option value="batMitzvah">Bat mitzvah</option>
-                      <option value="custom">+ Custom milestone</option>
-                    </select>
-                  </div>
-                )}
-
-                <div>
-                  <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Date</div>
-                  <input
-                    type="date"
-                    value={milestoneDate}
-                    onChange={(e) => setMilestoneDate(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem 0.85rem",
-                      borderRadius: "12px",
-                      border: "1px solid var(--border-strong)",
-                      background: "var(--card)",
-                      color: "var(--ink)",
-                      fontSize: "1rem",
-                    }}
-                  />
-                </div>
-
-                <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                  <button
-                    onClick={() => setMilestoneEditing(null)}
-                    style={{
-                      padding: 0,
-                      border: "none",
-                      background: "none",
-                      color: "var(--muted)",
-                      cursor: "pointer",
-                      textDecoration: "underline",
-                      textUnderlineOffset: "3px",
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!milestoneDate) return;
-                      if (milestoneType === "custom" && !milestoneCustomTitle.trim()) return;
-                      const idx = milestoneEditing.childIndex;
-                      setChildren((prev) =>
-                        prev.map((c, i) => {
-                          if (i !== idx) return c;
-                          return {
-                            ...c,
-                            schoolEvents: [
-                              ...(c.schoolEvents ?? []),
-                              {
-                                type: milestoneType,
-                                date: milestoneDate,
-                                label: milestoneType === "custom" ? milestoneCustomTitle.trim() : undefined,
-                              },
-                            ],
-                          };
-                        })
-                      );
-                      setMilestoneEditing(null);
-                      setMilestoneCustomTitle("");
-                      setMilestoneDate("");
-                    }}
-                    style={{
-                      border: "1px solid var(--border-strong)",
-                      background: "transparent",
-                      color:
-                        milestoneDate && (milestoneType !== "custom" || milestoneCustomTitle.trim())
-                          ? "var(--ink)"
-                          : "var(--muted)",
-                      cursor:
-                        milestoneDate && (milestoneType !== "custom" || milestoneCustomTitle.trim())
-                          ? "pointer"
-                          : "default",
-                      textAlign: "center",
-                      fontWeight: 500,
-                      letterSpacing: "0.01em",
-                      borderRadius: "12px",
-                      padding: "0.85rem 1.1rem",
-                      fontSize: "0.98rem",
-                      boxShadow: "none",
-                    }}
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       ) : null}
 
       {openSensitivePicker ? (

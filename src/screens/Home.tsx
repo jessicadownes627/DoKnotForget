@@ -129,6 +129,30 @@ function careEventDisplayName(name: string) {
   return displayNameOrFallback(name);
 }
 
+function buildRecentlyAddedReassurance(name: string, person: Person) {
+  const trimmedName = name.trim() || "This person";
+  const birthday = (person.moments ?? []).some((moment) => moment.type === "birthday");
+  const anniversary =
+    Boolean((person.anniversary ?? "").trim()) ||
+    (person.moments ?? []).some((moment) => moment.type === "anniversary");
+  const customCount = (person.moments ?? []).filter((moment) => moment.type === "custom").length;
+  const rememberedCount = Number(birthday) + Number(anniversary) + customCount;
+
+  if (birthday && !anniversary && customCount === 0) {
+    return `${possessive(trimmedName)} birthday is remembered.`;
+  }
+  if (!birthday && anniversary && customCount === 0) {
+    return `${possessive(trimmedName)} anniversary is remembered.`;
+  }
+  if (!birthday && !anniversary && customCount === 1) {
+    return `${possessive(trimmedName)} important day is remembered.`;
+  }
+  if (rememberedCount > 1) {
+    return `${possessive(trimmedName)} important days are remembered.`;
+  }
+  return `${trimmedName} is safely in your Circle.`;
+}
+
 function CircleEmptyStateGraphic() {
   return (
     <div
@@ -386,8 +410,7 @@ export default function Home({
   });
   const [dismissedReminderKeys, setDismissedReminderKeys] = useState<Record<string, true>>({});
   const [circleSuccessMessage, setCircleSuccessMessage] = useState("");
-  const [isCircleSuccessVisible, setIsCircleSuccessVisible] = useState(false);
-  const circleSuccessTimeoutRef = useRef<number | null>(null);
+  const [recentlyAddedPersonId, setRecentlyAddedPersonId] = useState<string | null>(null);
   const [sheetRecommendations, setSheetRecommendations] = useState<SheetRecommendation[]>([]);
   const [dismissedHorizonKeys] = useState<Record<string, true>>(() => {
     try {
@@ -625,6 +648,10 @@ export default function Home({
     if (activeTab !== "home") return [];
     return getUpcomingMoments(people, today, 30);
   }, [activeTab, people, today]);
+  const recentlyAddedPerson = useMemo(
+    () => (recentlyAddedPersonId ? people.find((person) => person.id === recentlyAddedPersonId) ?? null : null),
+    [people, recentlyAddedPersonId]
+  );
 
   const homeSections = useMemo(
     () =>
@@ -1725,21 +1752,9 @@ export default function Home({
     previousPeopleCountRef.current = people.length;
   }, [people.length]);
 
-  useEffect(() => {
-    return () => {
-      if (circleSuccessTimeoutRef.current !== null) {
-        window.clearTimeout(circleSuccessTimeoutRef.current);
-      }
-    };
-  }, []);
-
   function dismissCircleSuccess() {
-    if (circleSuccessTimeoutRef.current !== null) {
-      window.clearTimeout(circleSuccessTimeoutRef.current);
-      circleSuccessTimeoutRef.current = null;
-    }
-    setIsCircleSuccessVisible(false);
-    window.setTimeout(() => setCircleSuccessMessage(""), 220);
+    setCircleSuccessMessage("");
+    setRecentlyAddedPersonId(null);
   }
 
   useEffect(() => {
@@ -1751,14 +1766,9 @@ export default function Home({
     if (location.state?.circleSuccessMessage && isContacts) {
       const nextMessage = String(location.state.circleSuccessMessage);
       setCircleSuccessMessage(nextMessage);
-      setIsCircleSuccessVisible(false);
-      window.requestAnimationFrame(() => setIsCircleSuccessVisible(true));
-      if (circleSuccessTimeoutRef.current !== null) {
-        window.clearTimeout(circleSuccessTimeoutRef.current);
-      }
-      circleSuccessTimeoutRef.current = window.setTimeout(() => {
-        dismissCircleSuccess();
-      }, 1800);
+      setRecentlyAddedPersonId(
+        location.state?.addedPersonId ? String(location.state.addedPersonId) : null
+      );
 
       window.history.replaceState({}, document.title, location.pathname);
     }
@@ -2019,6 +2029,100 @@ export default function Home({
               {!isPremium && people.length >= FREE_LIMIT ? (
                 <div style={{ marginTop: "8px", color: "var(--muted)", fontSize: "0.88rem", lineHeight: 1.5 }}>
                   {`Your circle has ${people.length} people. Add more with Premium.`}
+                </div>
+              ) : null}
+
+              {circleSuccessMessage && recentlyAddedPerson ? (
+                <div
+                  style={{
+                    marginTop: "22px",
+                    borderRadius: "22px",
+                    border: "1px solid rgba(10, 27, 42, 0.08)",
+                    background:
+                      "linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(248, 241, 233, 0.88) 100%)",
+                    boxShadow: "0 16px 34px rgba(27,42,65,0.08)",
+                    padding: "18px 18px 16px",
+                    display: "grid",
+                    gap: "16px",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <button
+                      type="button"
+                      onClick={dismissCircleSuccess}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: "var(--muted)",
+                        cursor: "pointer",
+                        padding: 0,
+                        fontSize: "0.9rem",
+                        fontWeight: 500,
+                        fontFamily: "var(--font-sans)",
+                      }}
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <div style={{ display: "grid", gap: "6px" }}>
+                    <div
+                      style={{
+                        color: "var(--ink)",
+                        fontFamily: "var(--font-serif)",
+                        fontSize: "1.5rem",
+                        lineHeight: 1.04,
+                        letterSpacing: "-0.02em",
+                      }}
+                    >
+                      {recentlyAddedPerson.name} is safely in your Circle.
+                    </div>
+                    <div style={{ color: "var(--muted)", fontSize: "0.97rem", lineHeight: 1.55 }}>
+                      {buildRecentlyAddedReassurance(recentlyAddedPerson.name, recentlyAddedPerson)}
+                    </div>
+                    <div style={{ color: "var(--muted)", fontSize: "0.97rem", lineHeight: 1.55 }}>
+                      You don&apos;t have to keep this in your head anymore.
+                    </div>
+                    <div style={{ color: "var(--muted)", fontSize: "0.97rem", lineHeight: 1.55 }}>
+                      When the time comes, we&apos;ll help you show up for {recentlyAddedPerson.name}.
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+                    <button
+                      type="button"
+                      onClick={navigateToAddPerson}
+                      style={{
+                        border: "1px solid var(--ink)",
+                        background: "var(--ink)",
+                        color: "var(--paper)",
+                        cursor: "pointer",
+                        borderRadius: "12px",
+                        padding: "0.76rem 1rem",
+                        fontSize: "0.95rem",
+                        fontWeight: 600,
+                        fontFamily: "var(--font-sans)",
+                      }}
+                    >
+                      Add another person
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/person/${recentlyAddedPerson.id}`)}
+                      style={{
+                        border: "1px solid var(--border-strong)",
+                        background: "rgba(255,255,255,0.7)",
+                        color: "var(--ink)",
+                        cursor: "pointer",
+                        borderRadius: "12px",
+                        padding: "0.76rem 1rem",
+                        fontSize: "0.95rem",
+                        fontWeight: 500,
+                        fontFamily: "var(--font-sans)",
+                      }}
+                    >
+                      View {recentlyAddedPerson.name}
+                    </button>
+                  </div>
                 </div>
               ) : null}
 
@@ -2459,50 +2563,6 @@ export default function Home({
             </section>
           )}
         </main>
-
-        {circleSuccessMessage ? (
-          <div
-            aria-live="polite"
-            style={{
-              position: "fixed",
-              top: "calc(env(safe-area-inset-top, 0px) + 88px)",
-              left: "50%",
-              display: "flex",
-              justifyContent: "center",
-              width: "min(520px, calc(100vw - 32px))",
-              transform: `translateX(-50%) scale(${isCircleSuccessVisible ? 1 : 0.95})`,
-              opacity: isCircleSuccessVisible ? 1 : 0,
-              transition: "opacity 220ms ease, transform 220ms ease",
-              pointerEvents: "none",
-              zIndex: 999,
-            }}
-          >
-            <div
-              onClick={dismissCircleSuccess}
-              style={{
-                display: "grid",
-                justifyItems: "center",
-                gap: "12px",
-                width: "100%",
-                padding: "16px 18px",
-                textAlign: "center",
-                background: "rgba(255,255,255,0.96)",
-                border: "1px solid var(--border)",
-                borderRadius: "18px",
-                boxShadow: "0 12px 30px rgba(27,42,65,0.16)",
-                backdropFilter: "blur(10px)",
-                pointerEvents: "auto",
-                cursor: "pointer",
-              }}
-            >
-              <CircleEmptyStateGraphic />
-              <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.4 }}>
-                {circleSuccessMessage}
-              </div>
-            </div>
-          </div>
-        ) : null}
-
         {birthdayPickerPersonId ? (
           <MomentDatePicker
             isOpen

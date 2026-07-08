@@ -35,6 +35,9 @@
   --dkf-gold-strong: rgba(221, 183, 111, 0.95);
   --dkf-gold-soft: rgba(245, 222, 179, 0.52);
   --dkf-gold-line: rgba(223, 194, 140, 0.42);
+  --dkf-blush: #e7c4c7;
+  --dkf-blush-soft: rgba(231, 196, 199, 0.18);
+  --dkf-blush-wash: rgba(244, 227, 229, 0.46);
 
   --dkf-motion-fast: 220ms cubic-bezier(0.25, 0.1, 0.25, 1);
   --dkf-motion-medium: 280ms cubic-bezier(0.25, 0.1, 0.25, 1);
@@ -242,12 +245,12 @@ select {
   opacity: 0;
   transform: translateY(14px) scale(0.992);
   animation: dkfStoryStepEnter 420ms cubic-bezier(0.22, 0.8, 0.24, 1) both;
-  border: 1px solid rgba(224, 206, 173, 0.56);
-  background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,250,243,0.86) 100%);
+  border: 1px solid rgba(10, 27, 42, 0.05);
+  background:
+    linear-gradient(180deg, rgba(255,250,247,0.46) 0%, rgba(255,255,255,0.22) 100%);
   box-shadow:
-    0 28px 64px rgba(149, 110, 44, 0.1),
-    0 10px 24px rgba(32, 26, 17, 0.05),
-    inset 0 1px 0 rgba(255,255,255,0.94);
+    0 10px 28px rgba(10, 27, 42, 0.03),
+    inset 0 1px 0 rgba(255,255,255,0.58);
 }
 
 .dkf-story-bridge {
@@ -271,30 +274,30 @@ select {
 .dkf-onboard-hero-title {
   margin: 1.25rem 0 0;
   font-family: var(--font-serif);
-  font-size: clamp(2.45rem, 6.2vw, 3.65rem);
-  line-height: 1.1;
+  font-size: clamp(1.72rem, 4.2vw, 2.4rem);
+  line-height: 1;
   letter-spacing: -0.045em;
-  color: var(--ink);
+  color: rgba(10, 27, 42, 0.92);
   font-weight: 600;
   max-width: 420px;
 }
 
 .dkf-onboard-hero-invite {
-  margin-top: 20px;
+  margin-top: 14px;
   font-family: var(--font-serif);
-  font-size: clamp(1.82rem, 4.3vw, 2.36rem);
-  line-height: 1.12;
+  font-size: clamp(1.14rem, 2.9vw, 1.46rem);
+  line-height: 1.08;
   letter-spacing: -0.03em;
-  color: rgba(10, 27, 42, 0.78);
+  color: rgba(10, 27, 42, 0.66);
   font-weight: 400;
   max-width: 340px;
 }
 
 .dkf-onboard-body {
-  color: rgba(165, 112, 34, 0.85);
+  color: rgba(145, 101, 47, 0.72);
   font-family: "Bradley Hand", "Marker Felt", "Segoe Print", cursive;
-  font-size: clamp(1.35rem, 3.5vw, 1.7rem);
-  line-height: 1.48;
+  font-size: clamp(1.02rem, 2.8vw, 1.24rem);
+  line-height: 1.42;
   letter-spacing: 0.01em;
 }
 
@@ -409,8 +412,8 @@ select {
 }
 
 .dkf-journey-input-hero {
-  min-height: 120px;
-  padding: 1.9rem 1.85rem;
+  min-height: 126px;
+  padding: 2rem 1.9rem;
   border-radius: 30px;
 }
 
@@ -602,6 +605,20 @@ select {
 .dkf-journey-note {
   opacity: 0.85;
   transition: opacity 320ms ease, transform 320ms ease;
+}
+
+.dkf-memory-section {
+  position: relative;
+}
+
+.dkf-memory-section::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(10, 27, 42, 0) 0%, rgba(10, 27, 42, 0.045) 16%, rgba(231, 196, 199, 0.16) 50%, rgba(10, 27, 42, 0.045) 84%, rgba(10, 27, 42, 0) 100%);
 }
 
 

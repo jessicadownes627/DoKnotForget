@@ -3,6 +3,7 @@ import type { CareEvent } from "../models/CareEvent";
 import type { Moment, Person } from "../models/Person";
 import type { Relationship } from "../models/Relationship";
 import PersonEditDrawer from "../components/PersonEditDrawer";
+import type { FamilyChildDraft } from "../components/PersonEditDrawer";
 import MomentDatePicker from "../components/MomentDatePicker";
 import ContactsSearchResults from "../components/ContactsSearchResults";
 import { useAppState } from "../appState";
@@ -12,6 +13,7 @@ import { parseLocalDate } from "../utils/date";
 import { filterContacts } from "../utils/contactSearch";
 import { normalizePhone } from "../utils/phone";
 import { getSelectedHolidays, holidayOptionLabel } from "../utils/personHolidays";
+import { buildAddPersonRelationshipPersistence } from "../utils/addPersonRelationshipPersistence";
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -182,11 +184,10 @@ export default function PersonDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams<{ id: string }>();
-  const { people, relationships, careEvents, updatePerson, updatePersonFields, upsertRelationship, deletePerson } =
+  const { people, relationships, careEvents, updatePerson, updatePersonFields, upsertRelationship, deletePerson, savePerson } =
     useAppState();
   const person = people.find((p) => p.id === id) ?? null;
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [initialChildId, setInitialChildId] = useState<string | null>(null);
   const [startWithNewChild, setStartWithNewChild] = useState(false);
   const [isAddConnectionOpen, setIsAddConnectionOpen] = useState(false);
   const [connectionType, setConnectionType] = useState<"partner" | "child" | "grandchild" | "familyMember">("child");
@@ -360,66 +361,6 @@ export default function PersonDetail() {
     !editingConnection && selectedConnectionId
       ? availableConnections.find((candidate) => candidate.id === selectedConnectionId) ?? null
       : null;
-
-  const familyTimeline = useMemo(() => {
-    const events: Array<{ id: string; label: string; targetDate: Date }> = [];
-
-    const addRecurringEvent = (id: string, label: string, isoDate: string | undefined) => {
-      if (!isoDate) return;
-      const next = getNextBirthdayFromIso(isoDate, today);
-      if (!next || next.target < today) return;
-      events.push({ id, label, targetDate: next.target });
-    };
-
-    const addOneTimeOrRecurringMoment = (momentId: string, label: string, isoDate: string, recurring: boolean) => {
-      if (!isoDate) return;
-      if (recurring) {
-        addRecurringEvent(momentId, label, isoDate);
-        return;
-      }
-      const parsed = parseLocalDate(isoDate);
-      if (!parsed || parsed < today) return;
-      events.push({ id: momentId, label, targetDate: parsed });
-    };
-
-    addRecurringEvent(`${resolvedPerson.id}:birthday`, `${possessive(resolvedPerson.name)} birthday`, birthdayMoment?.date);
-    const anniversaryIso = anniversaryMoment?.date
-      ? anniversaryMoment.date
-      : resolvedPerson.anniversary
-        ? `0000-${resolvedPerson.anniversary}`
-        : undefined;
-    addRecurringEvent(`${resolvedPerson.id}:anniversary`, `${possessive(resolvedPerson.name)} anniversary`, anniversaryIso);
-
-    for (const child of resolvedPerson.children ?? []) {
-      const childBirthday = (child.birthday ?? child.birthdate ?? "").trim();
-      if (!childBirthday) continue;
-      const childName = child.name?.trim() || "Child";
-      addRecurringEvent(`${resolvedPerson.id}:child:${child.id}`, `${childName}'s birthday`, childBirthday);
-    }
-
-    for (const moment of resolvedPerson.moments ?? []) {
-      if (moment.type !== "custom") continue;
-      addOneTimeOrRecurringMoment(moment.id, moment.label, moment.date, moment.recurring);
-    }
-
-    return events
-      .sort((a, b) => {
-        if (a.targetDate.getTime() !== b.targetDate.getTime()) {
-          return a.targetDate.getTime() - b.targetDate.getTime();
-        }
-        return a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
-      })
-      .slice(0, 3);
-  }, [
-    anniversaryMoment?.date,
-    birthdayMoment?.date,
-    resolvedPerson.anniversary,
-    resolvedPerson.children,
-    resolvedPerson.id,
-    resolvedPerson.moments,
-    resolvedPerson.name,
-    today,
-  ]);
 
   const careHistory = useMemo(() => {
     return [...careEvents]
@@ -679,19 +620,16 @@ export default function PersonDetail() {
   }
 
   function openPersonEditor() {
-    setInitialChildId(null);
     setStartWithNewChild(false);
     setIsEditOpen(true);
   }
 
-  function openChildEditor(childId: string) {
-    setInitialChildId(childId);
+  function openChildEditor(_childId: string) {
     setStartWithNewChild(false);
     setIsEditOpen(true);
   }
 
   function openAddChildEditor() {
-    setInitialChildId(null);
     setStartWithNewChild(true);
     setIsAddConnectionOpen(false);
     setIsEditOpen(true);
@@ -713,38 +651,54 @@ export default function PersonDetail() {
     setIsPhoneEditorOpen(false);
   }
 
-  const promptCards = useMemo(() => {
-    const cards: Array<{ title: string; action: string; onClick: () => void }> = [];
-    if (!anniversaryDisplay) {
-      cards.push({
-        title: "Add an anniversary while you're here",
-        action: "Add anniversary",
-        onClick: openAnniversaryEditor,
+  function saveFamilyChildren(updatedParent: Person, drafts: FamilyChildDraft[]) {
+    const createdPeople: Person[] = [];
+    const createdRelationships: Relationship[] = [];
+    const createdRelationshipLinksV2 = [];
+
+    for (const draft of drafts) {
+      const childName = draft.name.trim();
+      const birthdayIso = buildMomentIso(draft.monthDay, draft.year, false);
+      if (!childName || !birthdayIso) continue;
+
+      const childId = makeId();
+      const childBirthdayMoment: Moment = {
+        id: makeId(),
+        type: "birthday",
+        label: "Birthday",
+        date: birthdayIso,
+        recurring: true,
+      };
+
+      createdPeople.push({
+        id: childId,
+        name: childName,
+        moments: [childBirthdayMoment],
+        importantDates: [],
+        sensitiveMoments: [],
       });
-    }
-    if (!children.length) {
-      cards.push({
-        title: "Someone else connected might matter too",
-        action: "Add child",
-        onClick: openAddChildEditor,
+
+      const relationshipPersistence = buildAddPersonRelationshipPersistence({
+        personId: childId,
+        makeId,
+        selectedRelationshipType: "child",
+        selectedConnectionId: updatedParent.id,
+        connectionRelationship: "child",
       });
+
+      createdRelationships.push(...relationshipPersistence.createdRelationships);
+      createdRelationshipLinksV2.push(...relationshipPersistence.createdRelationshipLinksV2);
     }
-    if (!relatedPeople.some((item) => item.type === "partner") && !resolvedPerson.partnerId) {
-      cards.push({
-        title: "A partner can make this page feel fuller",
-        action: "Add partner",
-        onClick: () => openAddConnection("partner"),
-      });
-    }
-    if (!resolvedPerson.phone) {
-      cards.push({
-        title: "Make reaching out easier from reminders",
-        action: "Add phone number",
-        onClick: openPhoneEditor,
-      });
-    }
-    return cards.slice(0, 2);
-  }, [anniversaryDisplay, children.length, relatedPeople, resolvedPerson.partnerId, resolvedPerson.phone]);
+
+    if (!createdPeople.length) return;
+
+    savePerson({
+      person: updatedParent,
+      createdPeople,
+      createdRelationships,
+      createdRelationshipLinksV2,
+    });
+  }
 
   const pageBackground =
     "radial-gradient(circle at top, rgba(243, 232, 209, 0.95) 0%, rgba(247, 244, 238, 0.96) 36%, rgba(244, 239, 231, 1) 100%)";
@@ -1073,62 +1027,6 @@ export default function PersonDetail() {
               ) : null}
             </div>
           </SurfaceCard>
-
-          {familyTimeline.length || promptCards.length ? (
-            <SurfaceCard>
-              <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>While you're here</div>
-              <div style={{ marginTop: "0.25rem", color: "var(--muted)", fontSize: "0.92rem" }}>
-                One more small thing could make this page even more helpful.
-              </div>
-
-              {familyTimeline.length ? (
-                <div style={{ marginTop: "1rem", display: "grid", gap: "0.7rem" }}>
-                  {familyTimeline.map((event) => (
-                    <div
-                      key={event.id}
-                      style={{
-                        border: "1px solid rgba(10, 27, 42, 0.08)",
-                        background: "rgba(255,255,255,0.84)",
-                        borderRadius: "18px",
-                        padding: "0.95rem 1rem",
-                        color: "var(--ink)",
-                      }}
-                    >
-                      <div style={{ fontWeight: 600 }}>{event.label}</div>
-                      <div style={{ marginTop: "0.22rem", color: "var(--muted)", fontSize: "0.9rem" }}>
-                        {monthDayFormatter.format(event.targetDate)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-
-              {promptCards.length ? (
-                <div style={{ marginTop: familyTimeline.length ? "1rem" : "1rem", display: "grid", gap: "0.7rem" }}>
-                  {promptCards.map((card, index) => (
-                    <button
-                      key={`${card.title}-${index}`}
-                      type="button"
-                      onClick={card.onClick}
-                      style={{
-                        border: "1px dashed rgba(10, 27, 42, 0.16)",
-                        background: "rgba(255,255,255,0.7)",
-                        borderRadius: "18px",
-                        padding: "0.95rem 1rem",
-                        textAlign: "left",
-                        color: "var(--ink)",
-                      }}
-                    >
-                      <div style={{ fontWeight: 600 }}>{card.title}</div>
-                      <div style={{ marginTop: "0.22rem", color: "var(--muted)", fontSize: "0.9rem" }}>
-                        {card.action}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </SurfaceCard>
-          ) : null}
 
           <div
             style={{
@@ -1720,16 +1618,17 @@ export default function PersonDetail() {
       <PersonEditDrawer
         isOpen={isEditOpen}
         person={person}
-        initialChildId={initialChildId}
         startWithNewChild={startWithNewChild}
         onClose={() => {
           setIsEditOpen(false);
-          setInitialChildId(null);
           setStartWithNewChild(false);
         }}
         onSave={(updated) => {
           updatePerson(updated);
-          setInitialChildId(null);
+          setStartWithNewChild(false);
+        }}
+        onAddChildren={(updatedParent, children) => {
+          saveFamilyChildren(updatedParent, children);
           setStartWithNewChild(false);
         }}
       />
