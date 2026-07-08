@@ -17,6 +17,7 @@ import { normalizeRelationships } from "./relationshipModel.js";
 type RelationshipV2BuildInput = {
   people: Person[];
   relationships: Relationship[];
+  persistedLinks?: RelationshipV2Link[];
 };
 
 const USER_ANCHOR: RelationshipV2AnchorRef = { kind: "user" };
@@ -74,6 +75,8 @@ function roleRank(role: RelationshipV2Role) {
 
 function relationshipSourceRank(source: RelationshipV2Source) {
   switch (source) {
+    case "persistedV2":
+      return 6;
     case "graphRelationship":
       return 5;
     case "embeddedChild":
@@ -163,9 +166,17 @@ function firstAvailableName(value: string | undefined | null, fallback: string) 
   return trimmed || fallback;
 }
 
-export function buildRelationshipV2Links({ people, relationships }: RelationshipV2BuildInput): RelationshipV2Link[] {
+export function buildRelationshipV2Links({
+  people,
+  relationships,
+  persistedLinks = [],
+}: RelationshipV2BuildInput): RelationshipV2Link[] {
   const links: RelationshipV2Link[] = [];
   const seen = new Set<string>();
+  const normalizedPersisted = normalizeRelationshipV2Links(persistedLinks);
+  for (const persistedLink of normalizedPersisted) {
+    pushUniqueLink(links, seen, persistedLink);
+  }
   const normalized = normalizeRelationships(relationships);
 
   for (const relationship of normalized) {
@@ -288,6 +299,36 @@ export function buildRelationshipV2Links({ people, relationships }: Relationship
   }
 
   return links.sort((a, b) => linkSortValue(b) - linkSortValue(a));
+}
+
+export function normalizeRelationshipV2Links(links: RelationshipV2Link[]) {
+  const seen = new Set<string>();
+  const normalized: RelationshipV2Link[] = [];
+
+  for (const link of links) {
+    const key = `${subjectKey(link.subject)}|${anchorKey(link.anchor)}|${link.relationshipToAnchor}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push(link);
+  }
+
+  return normalized.sort((a, b) => linkSortValue(b) - linkSortValue(a));
+}
+
+export function buildPersistedRelationshipV2Link(args: {
+  id: string;
+  subject: RelationshipV2SubjectRef;
+  anchor: RelationshipV2AnchorRef;
+  relationshipToAnchor: RelationshipV2Role;
+}): RelationshipV2Link {
+  return buildLink({
+    subject: args.subject,
+    anchor: args.anchor,
+    relationshipToAnchor: args.relationshipToAnchor,
+    source: "persistedV2",
+    confidence: "explicit",
+    sourceRelationshipId: args.id,
+  });
 }
 
 export function resolveRelationshipV2Entity(

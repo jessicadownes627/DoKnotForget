@@ -25,12 +25,15 @@ export default function Contacts() {
     try {
       const rawPeople = window.localStorage.getItem("doknotforget_people");
       const rawRelationships = window.localStorage.getItem("doknotforget_relationships");
+      const rawRelationshipLinksV2 = window.localStorage.getItem("doknotforget_relationship_links_v2");
       const parsedPeople = rawPeople ? JSON.parse(rawPeople) : [];
       const parsedRelationships = rawRelationships ? JSON.parse(rawRelationships) : [];
+      const parsedRelationshipLinksV2 = rawRelationshipLinksV2 ? JSON.parse(rawRelationshipLinksV2) : [];
 
       const payload = {
         people: Array.isArray(parsedPeople) ? parsedPeople : [],
         relationships: Array.isArray(parsedRelationships) ? parsedRelationships : [],
+        relationshipLinksV2: Array.isArray(parsedRelationshipLinksV2) ? parsedRelationshipLinksV2 : [],
       };
 
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -57,9 +60,11 @@ export default function Contacts() {
 
       const nextPeople = Array.isArray(parsed?.people) ? parsed.people : [];
       const nextRelationships = Array.isArray(parsed?.relationships) ? parsed.relationships : [];
+      const nextRelationshipLinksV2 = Array.isArray(parsed?.relationshipLinksV2) ? parsed.relationshipLinksV2 : [];
 
       window.localStorage.setItem("doknotforget_people", JSON.stringify(nextPeople));
       window.localStorage.setItem("doknotforget_relationships", JSON.stringify(nextRelationships));
+      window.localStorage.setItem("doknotforget_relationship_links_v2", JSON.stringify(nextRelationshipLinksV2));
       window.location.reload();
     } catch {
       window.alert("That backup file couldn’t be imported. Please select a valid JSON backup.");

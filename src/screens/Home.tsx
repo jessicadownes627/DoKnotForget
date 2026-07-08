@@ -369,7 +369,7 @@ export default function Home({
 }: {}) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { people, relationships, isPremium, updatePerson, updatePersonFields, createPerson, recordCareEvent } = useAppState();
+  const { people, relationships, relationshipLinksV2, isPremium, updatePerson, updatePersonFields, createPerson, recordCareEvent } = useAppState();
   const [searchTerm, setSearchTerm] = useState("");
   const [questionTick, setQuestionTick] = useState(0);
   const [shouldPulseBow, setShouldPulseBow] = useState(false);
@@ -605,8 +605,8 @@ export default function Home({
     return generateCareSuggestions(filteredPeople, today);
   }, [activeTab, filteredPeople, today, questionTick]);
   const relationshipV2Links = useMemo(
-    () => buildRelationshipV2Links({ people, relationships }),
-    [people, relationships]
+    () => buildRelationshipV2Links({ people, relationships, persistedLinks: relationshipLinksV2 }),
+    [people, relationshipLinksV2, relationships]
   );
 
   const reminders = useMemo(() => {

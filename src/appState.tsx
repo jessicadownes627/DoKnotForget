@@ -2,8 +2,11 @@ import { createContext, type ReactNode, useContext, useEffect, useMemo, useState
 import type { Person } from "./models/Person";
 import type { CareEvent, CareEventType } from "./models/CareEvent";
 import type { Relationship } from "./models/Relationship";
+import type { RelationshipV2Link } from "./models/RelationshipV2";
 import { normalizePhone } from "./utils/phone";
 import { canonicalizeRelationship, normalizeRelationships } from "./utils/relationshipModel";
+import { loadRelationshipLinksV2, RELATIONSHIP_LINKS_V2_STORAGE_KEY } from "./utils/relationshipLinksV2Storage";
+import { normalizeRelationshipV2Links } from "./utils/relationshipV2";
 import {
   loadUserSettings,
   normalizeUserSettings,
@@ -16,6 +19,8 @@ type SavePersonPayload = {
   person: Person;
   createdPeople: Person[];
   createdRelationships: Relationship[];
+  createdRelationshipLinksV2: RelationshipV2Link[];
+  replaceRelationshipLinksV2ForPersonId?: string | null;
 };
 
 type AppState = {
@@ -24,6 +29,7 @@ type AppState = {
   isPremium: boolean;
   people: Person[];
   relationships: Relationship[];
+  relationshipLinksV2: RelationshipV2Link[];
   careEvents: CareEvent[];
   userSettings: UserSettings;
   markOnboardingComplete: () => void;
@@ -52,6 +58,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [isPremium, setIsPremium] = useState(loadPremiumStatus);
   const [people, setPeople] = useState<Person[]>([]);
   const [relationships, setRelationships] = useState<Relationship[]>([]);
+  const [relationshipLinksV2, setRelationshipLinksV2] = useState<RelationshipV2Link[]>([]);
   const [careEvents, setCareEvents] = useState<CareEvent[]>([]);
   const [userSettings, setUserSettings] = useState<UserSettings>(loadUserSettings);
 
@@ -92,6 +99,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
+    setRelationshipLinksV2(loadRelationshipLinksV2());
 
     try {
       const rawCareEvents = window.localStorage.getItem(CARE_EVENTS_STORAGE_KEY);
@@ -174,6 +182,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!hasHydrated) return;
     try {
+      window.localStorage.setItem(
+        RELATIONSHIP_LINKS_V2_STORAGE_KEY,
+        JSON.stringify(relationshipLinksV2)
+      );
+    } catch {
+      // ignore
+    }
+  }, [hasHydrated, relationshipLinksV2]);
+
+  useEffect(() => {
+    if (!hasHydrated) return;
+    try {
       window.localStorage.setItem(CARE_EVENTS_STORAGE_KEY, JSON.stringify(careEvents));
     } catch {
       // ignore
@@ -206,6 +226,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       isPremium,
       people,
       relationships,
+      relationshipLinksV2,
       careEvents,
       userSettings,
       markOnboardingComplete: () => setOnboardingComplete(true),
@@ -262,6 +283,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           return next;
         });
         setRelationships((prev) => normalizeRelationships([...prev, ...payload.createdRelationships.map(canonicalizeRelationship)]));
+        setRelationshipLinksV2((prev) => {
+          const filtered =
+            payload.replaceRelationshipLinksV2ForPersonId
+              ? prev.filter(
+                  (link) =>
+                    !(link.subject.kind === "person" && link.subject.personId === payload.replaceRelationshipLinksV2ForPersonId)
+                )
+              : prev;
+          return normalizeRelationshipV2Links([...filtered, ...payload.createdRelationshipLinksV2]);
+        });
       },
       updatePerson: (person: Person) => {
         setPeople((prev) =>
@@ -317,10 +348,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
             .map((p) => (p.partnerId === id ? { ...p, partnerId: null } : p))
         );
         setRelationships((prev) => prev.filter((r) => r.fromId !== id && r.toId !== id));
+        setRelationshipLinksV2((prev) =>
+          prev.filter((link) => {
+            if (link.subject.kind === "person" && link.subject.personId === id) return false;
+            if (link.subject.kind === "child" && link.subject.parentId === id) return false;
+            if (link.anchor.kind === "person" && link.anchor.personId === id) return false;
+            return true;
+          })
+        );
         setCareEvents((prev) => prev.filter((event) => event.personId !== id));
       },
     };
-  }, [careEvents, hasHydrated, isPremium, onboardingComplete, people, relationships, userSettings]);
+  }, [careEvents, hasHydrated, isPremium, onboardingComplete, people, relationshipLinksV2, relationships, userSettings]);
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }

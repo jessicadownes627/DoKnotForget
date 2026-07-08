@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
+    "outDir": "./.tmp/phase3-writes",
+    "rootDir": ".",
+    "module": "ESNext",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": [
+    "src/models/Person.ts",
+    "src/models/Relationship.ts",
+    "src/models/RelationshipV2.ts",
+    "src/utils/relationshipModel.ts",
+    "src/utils/relationshipV2.ts",
+    "src/utils/addPersonRelationshipPersistence.ts",
+    "src/utils/phase3WriteValidation.ts"
+  ]
+}

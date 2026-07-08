@@ -8,6 +8,7 @@ import {
 } from "@capacitor/local-notifications";
 import type { Person } from "../models/Person.js";
 import type { Relationship } from "../models/Relationship.js";
+import type { RelationshipV2Link } from "../models/RelationshipV2.js";
 import type { ReminderEvent } from "../engine/reminderEngine";
 import { getReminderId, hasReminderFired } from "../engine/reminderRegistry.js";
 import { formatLocalYmd, parseLocalDate } from "./date.js";
@@ -78,7 +79,8 @@ export function buildReminderNotification(
   now = new Date(),
   userSettings: UserSettings = DEFAULT_USER_SETTINGS,
   people: Person[] = [],
-  relationships: Relationship[] = []
+  relationships: Relationship[] = [],
+  relationshipLinksV2: RelationshipV2Link[] = []
 ): LocalNotificationSchema | null {
   if (hasReminderFired(getReminderId(reminder))) return null;
 
@@ -116,7 +118,7 @@ export function buildReminderNotification(
           people,
           relationships,
           new Date(now.getFullYear(), now.getMonth(), now.getDate()),
-          buildRelationshipV2Links({ people, relationships })
+          buildRelationshipV2Links({ people, relationships, persistedLinks: relationshipLinksV2 })
         )
       : reminder.label;
   return {
@@ -147,7 +149,8 @@ export function buildReminderNudgeNotification(
   reminder: ReminderEvent,
   userSettings: UserSettings = DEFAULT_USER_SETTINGS,
   people: Person[] = [],
-  relationships: Relationship[] = []
+  relationships: Relationship[] = [],
+  relationshipLinksV2: RelationshipV2Link[] = []
 ): LocalNotificationSchema | null {
   const reminderId = getReminderNotificationKey(reminder);
   if (reminder.reminderType !== "dayOf") return null;
@@ -178,7 +181,7 @@ export function buildReminderNudgeNotification(
             people,
             relationships,
             new Date(),
-            buildRelationshipV2Links({ people, relationships })
+            buildRelationshipV2Links({ people, relationships, persistedLinks: relationshipLinksV2 })
           )
         : reminder.label,
     body: "Still time to send a quick message or do something thoughtful.",
@@ -262,14 +265,15 @@ export async function scheduleReminderNotifications(
   now = new Date(),
   userSettings: UserSettings = DEFAULT_USER_SETTINGS,
   people: Person[] = [],
-  relationships: Relationship[] = []
+  relationships: Relationship[] = [],
+  relationshipLinksV2: RelationshipV2Link[] = []
 ) {
   if (!isNativeNotificationsSupported()) return;
 
   const notifications = reminders
     .flatMap((reminder) => [
-      buildReminderNotification(reminder, now, userSettings, people, relationships),
-      buildReminderNudgeNotification(reminder, userSettings, people, relationships),
+      buildReminderNotification(reminder, now, userSettings, people, relationships, relationshipLinksV2),
+      buildReminderNudgeNotification(reminder, userSettings, people, relationships, relationshipLinksV2),
     ])
     .filter((notification): notification is LocalNotificationSchema => Boolean(notification))
     .sort((left, right) => {

@@ -8,6 +8,7 @@ export type RelationshipV2Role =
   | "unknown";
 
 export type RelationshipV2Source =
+  | "persistedV2"
   | "graphRelationship"
   | "personPartnerId"
   | "personParentRole"

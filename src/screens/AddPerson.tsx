@@ -8,13 +8,13 @@ import {
   PrimaryButton,
 } from "../components/onboarding/OnboardingPrimitives";
 import type { Moment, Person } from "../models/Person";
-import type { Relationship, RelationshipType } from "../models/Relationship";
+import type { RelationshipType } from "../models/Relationship";
 import MomentDatePicker from "../components/MomentDatePicker";
 import { useAppState } from "../appState";
 import { useLocation, useNavigate } from "../router";
+import { buildAddPersonRelationshipPersistence } from "../utils/addPersonRelationshipPersistence";
 import { normalizePhone } from "../utils/phone";
 import { getSelectedHolidays } from "../utils/personHolidays";
-import { buildCanonicalRelationship } from "../utils/relationshipModel";
 
 const FREE_LIMIT = 3;
 
@@ -501,38 +501,13 @@ export default function AddPerson() {
 
     const personId = editingPerson?.id ?? makeId();
     const createdPeople: Person[] = [];
-    const createdRelationships: Relationship[] = [];
-
-    if (selectedConnectionId) {
-      const canonicalRelationship =
-        connectionRelationship === "child"
-          ? buildCanonicalRelationship({
-              id: makeId(),
-              fromId: selectedConnectionId,
-              toId: personId,
-              type: "child",
-            })
-          : connectionRelationship === "parent"
-            ? buildCanonicalRelationship({
-                id: makeId(),
-                fromId: personId,
-                toId: selectedConnectionId,
-                type: "child",
-              })
-            : buildCanonicalRelationship({
-                id: makeId(),
-                fromId: personId,
-                toId: selectedConnectionId,
-                type: connectionRelationship,
-              });
-
-      createdRelationships.push(canonicalRelationship);
-    }
-
-    const partnerId =
-      selectedConnectionId && connectionRelationship === "partner"
-        ? selectedConnectionId
-        : editingPerson?.partnerId ?? undefined;
+    const relationshipPersistence = buildAddPersonRelationshipPersistence({
+      personId,
+      makeId,
+      selectedRelationshipType: selectedRelationshipOption?.saveType ?? null,
+      selectedConnectionId,
+      connectionRelationship,
+    });
 
     const person: Person = {
       ...(editingPerson ?? {}),
@@ -540,10 +515,12 @@ export default function AddPerson() {
       name: name.trim(),
       phone: normalizedPhone || undefined,
       moments,
-      partnerId,
+      partnerId: relationshipPersistence.legacyPersonPatch.partnerId ?? undefined,
       anniversary: anniversary || undefined,
       hasKids: editingPerson?.hasKids,
-      parentRole: editingPerson?.parentRole,
+      parentRole: relationshipPersistence.legacyPersonPatch.parentRole,
+      isMother: relationshipPersistence.legacyPersonPatch.isMother,
+      isFather: relationshipPersistence.legacyPersonPatch.isFather,
       selectedHolidays: editingPerson ? getSelectedHolidays(editingPerson) : undefined,
       children: editingPerson?.children,
       importantDates: moments.filter((moment) => moment.type === "custom"),
@@ -562,14 +539,16 @@ export default function AddPerson() {
     savePerson({
       person,
       createdPeople,
-      createdRelationships,
+      createdRelationships: relationshipPersistence.createdRelationships,
+      createdRelationshipLinksV2: relationshipPersistence.createdRelationshipLinksV2,
+      replaceRelationshipLinksV2ForPersonId: relationshipPersistence.replaceRelationshipLinksV2ForPersonId,
     });
 
     if (editingPerson) {
       navigate("/home", {
         state: {
           defaultTab: "home",
-          ...(partnerId ? { showPartnerLinkCheck: person.id } : null),
+          ...(person.partnerId ? { showPartnerLinkCheck: person.id } : null),
         },
       });
       return;
