@@ -189,7 +189,7 @@ export default function MicroQuestionCard({ suggestion, onChoose, onDismiss }: P
           setMonthDay={setDraftMonthDay}
           year={draftYear}
           setYear={setDraftYear}
-          yearHelperText="Optional."
+          yearHelperText="Add the year if you know it."
           onSave={() => {
             const iso = buildMomentIso(draftMonthDay, draftYear, false);
             if (!iso) return;

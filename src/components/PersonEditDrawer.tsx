@@ -935,7 +935,7 @@ export default function PersonEditDrawer({
           setMonthDay={setAnniversaryDraftMonthDay}
           year={anniversaryDraftYear}
           setYear={setAnniversaryDraftYear}
-          yearHelperText="Optional."
+          yearHelperText="Add the year if you know it."
           onSave={() => {
             updateAnniversaryFromDraft();
             setOpenAnniversary(false);

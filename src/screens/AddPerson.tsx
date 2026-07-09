@@ -838,7 +838,7 @@ export default function AddPerson() {
             setMonthDay={setBirthdayDraftMonthDay}
             year={birthdayDraftYear}
             setYear={setBirthdayDraftYear}
-            yearHelperText="The year helps with milestone birthdays, but it's okay if you don't know it."
+            yearHelperText="The year helps with milestone birthdays and age-based reminders."
             onSave={() => {
               setBirthdayMonthDay(birthdayDraftMonthDay);
               setBirthdayYear(birthdayDraftYear);
@@ -991,7 +991,7 @@ export default function AddPerson() {
             setMonthDay={setCustomDraftMonthDay}
             year={customDraftYear}
             setYear={setCustomDraftYear}
-            yearHelperText="Add the year only if it helps."
+            yearHelperText="Add the year if you know it."
             onSave={() => {
               const iso = buildMomentIso(customDraftMonthDay, customDraftYear, false);
               if (!iso) return;
