@@ -773,11 +773,96 @@ export default function PersonDetail() {
                 </div>
               </div>
             </div>
+          </SurfaceCard>
 
-            <div style={{ marginTop: "1rem", display: "flex", flexWrap: "wrap", gap: "0.7rem" }}>
-              <ActionPill label="Add a moment" onClick={() => setMomentComposer({ kind: "chooser" })} />
-              <ActionPill label="Add family" onClick={() => openAddConnection("child")} />
-              <ActionPill label="Make reaching out easier" onClick={openPhoneEditor} />
+          <SurfaceCard>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "baseline" }}>
+              <div>
+                <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>Ways to show up</div>
+                <div style={{ marginTop: "0.25rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                  Small things that make reminders easier to act on.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={openPhoneEditor}
+                style={{ border: "none", background: "none", color: "var(--ink)", padding: 0, fontWeight: 600 }}
+              >
+                Edit
+              </button>
+            </div>
+
+            <div style={{ marginTop: "1rem", display: "grid", gap: "0.85rem" }}>
+              <button
+                type="button"
+                onClick={openPhoneEditor}
+                style={{
+                  border: "1px solid rgba(10, 27, 42, 0.08)",
+                  background: "rgba(255,255,255,0.84)",
+                  borderRadius: "20px",
+                  padding: "1rem",
+                  textAlign: "left",
+                  color: "var(--ink)",
+                }}
+              >
+                <div style={{ fontWeight: 600 }}>📱 Phone number</div>
+                <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                  {resolvedPerson.phone
+                    ? `${resolvedPerson.phone} · ready for quick texting from reminders`
+                    : "Add a number if you'd like to text directly from reminders"}
+                </div>
+              </button>
+
+              {selectedHolidays.length ? (
+                <div
+                  style={{
+                    border: "1px solid rgba(10, 27, 42, 0.08)",
+                    background: "rgba(255,255,255,0.84)",
+                    borderRadius: "20px",
+                    padding: "1rem",
+                    color: "var(--ink)",
+                  }}
+                >
+                  <div style={{ fontWeight: 600 }}>🎉 Holidays that matter</div>
+                  <div style={{ marginTop: "0.5rem", display: "flex", flexWrap: "wrap", gap: "0.55rem" }}>
+                    {selectedHolidays.map((holidayId) => (
+                      <span
+                        key={holidayId}
+                        style={{
+                          borderRadius: "999px",
+                          background: "rgba(242,231,210,0.95)",
+                          padding: "0.5rem 0.7rem",
+                          fontSize: "0.88rem",
+                        }}
+                      >
+                        {holidayOptionLabel(holidayId)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {careHistory.length ? (
+                <div
+                  style={{
+                    border: "1px solid rgba(10, 27, 42, 0.08)",
+                    background: "rgba(255,255,255,0.84)",
+                    borderRadius: "20px",
+                    padding: "1rem",
+                    color: "var(--ink)",
+                  }}
+                >
+                  <div style={{ fontWeight: 600 }}>Recent care</div>
+                  <div style={{ marginTop: "0.7rem", display: "grid", gap: "0.6rem" }}>
+                    {careHistory.map((event) => (
+                      <div key={event.id} style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
+                        <span style={{ color: "var(--ink)" }}>{formatCareEventDate(event.timestamp)}</span> ·{" "}
+                        {describeCareEvent(event)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </SurfaceCard>
 
@@ -933,97 +1018,6 @@ export default function PersonDetail() {
 
               {!children.length && groupedRelatedPeople.length === 0 ? (
                 <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>No one else is connected yet.</div>
-              ) : null}
-            </div>
-          </SurfaceCard>
-
-          <SurfaceCard>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "baseline" }}>
-              <div>
-                <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>Ways to show up</div>
-                <div style={{ marginTop: "0.25rem", color: "var(--muted)", fontSize: "0.92rem" }}>
-                  Small things that make reminders easier to act on.
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={openPhoneEditor}
-                style={{ border: "none", background: "none", color: "var(--ink)", padding: 0, fontWeight: 600 }}
-              >
-                Edit
-              </button>
-            </div>
-
-            <div style={{ marginTop: "1rem", display: "grid", gap: "0.85rem" }}>
-              <button
-                type="button"
-                onClick={openPhoneEditor}
-                style={{
-                  border: "1px solid rgba(10, 27, 42, 0.08)",
-                  background: "rgba(255,255,255,0.84)",
-                  borderRadius: "20px",
-                  padding: "1rem",
-                  textAlign: "left",
-                  color: "var(--ink)",
-                }}
-              >
-                <div style={{ fontWeight: 600 }}>📱 Phone number</div>
-                <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
-                  {resolvedPerson.phone
-                    ? `${resolvedPerson.phone} · ready for quick texting from reminders`
-                    : "Add a number if you'd like to text directly from reminders"}
-                </div>
-              </button>
-
-              {selectedHolidays.length ? (
-                <div
-                  style={{
-                    border: "1px solid rgba(10, 27, 42, 0.08)",
-                    background: "rgba(255,255,255,0.84)",
-                    borderRadius: "20px",
-                    padding: "1rem",
-                    color: "var(--ink)",
-                  }}
-                >
-                  <div style={{ fontWeight: 600 }}>🎉 Holidays that matter</div>
-                  <div style={{ marginTop: "0.5rem", display: "flex", flexWrap: "wrap", gap: "0.55rem" }}>
-                    {selectedHolidays.map((holidayId) => (
-                      <span
-                        key={holidayId}
-                        style={{
-                          borderRadius: "999px",
-                          background: "rgba(242,231,210,0.95)",
-                          padding: "0.5rem 0.7rem",
-                          fontSize: "0.88rem",
-                        }}
-                      >
-                        {holidayOptionLabel(holidayId)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              {careHistory.length ? (
-                <div
-                  style={{
-                    border: "1px solid rgba(10, 27, 42, 0.08)",
-                    background: "rgba(255,255,255,0.84)",
-                    borderRadius: "20px",
-                    padding: "1rem",
-                    color: "var(--ink)",
-                  }}
-                >
-                  <div style={{ fontWeight: 600 }}>Recent care</div>
-                  <div style={{ marginTop: "0.7rem", display: "grid", gap: "0.6rem" }}>
-                    {careHistory.map((event) => (
-                      <div key={event.id} style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
-                        <span style={{ color: "var(--ink)" }}>{formatCareEventDate(event.timestamp)}</span> ·{" "}
-                        {describeCareEvent(event)}
-                      </div>
-                    ))}
-                  </div>
-                </div>
               ) : null}
             </div>
           </SurfaceCard>
@@ -1213,7 +1207,7 @@ export default function PersonDetail() {
             >
               <span>Choose the date</span>
               <span style={{ color: "var(--muted)" }}>
-                {customMomentDate ? formatBirthday(customMomentDate, monthDayFormatter, fullDateFormatter) : "Month and day"}
+                {customMomentDate ? formatBirthday(customMomentDate, monthDayFormatter, fullDateFormatter) : "Month, day, year"}
               </span>
             </button>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>

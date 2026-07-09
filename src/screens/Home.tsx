@@ -2090,7 +2090,7 @@ export default function Home({
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
                     <button
                       type="button"
-                      onClick={navigateToAddPerson}
+                      onClick={() => navigate(`/person/${recentlyAddedPerson.id}`)}
                       style={{
                         border: "1px solid var(--ink)",
                         background: "var(--ink)",
@@ -2103,11 +2103,11 @@ export default function Home({
                         fontFamily: "var(--font-sans)",
                       }}
                     >
-                      Add another person
+                      View {recentlyAddedPerson.name}
                     </button>
                     <button
                       type="button"
-                      onClick={() => navigate(`/person/${recentlyAddedPerson.id}`)}
+                      onClick={navigateToAddPerson}
                       style={{
                         border: "1px solid var(--border-strong)",
                         background: "rgba(255,255,255,0.7)",
@@ -2120,7 +2120,7 @@ export default function Home({
                         fontFamily: "var(--font-sans)",
                       }}
                     >
-                      View {recentlyAddedPerson.name}
+                      Add another person
                     </button>
                   </div>
                 </div>

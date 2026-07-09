@@ -29,8 +29,6 @@ type DisplayRelationship =
 
 type ReminderChoice = "birthday" | "anniversary" | "custom";
 
-type CustomSuggestion = "anotherSpecialDate" | "bigMilestone" | "somethingImportant" | "writeMyOwn";
-
 const RELATIONSHIP_OPTIONS: Array<{
   value: DisplayRelationship;
   label: string;
@@ -49,13 +47,6 @@ const REMINDER_OPTIONS: Array<{ value: ReminderChoice; label: string }> = [
   { value: "birthday", label: "🎂 Birthday" },
   { value: "anniversary", label: "💕 Anniversary" },
   { value: "custom", label: "✨ Another important date" },
-];
-
-const CUSTOM_SUGGESTIONS: Array<{ value: CustomSuggestion; label: string; presetTitle?: string }> = [
-  { value: "anotherSpecialDate", label: "Another special date", presetTitle: "Another special date" },
-  { value: "bigMilestone", label: "Big milestone", presetTitle: "Big milestone" },
-  { value: "somethingImportant", label: "Something important", presetTitle: "Something important" },
-  { value: "writeMyOwn", label: "Write my own" },
 ];
 
 function makeId() {
@@ -366,7 +357,6 @@ export default function AddPerson() {
       .map((moment) => ({ title: moment.label, date: moment.date }))
   );
   const [activeReminder, setActiveReminder] = useState<ReminderChoice | null>(null);
-  const [activeCustomSuggestion, setActiveCustomSuggestion] = useState<CustomSuggestion | null>(null);
   const [isCustomMomentOpen, setIsCustomMomentOpen] = useState(false);
   const [customMomentTitle, setCustomMomentTitle] = useState("");
   const [customMomentDate, setCustomMomentDate] = useState("");
@@ -452,6 +442,7 @@ export default function AddPerson() {
   const hasRelationship = requiresParentSelection
     ? Boolean(selectedRelationshipOption && selectedConnectionId.trim())
     : Boolean(selectedRelationshipOption);
+  const canSaveCustomMoment = Boolean(customMomentTitle.trim() && customMomentDate);
   const hasAnyReminder = Boolean(
     buildBirthdayIso(birthdayMonthDay, birthdayYear) || anniversary || customMoments.length
   );
@@ -505,7 +496,6 @@ export default function AddPerson() {
   }, [hasName, name]);
 
   function resetCustomDraft() {
-    setActiveCustomSuggestion(null);
     setCustomMomentTitle("");
     setCustomMomentDate("");
     setCustomDraftMonthDay("");
@@ -919,23 +909,11 @@ export default function AddPerson() {
                 <div style={{ fontSize: "1.08rem", fontWeight: 600, color: "var(--ink)" }}>
                   What should we remember for {promptName}?
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.65rem" }}>
-                  {CUSTOM_SUGGESTIONS.map((suggestion) => (
-                    <ChipButton
-                      key={suggestion.value}
-                      active={activeCustomSuggestion === suggestion.value}
-                      label={suggestion.label}
-                      onClick={() => {
-                        setActiveCustomSuggestion(suggestion.value);
-                        setCustomMomentTitle(suggestion.presetTitle ?? "");
-                      }}
-                    />
-                  ))}
-                </div>
+                <div style={{ color: "var(--muted)", fontSize: "0.88rem", fontWeight: 600 }}>Title</div>
                 <input
                   value={customMomentTitle}
                   onChange={(e) => setCustomMomentTitle(e.target.value)}
-                  placeholder={`What should we remember about ${promptName}?`}
+                  placeholder="What would you like to remember?"
                   style={{
                     width: "100%",
                     padding: "0.95rem 1rem",
@@ -944,6 +922,7 @@ export default function AddPerson() {
                     background: "rgba(255,255,255,0.95)",
                   }}
                 />
+                <div style={{ color: "var(--muted)", fontSize: "0.88rem", fontWeight: 600 }}>Date</div>
                 <button
                   type="button"
                   onClick={() => {
@@ -963,9 +942,9 @@ export default function AddPerson() {
                     color: "var(--ink)",
                   }}
                 >
-                  <span>Choose the date</span>
+                  <span>Date</span>
                   <span style={{ color: "var(--muted)" }}>
-                    {customMomentDate ? formatMomentDate(customMomentDate) : "Month and day"}
+                    {customMomentDate ? formatMomentDate(customMomentDate) : "Month, day, year"}
                   </span>
                 </button>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
@@ -989,10 +968,13 @@ export default function AddPerson() {
                       border: "none",
                       background: "transparent",
                       padding: 0,
-                      color: "var(--ink)",
+                      color: canSaveCustomMoment ? "var(--ink)" : "var(--muted)",
                       fontSize: "0.95rem",
                       fontWeight: 700,
+                      cursor: canSaveCustomMoment ? "pointer" : "default",
+                      opacity: canSaveCustomMoment ? 1 : 0.6,
                     }}
+                    disabled={!canSaveCustomMoment}
                   >
                     Add this date
                   </button>
