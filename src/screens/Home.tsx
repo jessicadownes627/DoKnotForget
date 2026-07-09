@@ -13,9 +13,16 @@ import { getRemindersToFire } from "../engine/reminderScheduler";
 import { getReminderId, markReminderFired } from "../engine/reminderRegistry";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import {
+  getAnniversaryPrompts,
+  getBirthdayPrompts,
+  getFatherPrompts,
+  getKidsBirthdayPrompts,
+  getMotherPrompts,
   type AnniversaryPromptItem,
   type BirthdayPromptItem,
+  type FatherPromptItem,
   type KidsBirthdayPromptItem,
+  type MotherPromptItem,
   type PromptItem,
 } from "../engine/promptEngine";
 import { getNextBirthdayFromIso } from "../utils/birthdayUtils";
@@ -25,6 +32,8 @@ import GoldenSunDivider from "../components/GoldenSunDivider";
 import ContactsSearchResults from "../components/ContactsSearchResults";
 import { filterContacts } from "../utils/contactSearch";
 import SmartMessageSuggestionsModal from "../components/SmartMessageSuggestionsModal";
+import SmartSuggestionCard from "../components/SmartSuggestionCard";
+import MicroQuestionCard from "../components/MicroQuestionCard";
 import { displayNameOrFallback } from "../utils/displayName";
 import { formatLocalYmd, parseLocalDate } from "../utils/date";
 import { buildHomeSections } from "../utils/homeSections";
@@ -841,11 +850,52 @@ export default function Home({
     return label.endsWith(suffix) ? label.slice(0, -suffix.length) : label;
   }
 
+  function reminderCardPresentation(reminder: ReminderEvent) {
+    const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
+
+    if (reminderContext?.kind === "childBirthday" || reminderContext?.kind === "childThroughRelationship") {
+      const recipientName = reminderContext.recipients[0]?.name?.trim() || "their family";
+      const firstRecipient = contactFirstName(recipientName);
+      return {
+        eyebrow: `Show up for ${firstRecipient}`,
+        support: `${reminderContext.subjectName} is part of ${firstRecipient}'s story.`,
+        border: "1px solid rgba(194, 148, 88, 0.18)",
+        background: "linear-gradient(180deg, rgba(255,255,255,0.76) 0%, rgba(249, 239, 229, 0.9) 100%)",
+      };
+    }
+
+    if (reminderContext?.kind === "anniversary") {
+      return {
+        eyebrow: "Celebrate together",
+        support: "A shared moment deserves a thoughtful note.",
+        border: "1px solid rgba(174, 108, 128, 0.18)",
+        background: "linear-gradient(180deg, rgba(255,255,255,0.76) 0%, rgba(245, 233, 236, 0.88) 100%)",
+      };
+    }
+
+    if (reminder.momentType === "custom") {
+      return {
+        eyebrow: "A meaningful moment",
+        support: "A small reminder can help you show up well.",
+        border: "1px solid rgba(10, 27, 42, 0.1)",
+        background: "linear-gradient(180deg, rgba(255,255,255,0.76) 0%, rgba(243, 238, 232, 0.88) 100%)",
+      };
+    }
+
+    return {
+      eyebrow: "Reach out directly",
+      support: "A simple note can go a long way.",
+      border: "1px solid rgba(10, 27, 42, 0.1)",
+      background: "linear-gradient(180deg, rgba(255,255,255,0.78) 0%, rgba(240, 236, 231, 0.88) 100%)",
+    };
+  }
+
   function buildReminderDisplay(reminder: ReminderEvent, section: "today" | "tomorrow" | "horizon") {
     const display = formatReminderCard(reminder);
     const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
     const childContext = getChildBirthdayContext(reminder, people, today);
     const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
+    const presentation = reminderCardPresentation(reminder);
     const latestGift = person?.giftHistory?.length ? person.giftHistory[person.giftHistory.length - 1] : null;
     const personName = (person?.name ?? reminder.personName).trim();
     const firstName = personName.split(" ")[0] || reminder.personName || "them";
@@ -904,6 +954,10 @@ export default function Home({
     return {
       title,
       date: formatReminderDate(eventDate ? formatYmd(eventDate) : reminder.date),
+      eyebrow: presentation.eyebrow,
+      support: presentation.support,
+      cardBorder: presentation.border,
+      cardBackground: presentation.background,
       giftLine: latestGift ? formatGiftHistoryLine(latestGift, new Date()) : null,
       actionHeading: reminderContext?.actionHeading ?? null,
       ideaHeading:
@@ -1501,6 +1555,56 @@ export default function Home({
     dismissPrompt(prompt);
   }
 
+  function handleMotherPromptYes(prompt: MotherPromptItem) {
+    const person = people.find((p) => p.id === prompt.personId) ?? null;
+    if (!person) {
+      dismissPrompt(prompt);
+      return;
+    }
+
+    if (prompt.type === "DISCOVER_MOTHER") {
+      updatePersonFields(prompt.personId, { isMother: true, hasKids: true });
+      dismissPrompt(prompt);
+      return;
+    }
+
+    const first = (person.name ?? "").trim().split(" ")[0] || person.name || "there";
+    if (person.phone) openSmsComposer(person.phone, `Happy Mother’s Day, ${first}. Thinking of you today.`);
+    dismissPrompt(prompt);
+  }
+
+  function handleMotherPromptNo(prompt: MotherPromptItem) {
+    if (prompt.type === "DISCOVER_MOTHER") {
+      updatePersonFields(prompt.personId, { isMother: false });
+    }
+    dismissPrompt(prompt);
+  }
+
+  function handleFatherPromptYes(prompt: FatherPromptItem) {
+    const person = people.find((p) => p.id === prompt.personId) ?? null;
+    if (!person) {
+      dismissPrompt(prompt);
+      return;
+    }
+
+    if (prompt.type === "DISCOVER_FATHER") {
+      updatePersonFields(prompt.personId, { isFather: true, hasKids: true });
+      dismissPrompt(prompt);
+      return;
+    }
+
+    const first = (person.name ?? "").trim().split(" ")[0] || person.name || "there";
+    if (person.phone) openSmsComposer(person.phone, `Happy Father’s Day, ${first}. Thinking of you today.`);
+    dismissPrompt(prompt);
+  }
+
+  function handleFatherPromptNo(prompt: FatherPromptItem) {
+    if (prompt.type === "DISCOVER_FATHER") {
+      updatePersonFields(prompt.personId, { isFather: false });
+    }
+    dismissPrompt(prompt);
+  }
+
   const unsnoozedCareSuggestions = useMemo(() => {
     const now = Date.now();
     function isSnoozed(cardId: string) {
@@ -1571,6 +1675,33 @@ export default function Home({
   const activeQuestion = useMemo(() => {
     return visibleCareSuggestions.find((s) => s.type === "question" && s.question) ?? null;
   }, [visibleCareSuggestions]);
+
+  const legacyPrompts = useMemo(() => {
+    if (activeTab !== "home") return [];
+    return [
+      ...getMotherPrompts(filteredPeople),
+      ...getFatherPrompts(filteredPeople),
+      ...getAnniversaryPrompts(filteredPeople),
+      ...getBirthdayPrompts(filteredPeople),
+      ...getKidsBirthdayPrompts(filteredPeople),
+    ];
+  }, [activeTab, filteredPeople, questionTick]);
+
+  const activeLegacyPrompt = useMemo(() => {
+    const prompts = legacyPrompts.filter((prompt) => {
+      try {
+        return !window.localStorage.getItem(promptDismissKey(prompt));
+      } catch {
+        return true;
+      }
+    });
+    return prompts[0] ?? null;
+  }, [legacyPrompts]);
+
+  const activeCareSuggestion = useMemo(() => {
+    if (activeQuestion) return null;
+    return visibleCareSuggestions.find((s) => s.type !== "question") ?? null;
+  }, [activeQuestion, visibleCareSuggestions]);
 
   useEffect(() => {
     if (!activeQuestion?.question) return;
@@ -1973,65 +2104,6 @@ export default function Home({
                 </div>
               </div>
 
-              <div style={{ marginTop: "24px", display: "grid", gap: "12px" }}>
-                <button
-                  onClick={navigateToAddPerson}
-                  style={{
-                    width: "100%",
-                    border: "1px solid var(--ink)",
-                    background: "var(--ink)",
-                    color: "var(--paper)",
-                    cursor: "pointer",
-                    textAlign: "center",
-                    fontWeight: 600,
-                    letterSpacing: "0.01em",
-                    borderRadius: "12px",
-                    padding: "0.85rem 1rem",
-                    fontSize: "1rem",
-                    fontFamily: "var(--font-sans)",
-                  }}
-                >
-                  Add a Person
-                </button>
-                <div
-                  style={{
-                    marginTop: "6px",
-                    paddingTop: "16px",
-                    borderTop: "1px solid var(--border)",
-                    display: "grid",
-                    gap: "10px",
-                  }}
-                >
-                  <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5, textAlign: "center" }}>
-                    Building a bigger circle? Import your contacts to get started faster.
-                  </div>
-                  <button
-                    onClick={navigateToImportContacts}
-                    style={{
-                      border: "1px solid var(--border-strong)",
-                      background: "transparent",
-                      color: "var(--ink)",
-                      cursor: "pointer",
-                      textAlign: "center",
-                      fontWeight: 500,
-                      letterSpacing: "0.01em",
-                      borderRadius: "12px",
-                      padding: "0.75rem 1rem",
-                      fontSize: "0.95rem",
-                      fontFamily: "var(--font-sans)",
-                    }}
-                  >
-                    Import from Contacts
-                  </button>
-                </div>
-              </div>
-
-              {!isPremium && people.length >= FREE_LIMIT ? (
-                <div style={{ marginTop: "8px", color: "var(--muted)", fontSize: "0.88rem", lineHeight: 1.5 }}>
-                  {`Your circle has ${people.length} people. Add more with Premium.`}
-                </div>
-              ) : null}
-
               {circleSuccessMessage && recentlyAddedPerson ? (
                 <div
                   style={{
@@ -2126,6 +2198,65 @@ export default function Home({
                 </div>
               ) : null}
 
+              <div style={{ marginTop: "24px", display: "grid", gap: "12px" }}>
+                <button
+                  onClick={navigateToAddPerson}
+                  style={{
+                    width: "100%",
+                    border: "1px solid var(--ink)",
+                    background: "var(--ink)",
+                    color: "var(--paper)",
+                    cursor: "pointer",
+                    textAlign: "center",
+                    fontWeight: 600,
+                    letterSpacing: "0.01em",
+                    borderRadius: "12px",
+                    padding: "0.85rem 1rem",
+                    fontSize: "1rem",
+                    fontFamily: "var(--font-sans)",
+                  }}
+                >
+                  Add a Person
+                </button>
+                <div
+                  style={{
+                    marginTop: "6px",
+                    paddingTop: "16px",
+                    borderTop: "1px solid var(--border)",
+                    display: "grid",
+                    gap: "10px",
+                  }}
+                >
+                  <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5, textAlign: "center" }}>
+                    Building a bigger circle? Import your contacts to get started faster.
+                  </div>
+                  <button
+                    onClick={navigateToImportContacts}
+                    style={{
+                      border: "1px solid var(--border-strong)",
+                      background: "transparent",
+                      color: "var(--ink)",
+                      cursor: "pointer",
+                      textAlign: "center",
+                      fontWeight: 500,
+                      letterSpacing: "0.01em",
+                      borderRadius: "12px",
+                      padding: "0.75rem 1rem",
+                      fontSize: "0.95rem",
+                      fontFamily: "var(--font-sans)",
+                    }}
+                  >
+                    Import from Contacts
+                  </button>
+                </div>
+              </div>
+
+              {!isPremium && people.length >= FREE_LIMIT ? (
+                <div style={{ marginTop: "8px", color: "var(--muted)", fontSize: "0.88rem", lineHeight: 1.5 }}>
+                  {`Your circle has ${people.length} people. Add more with Premium.`}
+                </div>
+              ) : null}
+
               {filteredPeople.length === 0 ? (
                 <div style={{ marginTop: "24px" }}>
                   {hasContacts ? (
@@ -2156,7 +2287,6 @@ export default function Home({
                   const tomorrowReminders = homeSections.tomorrowReminders;
                   const horizonEntries = homeSections.horizonEntries;
                   const hasPendingReminders = todayReminders.length > 0 || tomorrowReminders.length > 0 || horizonEntries.length > 0;
-                  void visibleCareSuggestions;
                   void handleSuggestionAction;
                   void handleQuestionChoose;
                   void handleQuestionDismiss;
@@ -2166,10 +2296,126 @@ export default function Home({
                   void handleAnniversaryPromptYes;
                   void handleKidsBirthdayPromptNo;
                   void handleKidsBirthdayPromptYes;
+                  void handleMotherPromptNo;
+                  void handleMotherPromptYes;
+                  void handleFatherPromptNo;
+                  void handleFatherPromptYes;
                   void partnerLinkPrompt;
                   const renderPromptGrid = (children: React.ReactNode) => (
                     <div style={{ display: "grid", gap: "16px" }}>{children}</div>
                   );
+
+                  const showDiscoverySurface = todayReminders.length === 0 && tomorrowReminders.length === 0;
+
+                  const renderLegacyPrompt = (prompt: PromptItem) => {
+                    if (prompt.type === "DISCOVER_BIRTHDAY" || prompt.type === "PREP_BIRTHDAY" || prompt.type === "TOMORROW_BIRTHDAY" || prompt.type === "TODAY_BIRTHDAY") {
+                      return (
+                        <SmartSuggestionCard
+                          variant={prompt.type === "DISCOVER_BIRTHDAY" ? "discover" : "nudge"}
+                          message={prompt.message}
+                          onYes={() => handleBirthdayPromptYes(prompt)}
+                          onNo={() => handleBirthdayPromptNo(prompt)}
+                          yesLabel={prompt.type === "DISCOVER_BIRTHDAY" ? "Add it" : "Do it"}
+                          noLabel="Not now"
+                        />
+                      );
+                    }
+
+                    if (
+                      prompt.type === "DISCOVER_ANNIVERSARY" ||
+                      prompt.type === "PREP_ANNIVERSARY" ||
+                      prompt.type === "ANNIVERSARY_TOMORROW" ||
+                      prompt.type === "ANNIVERSARY_TODAY"
+                    ) {
+                      return (
+                        <SmartSuggestionCard
+                          variant={prompt.type === "DISCOVER_ANNIVERSARY" ? "discover" : "nudge"}
+                          message={prompt.message}
+                          onYes={() => handleAnniversaryPromptYes(prompt)}
+                          onNo={() => handleAnniversaryPromptNo(prompt)}
+                          yesLabel={prompt.type === "DISCOVER_ANNIVERSARY" ? "Add it" : "Do it"}
+                          noLabel="Not now"
+                        />
+                      );
+                    }
+
+                    if (
+                      prompt.type === "DISCOVER_CHILD_BIRTHDAY" ||
+                      prompt.type === "PREP_CHILD_BIRTHDAY" ||
+                      prompt.type === "TOMORROW_CHILD_BIRTHDAY" ||
+                      prompt.type === "TODAY_CHILD_BIRTHDAY"
+                    ) {
+                      return (
+                        <SmartSuggestionCard
+                          variant={prompt.type === "DISCOVER_CHILD_BIRTHDAY" ? "discover" : "nudge"}
+                          message={prompt.message}
+                          onYes={() => handleKidsBirthdayPromptYes(prompt)}
+                          onNo={() => handleKidsBirthdayPromptNo(prompt)}
+                          yesLabel={prompt.type === "DISCOVER_CHILD_BIRTHDAY" ? "Add it" : "Do it"}
+                          noLabel="Not now"
+                        />
+                      );
+                    }
+
+                    if (prompt.type === "DISCOVER_MOTHER" || prompt.type === "NUDGE_MOTHERS_DAY") {
+                      return (
+                        <SmartSuggestionCard
+                          variant={prompt.type === "DISCOVER_MOTHER" ? "discover" : "nudge"}
+                          message={prompt.message}
+                          onYes={() => handleMotherPromptYes(prompt)}
+                          onNo={() => handleMotherPromptNo(prompt)}
+                          yesLabel={prompt.type === "DISCOVER_MOTHER" ? "Yes" : "Text"}
+                          noLabel="Not now"
+                        />
+                      );
+                    }
+
+                    if (prompt.type === "DISCOVER_FATHER" || prompt.type === "NUDGE_FATHERS_DAY") {
+                      return (
+                        <SmartSuggestionCard
+                          variant={prompt.type === "DISCOVER_FATHER" ? "discover" : "nudge"}
+                          message={prompt.message}
+                          onYes={() => handleFatherPromptYes(prompt)}
+                          onNo={() => handleFatherPromptNo(prompt)}
+                          yesLabel={prompt.type === "DISCOVER_FATHER" ? "Yes" : "Text"}
+                          noLabel="Not now"
+                        />
+                      );
+                    }
+
+                    return null;
+                  };
+
+                  const renderCareSuggestionCard = (suggestion: typeof activeCareSuggestion) => {
+                    if (!suggestion) return null;
+                    const message = [suggestion.title, suggestion.message, suggestion.insight].filter(Boolean).join("\n");
+                    return (
+                      <SmartSuggestionCard
+                        variant="nudge"
+                        message={message}
+                        actions={[
+                          {
+                            label: suggestion.actionLabel,
+                            onClick: () => handleSuggestionAction(suggestion.id),
+                          },
+                          {
+                            label: "Not now",
+                            onClick: () => {
+                              try {
+                                window.localStorage.setItem(
+                                  `doknotforget_snooze_${suggestion.id}`,
+                                  String(Date.now() + 7 * 24 * 60 * 60 * 1000)
+                                );
+                              } catch {
+                                // ignore
+                              }
+                              setQuestionTick((v) => v + 1);
+                            },
+                          },
+                        ]}
+                      />
+                    );
+                  };
 
                   const renderReminderCards = (items: ReminderEvent[], section: "today" | "tomorrow") => (
                     <div style={{ display: "grid", gap: "16px" }}>
@@ -2190,9 +2436,9 @@ export default function Home({
                             key={reminderId}
                             className="smart-card"
                             style={{
-                              border: "1px solid var(--border)",
+                              border: display.cardBorder,
                               borderRadius: "16px",
-                              background: "rgba(255,255,255,0.7)",
+                              background: display.cardBackground,
                               padding: "16px",
                               overflow: "hidden",
                               display: "grid",
@@ -2202,12 +2448,30 @@ export default function Home({
                             }}
                           >
                             <div style={{ display: "grid", gap: "8px" }}>
+                              {display.eyebrow ? (
+                                <div
+                                  style={{
+                                    color: "var(--muted)",
+                                    fontSize: "0.82rem",
+                                    fontWeight: 700,
+                                    letterSpacing: "0.04em",
+                                    textTransform: "uppercase",
+                                  }}
+                                >
+                                  {display.eyebrow}
+                                </div>
+                              ) : null}
                               <div style={{ color: "var(--ink)", fontSize: "16px", lineHeight: 1.5, fontWeight: 700 }}>
                                 {display.title}
                               </div>
                               <div style={{ color: "var(--ink)", fontSize: "16px", lineHeight: 1.5 }}>
                                 {display.date}
                               </div>
+                              {display.support ? (
+                                <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
+                                  {display.support}
+                                </div>
+                              ) : null}
                               {display.actionHeading ? (
                                 <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
                                   {display.actionHeading}
@@ -2485,6 +2749,39 @@ export default function Home({
                         </>
                       ) : null}
 
+                      {showDiscoverySurface && activeLegacyPrompt ? (
+                        <>
+                          <div style={{ ...headerStyle, marginTop: hasPendingReminders ? "24px" : "8px" }}>
+                            Thoughtful prompts
+                          </div>
+                          {renderPromptGrid(renderLegacyPrompt(activeLegacyPrompt))}
+                        </>
+                      ) : null}
+
+                      {showDiscoverySurface && !activeLegacyPrompt && activeQuestion ? (
+                        <>
+                          <div style={{ ...headerStyle, marginTop: hasPendingReminders ? "24px" : "8px" }}>
+                            A quick question
+                          </div>
+                          {renderPromptGrid(
+                            <MicroQuestionCard
+                              suggestion={activeQuestion}
+                              onChoose={(optionId, data) => handleQuestionChoose(activeQuestion.id, optionId, data)}
+                              onDismiss={() => handleQuestionDismiss(activeQuestion.id)}
+                            />
+                          )}
+                        </>
+                      ) : null}
+
+                      {showDiscoverySurface && !activeLegacyPrompt && !activeQuestion && activeCareSuggestion ? (
+                        <>
+                          <div style={{ ...headerStyle, marginTop: hasPendingReminders ? "24px" : "8px" }}>
+                            A thoughtful nudge
+                          </div>
+                          {renderPromptGrid(renderCareSuggestionCard(activeCareSuggestion))}
+                        </>
+                      ) : null}
+
                       {horizonEntries.length > 0 ? (
                         <>
                           <div style={{ ...headerStyle, marginTop: todayReminders.length > 0 || tomorrowReminders.length > 0 ? "24px" : "8px" }}>
@@ -2503,9 +2800,9 @@ export default function Home({
                                     className="smart-card"
                                     onClick={() => navigate(`/person/${reminder.personId}`)}
                                     style={{
-                                      border: "1px solid var(--border)",
+                                      border: display.cardBorder,
                                       borderRadius: "16px",
-                                      background: "rgba(255,255,255,0.7)",
+                                      background: display.cardBackground,
                                       padding: "16px",
                                       display: "grid",
                                       gap: "16px",
@@ -2513,12 +2810,30 @@ export default function Home({
                                     }}
                                   >
                                     <div style={{ display: "grid", gap: "8px" }}>
+                                      {display.eyebrow ? (
+                                        <div
+                                          style={{
+                                            color: "var(--muted)",
+                                            fontSize: "0.82rem",
+                                            fontWeight: 700,
+                                            letterSpacing: "0.04em",
+                                            textTransform: "uppercase",
+                                          }}
+                                        >
+                                          {display.eyebrow}
+                                        </div>
+                                      ) : null}
                                       <div style={{ color: "var(--ink)", fontSize: "16px", lineHeight: 1.5, fontWeight: 700 }}>
                                         {display.title}
                                       </div>
                                       <div style={{ color: "var(--ink)", fontSize: "16px", lineHeight: 1.5 }}>
                                         {formatReminderDate(moment.eventDate)}
                                       </div>
+                                      {display.support ? (
+                                        <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
+                                          {display.support}
+                                        </div>
+                                      ) : null}
                                       {display.giftLine ? (
                                         <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
                                           {display.giftLine}
