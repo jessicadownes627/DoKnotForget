@@ -5,12 +5,10 @@ import type { Relationship } from "../models/Relationship";
 import PersonEditDrawer from "../components/PersonEditDrawer";
 import type { FamilyChildDraft } from "../components/PersonEditDrawer";
 import MomentDatePicker from "../components/MomentDatePicker";
-import ContactsSearchResults from "../components/ContactsSearchResults";
 import { useAppState } from "../appState";
 import { useLocation, useNavigate, useParams } from "../router";
 import { getNextBirthdayFromIso } from "../utils/birthdayUtils";
 import { parseLocalDate } from "../utils/date";
-import { filterContacts } from "../utils/contactSearch";
 import { normalizePhone } from "../utils/phone";
 import { getSelectedHolidays, holidayOptionLabel } from "../utils/personHolidays";
 import { buildAddPersonRelationshipPersistence } from "../utils/addPersonRelationshipPersistence";
@@ -184,22 +182,11 @@ export default function PersonDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams<{ id: string }>();
-  const { people, relationships, careEvents, updatePerson, updatePersonFields, upsertRelationship, deletePerson, savePerson } =
+  const { people, relationships, careEvents, updatePerson, updatePersonFields, deletePerson, savePerson } =
     useAppState();
   const person = people.find((p) => p.id === id) ?? null;
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [startWithNewChild, setStartWithNewChild] = useState(false);
-  const [isAddConnectionOpen, setIsAddConnectionOpen] = useState(false);
-  const [connectionType, setConnectionType] = useState<"partner" | "child" | "grandchild" | "familyMember">("child");
-  const [connectionName, setConnectionName] = useState("");
-  const [connectionPhone, setConnectionPhone] = useState("");
-  const [connectionPhoneError, setConnectionPhoneError] = useState(false);
-  const [connectionBirthdayMonthDay, setConnectionBirthdayMonthDay] = useState("");
-  const [connectionBirthdayYear, setConnectionBirthdayYear] = useState("");
-  const [isConnectionBirthdayOpen, setIsConnectionBirthdayOpen] = useState(false);
-  const [editingConnection, setEditingConnection] = useState<EditableConnection | null>(null);
-  const [connectionSearch, setConnectionSearch] = useState("");
-  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const [momentComposer, setMomentComposer] = useState<MomentComposerState>({ kind: "hidden" });
   const [birthdayDraftMonthDay, setBirthdayDraftMonthDay] = useState("");
   const [birthdayDraftYear, setBirthdayDraftYear] = useState("");
@@ -228,10 +215,6 @@ export default function PersonDetail() {
       )
     : [];
   const returnToImportReview = location.state?.returnToImportReview === true && reviewImportedIds.length > 0;
-  const startConnectionType =
-    location.state?.startConnectionType === "child" || location.state?.startConnectionType === "partner"
-      ? location.state.startConnectionType
-      : null;
 
   function navigateBack() {
     if (returnToImportReview) {
@@ -240,14 +223,6 @@ export default function PersonDetail() {
     }
     navigate("/home", { state: { defaultTab: "contacts" } });
   }
-
-  useEffect(() => {
-    if (!startConnectionType) return;
-    resetConnectionDraft();
-    setConnectionType(startConnectionType);
-    setIsAddConnectionOpen(true);
-    navigate(location.pathname, { replace: true });
-  }, [location.pathname, navigate, startConnectionType]);
 
   const monthDayFormatter = useMemo(
     () => new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" }),
@@ -343,24 +318,6 @@ export default function PersonDetail() {
       }))
       .filter((group) => group.items.length > 0);
   }, [relatedPeople]);
-
-  const availableConnections = useMemo(() => {
-    const connectedIds = new Set(relatedPeople.map((item) => item.person.id));
-    return people.filter((candidate) => {
-      if (candidate.id === resolvedPerson.id) return false;
-      if (editingConnection?.person.id === candidate.id) return true;
-      return !connectedIds.has(candidate.id);
-    });
-  }, [editingConnection?.person.id, people, relatedPeople, resolvedPerson.id]);
-
-  const filteredConnectionResults = useMemo(() => {
-    return filterContacts(availableConnections, connectionSearch).slice(0, 8);
-  }, [availableConnections, connectionSearch]);
-
-  const selectedConnection =
-    !editingConnection && selectedConnectionId
-      ? availableConnections.find((candidate) => candidate.id === selectedConnectionId) ?? null
-      : null;
 
   const careHistory = useMemo(() => {
     return [...careEvents]
@@ -504,121 +461,6 @@ export default function PersonDetail() {
     resetMomentComposer();
   }
 
-  function resetConnectionDraft() {
-    setConnectionType(resolvedPerson.partnerId ? "child" : "partner");
-    setConnectionName("");
-    setConnectionPhone("");
-    setConnectionPhoneError(false);
-    setConnectionBirthdayMonthDay("");
-    setConnectionBirthdayYear("");
-    setIsConnectionBirthdayOpen(false);
-    setEditingConnection(null);
-    setConnectionSearch("");
-    setSelectedConnectionId(null);
-  }
-
-  function openAddConnection(startType: "child" | "partner" | "familyMember" = "familyMember") {
-    resetConnectionDraft();
-    setConnectionType(startType);
-    setIsAddConnectionOpen(true);
-  }
-
-  function saveConnection() {
-    if (editingConnection) {
-      const trimmedName = connectionName.trim();
-      if (!trimmedName) return;
-
-      const normalizedPhone = connectionPhone.trim() ? normalizePhone(connectionPhone) : null;
-      if (connectionPhone.trim() && !normalizedPhone) {
-        setConnectionPhoneError(true);
-        return;
-      }
-
-      const birthdayIso = buildMomentIso(connectionBirthdayMonthDay, connectionBirthdayYear, false);
-      const existingMoments = [...(editingConnection.person.moments ?? [])];
-      const existingBirthdayIndex = existingMoments.findIndex((moment) => moment.type === "birthday");
-      if (birthdayIso) {
-        const nextBirthdayMoment = {
-          id: existingBirthdayIndex >= 0 ? existingMoments[existingBirthdayIndex].id : makeId(),
-          type: "birthday" as const,
-          label: "Birthday",
-          date: birthdayIso,
-          recurring: true,
-        };
-        if (existingBirthdayIndex >= 0) existingMoments[existingBirthdayIndex] = nextBirthdayMoment;
-        else existingMoments.unshift(nextBirthdayMoment);
-      } else if (existingBirthdayIndex >= 0) {
-        existingMoments.splice(existingBirthdayIndex, 1);
-      }
-
-      const relationshipType: Relationship["type"] =
-        connectionType === "partner" ? "partner" : connectionType === "child" ? "child" : "other";
-
-      updatePerson({
-        ...editingConnection.person,
-        name: trimmedName,
-        phone: normalizedPhone || undefined,
-        moments: existingMoments,
-        importantDates: existingMoments.filter((moment) => moment.type === "custom"),
-        partnerId:
-          relationshipType === "partner"
-            ? resolvedPerson.id
-            : editingConnection.person.partnerId === resolvedPerson.id
-              ? null
-              : editingConnection.person.partnerId,
-      });
-
-      updatePerson({
-        ...resolvedPerson,
-        partnerId:
-          relationshipType === "partner"
-            ? editingConnection.person.id
-            : resolvedPerson.partnerId === editingConnection.person.id
-              ? null
-              : resolvedPerson.partnerId,
-      });
-
-      upsertRelationship({
-        id: editingConnection.relationshipId ?? makeId(),
-        fromId: resolvedPerson.id,
-        toId: editingConnection.person.id,
-        type: relationshipType,
-      });
-
-      setIsAddConnectionOpen(false);
-      resetConnectionDraft();
-      return;
-    }
-
-    if (!selectedConnection) return;
-    if (!people.some((candidate) => candidate.id === selectedConnection.id)) return;
-
-    const relationshipType: Relationship["type"] =
-      connectionType === "partner" ? "partner" : connectionType === "child" ? "child" : "other";
-
-    updatePerson({
-      ...resolvedPerson,
-      partnerId: relationshipType === "partner" ? selectedConnection.id : resolvedPerson.partnerId,
-    });
-
-    if (relationshipType === "partner") {
-      updatePerson({
-        ...selectedConnection,
-        partnerId: resolvedPerson.id,
-      });
-    }
-
-    upsertRelationship({
-      id: makeId(),
-      fromId: resolvedPerson.id,
-      toId: selectedConnection.id,
-      type: relationshipType,
-    });
-
-    setIsAddConnectionOpen(false);
-    resetConnectionDraft();
-  }
-
   function openPersonEditor() {
     setStartWithNewChild(false);
     setIsEditOpen(true);
@@ -629,16 +471,19 @@ export default function PersonDetail() {
     setIsEditOpen(true);
   }
 
-  function openAddChildEditor() {
-    setStartWithNewChild(true);
-    setIsAddConnectionOpen(false);
-    setIsEditOpen(true);
-  }
-
   function openPhoneEditor() {
     setPhoneDraft(resolvedPerson.phone ?? "");
     setPhoneDraftError(false);
     setIsPhoneEditorOpen(true);
+  }
+
+  function openAddConnectedPerson() {
+    navigate("/add", {
+      state: {
+        connectedToPersonId: resolvedPerson.id,
+        connectedToPersonName: resolvedPerson.name.trim(),
+      },
+    });
   }
 
   function savePhone() {
@@ -726,8 +571,19 @@ export default function PersonDetail() {
             <button
               type="button"
               onClick={navigateBack}
-              style={{ border: "none", background: "none", color: "var(--muted)", padding: 0 }}
+              style={{
+                border: "none",
+                background: "none",
+                color: "var(--muted)",
+                padding: 0,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+              }}
             >
+              <span aria-hidden="true" style={{ fontSize: "1rem", lineHeight: 1 }}>
+                ←
+              </span>
               Back
             </button>
             <button
@@ -735,7 +591,7 @@ export default function PersonDetail() {
               onClick={openPersonEditor}
               style={{ border: "none", background: "none", color: "var(--muted)", padding: 0 }}
             >
-              Edit details
+              Edit
             </button>
           </div>
 
@@ -783,13 +639,6 @@ export default function PersonDetail() {
                   Small things that make reminders easier to act on.
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={openPhoneEditor}
-                style={{ border: "none", background: "none", color: "var(--ink)", padding: 0, fontWeight: 600 }}
-              >
-                Edit
-              </button>
             </div>
 
             <div style={{ marginTop: "1rem", display: "grid", gap: "0.85rem" }}>
@@ -874,13 +723,6 @@ export default function PersonDetail() {
                   What helps you remember {resolvedPerson.name.trim()} well.
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setMomentComposer({ kind: "chooser" })}
-                style={{ border: "none", background: "none", color: "var(--ink)", padding: 0, fontWeight: 600 }}
-              >
-                Add
-              </button>
             </div>
 
             <div style={{ marginTop: "1rem", display: "grid", gap: "0.85rem" }}>
@@ -961,7 +803,7 @@ export default function PersonDetail() {
               </div>
               <button
                 type="button"
-                onClick={() => openAddConnection("familyMember")}
+                onClick={openAddConnectedPerson}
                 style={{ border: "none", background: "none", color: "var(--ink)", padding: 0, fontWeight: 600 }}
               >
                 Add
@@ -1323,290 +1165,6 @@ export default function PersonDetail() {
             </div>
           </div>
         </div>
-      ) : null}
-
-      {isAddConnectionOpen ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Add connection"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 18, 24, 0.35)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "flex-end",
-            padding: "12px",
-            overflowY: "auto",
-            WebkitOverflowScrolling: "touch",
-            zIndex: 55,
-          }}
-          onMouseDown={(e) => {
-            if (e.target !== e.currentTarget) return;
-            setIsAddConnectionOpen(false);
-            resetConnectionDraft();
-          }}
-        >
-          <div
-            style={{
-              width: "100%",
-              maxWidth: "720px",
-              maxHeight: "calc(100dvh - 24px)",
-              background: "var(--card)",
-              border: "1px solid var(--border)",
-              borderRadius: "16px",
-              boxShadow: "0 18px 55px rgba(0,0,0,0.18)",
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
-            }}
-          >
-            <div className="modalContent" style={{ fontFamily: "var(--font-sans)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "1rem" }}>
-                <div style={{ fontFamily: "var(--font-serif)", fontSize: "1.25rem", fontWeight: 600, color: "var(--ink)" }}>
-                  {editingConnection ? "Edit connection" : "Add someone connected"}
-                </div>
-                <button
-                  onClick={() => {
-                    setIsAddConnectionOpen(false);
-                    resetConnectionDraft();
-                  }}
-                  style={{
-                    padding: 0,
-                    border: "none",
-                    background: "none",
-                    color: "var(--muted)",
-                    cursor: "pointer",
-                    textDecoration: "underline",
-                    textUnderlineOffset: "3px",
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-
-              <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
-                <div>
-                  <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Connection</div>
-                  <select
-                    value={connectionType}
-                    onChange={(e) => setConnectionType(e.target.value as typeof connectionType)}
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem 0.85rem",
-                      borderRadius: "12px",
-                      border: "1px solid var(--border-strong)",
-                      background: "var(--card)",
-                      color: "var(--ink)",
-                      fontSize: "1rem",
-                      marginTop: "6px",
-                    }}
-                  >
-                    <option value="partner" disabled={Boolean(person.partnerId && person.partnerId !== editingConnection?.person.id)}>
-                      Partner
-                    </option>
-                    <option value="child">Child</option>
-                    <option value="grandchild">Grandchild</option>
-                    <option value="familyMember">Someone important</option>
-                  </select>
-                </div>
-
-                {editingConnection ? (
-                  <>
-                    <div>
-                      <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Name</div>
-                      <input
-                        value={connectionName}
-                        onChange={(e) => setConnectionName(e.target.value)}
-                        placeholder="Name"
-                        style={{
-                          width: "100%",
-                          padding: "0.75rem 0.85rem",
-                          borderRadius: "12px",
-                          border: "1px solid var(--border-strong)",
-                          background: "var(--card)",
-                          color: "var(--ink)",
-                          fontSize: "1rem",
-                          marginTop: "6px",
-                        }}
-                      />
-                    </div>
-
-                    <div>
-                      <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Phone (optional)</div>
-                      <input
-                        type="tel"
-                        value={connectionPhone}
-                        onChange={(e) => {
-                          const next = e.target.value;
-                          setConnectionPhone(next);
-                          if (!next.trim()) setConnectionPhoneError(false);
-                          else if (normalizePhone(next)) setConnectionPhoneError(false);
-                        }}
-                        placeholder="Phone"
-                        style={{
-                          width: "100%",
-                          padding: "0.75rem 0.85rem",
-                          borderRadius: "12px",
-                          border: "1px solid var(--border-strong)",
-                          background: "var(--card)",
-                          color: "var(--ink)",
-                          fontSize: "1rem",
-                          marginTop: "6px",
-                        }}
-                      />
-                      {connectionPhoneError ? (
-                        <div style={{ marginTop: "6px", color: "#b42318", fontSize: "0.85rem" }}>
-                          Enter a valid phone number.
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <button
-                      onClick={() => setIsConnectionBirthdayOpen(true)}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "1rem",
-                        width: "100%",
-                        padding: "0.85rem 0.95rem",
-                        borderRadius: "12px",
-                        border: "1px solid var(--border-strong)",
-                        background: "var(--card)",
-                        cursor: "pointer",
-                        color: "var(--ink)",
-                        fontSize: "0.98rem",
-                        textAlign: "left",
-                      }}
-                    >
-                      <span>Birthday (optional)</span>
-                      <span style={{ color: "var(--muted)" }}>
-                        {buildMomentIso(connectionBirthdayMonthDay, connectionBirthdayYear, false)
-                          ? formatMonthDay(
-                              buildMomentIso(connectionBirthdayMonthDay, connectionBirthdayYear, false)
-                                .split("-")
-                                .slice(1)
-                                .join("-"),
-                              monthDayFormatter
-                            )
-                          : "Select date"}
-                      </span>
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {connectionType === "child" ? (
-                      <button
-                        onClick={openAddChildEditor}
-                        style={{
-                          padding: 0,
-                          border: "none",
-                          background: "none",
-                          cursor: "pointer",
-                          color: "var(--ink)",
-                          textDecoration: "underline",
-                          textUnderlineOffset: "3px",
-                          fontSize: "0.95rem",
-                          justifySelf: "start",
-                        }}
-                      >
-                        Create a new child
-                      </button>
-                    ) : null}
-
-                    <div>
-                      <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Choose someone already in your circle</div>
-                      <input
-                        value={connectionSearch}
-                        onChange={(e) => setConnectionSearch(e.target.value)}
-                        placeholder="Search your circle"
-                        autoFocus
-                        style={{
-                          width: "100%",
-                          padding: "0.75rem 0.85rem",
-                          borderRadius: "12px",
-                          border: "1px solid var(--border-strong)",
-                          background: "var(--card)",
-                          color: "var(--ink)",
-                          fontSize: "1rem",
-                          marginTop: "6px",
-                        }}
-                      />
-                    </div>
-
-                    {selectedConnection ? (
-                      <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5 }}>
-                        Selected: <span style={{ color: "var(--ink)", fontWeight: 500 }}>{selectedConnection.name}</span>
-                      </div>
-                    ) : null}
-
-                    <ContactsSearchResults
-                      results={filteredConnectionResults}
-                      onSelect={(selectedPerson) => {
-                        setSelectedConnectionId(selectedPerson.id);
-                        setConnectionSearch(selectedPerson.name);
-                      }}
-                    />
-                  </>
-                )}
-
-                <button
-                  onClick={saveConnection}
-                  disabled={editingConnection ? !connectionName.trim() : !selectedConnectionId}
-                  style={{
-                    border: "1px solid var(--border-strong)",
-                    background: "transparent",
-                    color:
-                      editingConnection
-                        ? connectionName.trim()
-                          ? "var(--ink)"
-                          : "var(--muted)"
-                        : selectedConnectionId
-                          ? "var(--ink)"
-                          : "var(--muted)",
-                    cursor:
-                      editingConnection
-                        ? connectionName.trim()
-                          ? "pointer"
-                          : "default"
-                        : selectedConnectionId
-                          ? "pointer"
-                          : "default",
-                    textAlign: "center",
-                    fontWeight: 500,
-                    letterSpacing: "0.01em",
-                    borderRadius: "12px",
-                    padding: "0.85rem 1.1rem",
-                    fontSize: "0.98rem",
-                    boxShadow: "none",
-                  }}
-                >
-                  {editingConnection ? "Save connection" : "Add to the page"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {isConnectionBirthdayOpen ? (
-        <MomentDatePicker
-          isOpen
-          title="Connection birthday"
-          mode="birthday"
-          monthDay={connectionBirthdayMonthDay}
-          setMonthDay={setConnectionBirthdayMonthDay}
-          year={connectionBirthdayYear}
-          setYear={setConnectionBirthdayYear}
-          yearHelperText=""
-          onSave={() => setIsConnectionBirthdayOpen(false)}
-          onCancel={() => setIsConnectionBirthdayOpen(false)}
-          onClear={() => {
-            setConnectionBirthdayMonthDay("");
-            setConnectionBirthdayYear("");
-          }}
-        />
       ) : null}
 
       <PersonEditDrawer

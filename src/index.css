@@ -1224,6 +1224,38 @@ select {
   }
 }
 
+@keyframes dkfCircleButtonShimmer {
+  0%,
+  72%,
+  100% {
+    background-position: 200% 50%;
+  }
+  82% {
+    background-position: -20% 50%;
+  }
+  92% {
+    background-position: -80% 50%;
+  }
+}
+
+.dkf-circle-shimmer-button {
+  position: relative;
+  overflow: hidden;
+  background-image: linear-gradient(
+    110deg,
+    rgba(249, 243, 237, 0.98) 0%,
+    rgba(238, 229, 219, 0.98) 38%,
+    rgba(255, 251, 247, 0.94) 49%,
+    rgba(255, 255, 255, 0.98) 52%,
+    rgba(247, 241, 235, 0.92) 56%,
+    rgba(231, 221, 210, 0.98) 68%,
+    rgba(244, 235, 226, 0.98) 100%
+  );
+  background-size: 220% 100%;
+  background-position: 200% 50%;
+  animation: dkfCircleButtonShimmer 8.5s ease-in-out infinite;
+}
+
 
 .phone {
   margin-top: 0.35rem;

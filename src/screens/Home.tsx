@@ -66,12 +66,12 @@ const homeHeaderDateFormatter = new Intl.DateTimeFormat("en-US", {
 });
 
 const CHILD_QUICK_IDEAS = [
-  "Bring balloons",
+  "Grab a balloon or small surprise",
+  "Pick up a coloring book or craft",
+  "Get a small toy they'd love",
+  "Bring something fun they can open",
   "Drop off a birthday card",
   "Bring a cupcake",
-  "Send a small gift card (Roblox, toy store, or ice cream)",
-  "Bring a small toy",
-  "Draw them a funny picture",
   "Leave a birthday surprise at the door",
 ];
 
@@ -119,6 +119,7 @@ const ADULT_QUICK_IDEAS = [
 
 const RECOMMENDATIONS_SHEET_URL = (import.meta.env.VITE_RECOMMENDATIONS_SHEET_URL ?? "").trim();
 const FREE_LIMIT = 3;
+const CIRCLE_NAVY = "#17324d";
 
 function startOfToday() {
   const now = new Date();
@@ -319,6 +320,50 @@ function calculateAge(birthday: string | undefined, referenceDate = new Date()) 
   return age >= 0 ? age : undefined;
 }
 
+function reminderDaysAway(reminder: ReminderEvent, referenceDate: Date) {
+  const eventDate = reminderEventDate(reminder);
+  if (!eventDate) return null;
+  const todayDate = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+  const targetDate = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+  return Math.round((targetDate.getTime() - todayDate.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+function buildHorizonActionLabels(args: {
+  seed: string;
+  subjectName: string;
+  recipientName?: string;
+  age?: number;
+}) {
+  const { seed, subjectName, recipientName, age } = args;
+  const subjectFirst = contactFirstName(subjectName);
+  const recipientFirst = recipientName ? contactFirstName(recipientName) : "";
+
+  if (age !== undefined && age < 13) {
+    const relationalIdea = recipientFirst
+      ? `Ask ${recipientFirst} what ${subjectFirst} is into right now`
+      : `Ask what ${subjectFirst} is into right now`;
+    const concreteIdeas =
+      age <= 7
+        ? CHILD_QUICK_IDEAS
+        : [
+            "Drop off a birthday card",
+            "Bring a cupcake",
+            "Leave a birthday surprise at the door",
+            "Get a small toy they'd love",
+          ];
+    return [relationalIdea, ...pickQuickIdeas(seed, concreteIdeas).slice(0, 2)];
+  }
+
+  const ideaPool =
+    age !== undefined && MILESTONE_AGES.has(age)
+      ? MILESTONE_QUICK_IDEAS
+      : age !== undefined && age < 18
+        ? TEEN_QUICK_IDEAS
+        : ADULT_QUICK_IDEAS;
+
+  return pickQuickIdeas(seed, ideaPool).slice(0, 3);
+}
+
 function getChildBirthdayContext(reminder: ReminderEvent, people: Person[], today: Date) {
   if (reminder.momentType !== "childBirthday") return null;
 
@@ -400,6 +445,7 @@ function pickRandomRecommendations(recommendations: SheetRecommendation[]) {
 
 export default function Home({
 }: {}) {
+  const reminderUndoTimeoutRef = useRef<number | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { people, relationships, relationshipLinksV2, isPremium, updatePerson, updatePersonFields, createPerson, recordCareEvent } = useAppState();
@@ -418,6 +464,7 @@ export default function Home({
     }
   });
   const [dismissedReminderKeys, setDismissedReminderKeys] = useState<Record<string, true>>({});
+  const [undoableReminderId, setUndoableReminderId] = useState<string | null>(null);
   const [circleSuccessMessage, setCircleSuccessMessage] = useState("");
   const [recentlyAddedPersonId, setRecentlyAddedPersonId] = useState<string | null>(null);
   const [sheetRecommendations, setSheetRecommendations] = useState<SheetRecommendation[]>([]);
@@ -435,7 +482,7 @@ export default function Home({
   const [smsSuggestions, setSmsSuggestions] = useState<null | {
     personName: string;
     phone: string;
-    suggestions: Array<{ id: "quick" | "friendly" | "thoughtful" | "simple" | "custom"; label: string; message: string }>;
+    suggestions: Array<{ id: string; label?: string; message: string }>;
     onAfterSend?: () => void;
   }>(null);
   const previousPeopleCountRef = useRef<number>(people.length);
@@ -589,6 +636,15 @@ export default function Home({
       // ignore
     }
   }, [handledReminderActions]);
+
+  useEffect(
+    () => () => {
+      if (reminderUndoTimeoutRef.current) {
+        window.clearTimeout(reminderUndoTimeoutRef.current);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     try {
@@ -884,7 +940,7 @@ export default function Home({
 
     return {
       eyebrow: "Reach out directly",
-      support: "A simple note can go a long way.",
+      support: "Today might be a nice day to reach out.",
       border: "1px solid rgba(10, 27, 42, 0.1)",
       background: "linear-gradient(180deg, rgba(255,255,255,0.78) 0%, rgba(240, 236, 231, 0.88) 100%)",
     };
@@ -924,6 +980,12 @@ export default function Home({
     let title = display.label;
     if (section === "today" && reminder.reminderType === "oneDay") {
       title = `Tomorrow: ${stripRelativeSuffix(display.label, "tomorrow")}`;
+    } else if (
+      section === "today" &&
+      reminder.reminderType === "sevenDay" &&
+      (reminder.momentType === "birthday" || reminder.momentType === "childBirthday")
+    ) {
+      title = display.label;
     } else if (section === "today" && reminder.reminderType === "sevenDay") {
       title = `Coming up: ${display.label.replace(/ in 7 days$/, "")}`;
     } else if (section === "tomorrow" && reminder.reminderType === "dayOf") {
@@ -960,15 +1022,25 @@ export default function Home({
       cardBackground: presentation.background,
       giftLine: latestGift ? formatGiftHistoryLine(latestGift, new Date()) : null,
       actionHeading: reminderContext?.actionHeading ?? null,
-      ideaHeading:
-        reminder.reminderType === "dayOf" && section === "today"
-          ? reminder.momentType === "childBirthday" && childName
-            ? `A simple way to show up for ${childName} today`
-            : `A simple way to show up for ${firstName} today`
-          : null,
+      ideaHeading: null,
       ideas:
-        reminder.reminderType === "dayOf" && section === "today"
+        reminderAge !== undefined && reminderAge < 13 && (section === "today" || section === "tomorrow")
+          ? pickQuickIdeas(getReminderId(reminder), CHILD_QUICK_IDEAS).slice(0, 1)
+          : reminder.reminderType === "dayOf" && section === "today"
           ? pickQuickIdeas(getReminderId(reminder), ideaPool).slice(0, 1)
+          : [],
+      horizonHeading:
+        section === "horizon"
+          ? `A few ideas for ${contactFirstName(reminderContext?.subjectName ?? childName ?? personName)}`
+          : null,
+      horizonActions:
+        section === "horizon"
+          ? buildHorizonActionLabels({
+              seed: getReminderId(reminder),
+              subjectName: reminderContext?.subjectName ?? childName ?? firstName,
+              recipientName: reminderContext?.recipients[0]?.name ?? personName,
+              age: reminderAge,
+            })
           : [],
     };
   }
@@ -977,6 +1049,14 @@ export default function Home({
     if (reminder.reminderType === "dayOf") return "✓ You reached out today";
     if (reminder.reminderType === "oneDay") return "✓ You're all set for tomorrow";
     return "✓ You're all set ahead of time";
+  }
+
+  function clearReminderUndoWindow() {
+    if (reminderUndoTimeoutRef.current) {
+      window.clearTimeout(reminderUndoTimeoutRef.current);
+      reminderUndoTimeoutRef.current = null;
+    }
+    setUndoableReminderId(null);
   }
 
   function markReminderHandled(reminder: ReminderEvent) {
@@ -1000,9 +1080,37 @@ export default function Home({
     setDismissedReminderKeys((prev) => ({ ...prev, [reminderId]: true }));
   }
 
+  function undoReminderHandled(reminder: ReminderEvent) {
+    const reminderId = getReminderId(reminder);
+    if (reminderUndoTimeoutRef.current) {
+      window.clearTimeout(reminderUndoTimeoutRef.current);
+      reminderUndoTimeoutRef.current = null;
+    }
+    setUndoableReminderId(null);
+    setHandledReminderActions((prev) => {
+      if (!prev[reminderId]) return prev;
+      const next = { ...prev };
+      delete next[reminderId];
+      return next;
+    });
+    setDismissedReminderKeys((prev) => {
+      if (!prev[reminderId]) return prev;
+      const next = { ...prev };
+      delete next[reminderId];
+      return next;
+    });
+  }
+
   function dismissReminderCard(reminder: ReminderEvent) {
+    clearReminderUndoWindow();
     recordCareEvent(reminder.personId, "reminderComplete", careEventReminderNote(reminder));
     markReminderHandled(reminder);
+    const reminderId = getReminderId(reminder);
+    setUndoableReminderId(reminderId);
+    reminderUndoTimeoutRef.current = window.setTimeout(() => {
+      setUndoableReminderId((current) => (current === reminderId ? null : current));
+      reminderUndoTimeoutRef.current = null;
+    }, 5000);
   }
 
   function recordGiftHistoryAction(reminder: ReminderEvent, type: "coffee" | "ecard" | "gift") {
@@ -1045,17 +1153,6 @@ export default function Home({
     recordCareEvent(person.id, type, note);
   }
 
-  function careEventNoteForReminderText(reminder: ReminderEvent, contactName?: string) {
-    const personName = careEventDisplayName(contactName ?? reminder.personName);
-    const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
-    if (reminderContext?.kind === "childBirthday" || reminderContext?.kind === "childThroughRelationship") {
-      return `Texted ${personName} about ${reminderContext.subjectName}'s birthday`;
-    }
-    if (reminder.momentType === "birthday") return `Texted ${personName} for their birthday`;
-    if (reminder.momentType === "anniversary") return `Texted ${personName} for their anniversary`;
-    return `Texted ${personName}`;
-  }
-
   function reminderTextActionLabel(reminder: ReminderEvent, person: Person | null) {
     const first = ((person?.name ?? reminder.personName).trim().split(" ")[0] || reminder.personName || "them").trim();
     const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
@@ -1074,77 +1171,65 @@ export default function Home({
     if (reminder.reminderType === "dayOf") {
       return [
         {
-          id: "quick" as const,
-          label: "Quick",
-          message: `Thinking of ${subjectName}'s birthday today. Hope it feels really special.`,
+          id: "short",
+          message: `Happy birthday to ${subjectName}! 🎉`,
         },
         {
-          id: "friendly" as const,
-          label: "Friendly",
-          message: `Hope ${subjectName}'s birthday feels full of love today.`,
+          id: "warm",
+          message: `Hope ${subjectName} feels extra loved today.`,
         },
         {
-          id: "thoughtful" as const,
-          label: "Thoughtful",
-          message: `I was thinking about ${subjectName} today and wanted to send some love your way.`,
+          id: "playful",
+          message: `Hope ${subjectName} is having the best kind of birthday chaos today 😂`,
         },
         {
-          id: "simple" as const,
-          label: "Simple",
-          message: `Hope ${subjectName}'s birthday is a good one.`,
+          id: "deeper",
+          message: `Thinking of ${subjectName} today and hoping it feels really special.`,
         },
-        { id: "custom" as const, label: "Write my own", message: "" },
+        { id: "custom", label: "Write my own", message: "" },
       ];
     }
 
     if (reminder.reminderType === "oneDay") {
       return [
         {
-          id: "quick" as const,
-          label: "Quick",
-          message: `Tomorrow is ${subjectName}'s birthday. Hope it feels special.`,
+          id: "short",
+          message: `Tomorrow is ${subjectName}'s birthday! Hope it’s a great one.`,
         },
         {
-          id: "friendly" as const,
-          label: "Friendly",
-          message: `Thinking of ${subjectName}'s birthday tomorrow and hoping it’s a great one.`,
+          id: "warm",
+          message: `Hope ${subjectName} feels really celebrated tomorrow.`,
         },
         {
-          id: "thoughtful" as const,
-          label: "Thoughtful",
-          message: `I was thinking about ${subjectName}'s birthday tomorrow and wanted to send some love your way.`,
+          id: "playful",
+          message: `Hope ${subjectName} gets spoiled tomorrow 😂`,
         },
         {
-          id: "simple" as const,
-          label: "Simple",
-          message: `Hope ${subjectName}'s birthday feels really good tomorrow.`,
+          id: "deeper",
+          message: `Thinking of ${subjectName}'s birthday tomorrow and sending love your way.`,
         },
-        { id: "custom" as const, label: "Write my own", message: "" },
+        { id: "custom", label: "Write my own", message: "" },
       ];
     }
 
     return [
       {
-        id: "quick" as const,
-        label: "Quick",
-        message: `${subjectName}'s birthday is coming up soon. Hope it already feels exciting.`,
+        id: "short",
+        message: `${subjectName}'s birthday is coming up soon. Hope it’s already feeling exciting.`,
       },
       {
-        id: "friendly" as const,
-        label: "Friendly",
-        message: `Thinking ahead to ${subjectName}'s birthday and hoping it feels special.`,
+        id: "warm",
+        message: `Thinking ahead to ${subjectName}'s birthday and hoping it feels really special.`,
       },
       {
-        id: "thoughtful" as const,
-        label: "Thoughtful",
-        message: `I wanted to reach out before ${subjectName}'s birthday and send some love your way.`,
+        id: "playful",
+        message: `Big birthday energy coming up for ${subjectName} 🎉`,
       },
       {
-        id: "simple" as const,
-        label: "Simple",
-        message: `${subjectName}'s birthday is coming up soon.`,
+        id: "deeper",
+        message: `Wanted to send some birthday love early for ${subjectName}.`,
       },
-      { id: "custom" as const, label: "Write my own", message: "" },
+      { id: "custom", label: "Write my own", message: "" },
     ];
   }
 
@@ -1152,10 +1237,17 @@ export default function Home({
     const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
     const first = ((person?.name ?? reminder.personName).trim().split(" ")[0] || reminder.personName || "them").trim();
     const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
+    const daysAway = reminderDaysAway(reminder, today);
+    const subjectAge = reminderContext?.subjectAge;
+    const isYoungChild = subjectAge !== undefined && subjectAge < 13;
     const relationalRecipients =
       reminderContext?.kind === "childThroughRelationship" || reminderContext?.kind === "childBirthday"
         ? reminderContext.recipients
         : [];
+
+    if (daysAway !== null && daysAway > 1) {
+      return [];
+    }
 
     if (relationalRecipients.length > 0 && reminderContext) {
       const recipient = relationalRecipients[0];
@@ -1175,10 +1267,6 @@ export default function Home({
               personName: recipientFirst,
               phone: recipient.phone,
               suggestions: buildRelationshipAwareBirthdaySuggestions(reminder, reminderContext.subjectName),
-              onAfterSend: () => {
-                recordCareEvent(reminder.personId, "text", careEventNoteForReminderText(reminder, recipient.name));
-                markReminderHandled(reminder);
-              },
             });
           },
         },
@@ -1199,11 +1287,14 @@ export default function Home({
     }
 
     if (reminder.reminderType === "sevenDay") {
+      return [];
+    }
+
+    if (isYoungChild) {
       return [
         {
-          label: "Send gift",
-          href: "https://www.starbucks.com/gift",
-          onClick: () => recordGiftHistoryAction(reminder, "gift"),
+          label: "✓ Mark as done",
+          onClick: () => dismissReminderCard(reminder),
         },
       ];
     }
@@ -1242,52 +1333,48 @@ export default function Home({
           const isKidBirthday = reminder.momentType === "childBirthday";
           const isAnniversary = reminder.momentType === "anniversary";
 
-          const quick = isKidBirthday
-            ? `Happy birthday to ${childName || "your child"}! Hope it's a great day.`
+          const short = isKidBirthday
+            ? `Happy birthday ${childName || "to your little one"}!! 🎉`
             : isBirthday
-              ? `Happy birthday ${toName}! Hope it's a great day.`
+              ? `Happy birthday ${toName}!! 🎉`
               : isAnniversary
-                ? `Happy anniversary, ${toName}! Hope it's a great day.`
-                : "Thinking of you today. Hope things go well.";
+                ? `Happy anniversary ${toName}! ❤️`
+                : `Thinking of you today, ${toName}.`;
 
-          const friendly = isKidBirthday
-            ? `Hope ${childName || "your child"} is having a great birthday today!`
+          const warm = isKidBirthday
+            ? `Hope ${childName || "your little one"} has the sweetest birthday today.`
             : isBirthday
-              ? "Hope you’re having a great birthday today!"
+              ? "Hope today’s a good one — you deserve it."
               : isAnniversary
-                ? "Hope you’re having a great anniversary today!"
-                : "Hope today goes well — thinking of you.";
+                ? "Hope you both get a little time to celebrate today."
+                : "Hope today feels a little lighter. Thinking of you.";
 
-          const thoughtful = isKidBirthday
-            ? `Thinking of ${childName || "your child"} today and hoping it’s a really special birthday.`
+          const playful = isKidBirthday
+            ? `Hope ${childName || "your little one"} is living their best birthday life today 😂`
             : isBirthday
-              ? "Thinking of you today and hoping it’s a really special birthday."
+              ? "Another year older, still crushing it 🙌"
               : isAnniversary
-                ? "Thinking of you today and hoping your anniversary feels special."
-                : "Just wanted to check in — thinking of you today and hoping everything goes smoothly.";
+                ? "Still cute together after all this time 😂"
+                : "Just checking in before today runs away with you.";
 
-          const simple = isKidBirthday
-            ? `Happy birthday to ${childName || "your child"}. Hope it's a good one.`
+          const deeper = isKidBirthday
+            ? `Thinking of ${childName || "your little one"} today — hope it’s a really special birthday.`
             : isBirthday
-              ? "Happy birthday. Hope it's a good one."
+              ? "Hope today feels special in all the right ways."
               : isAnniversary
-                ? "Happy anniversary. Hope it's a good one."
-                : "Thinking of you today.";
+                ? "Hope today brings back some really good memories."
+                : "Just wanted to say I’m thinking of you today.";
 
           openSmartMessageSuggestions({
             personName: toName,
             phone: person.phone,
             suggestions: [
-              { id: "quick", label: "Quick", message: quick },
-              { id: "friendly", label: "Friendly", message: friendly },
-              { id: "thoughtful", label: "Thoughtful", message: thoughtful },
-              { id: "simple", label: "Simple", message: simple },
+              { id: "short", message: short },
+              { id: "warm", message: warm },
+              { id: "playful", message: playful },
+              { id: "deeper", message: deeper },
               { id: "custom", label: "Write my own", message: "" },
             ],
-            onAfterSend: () => {
-              recordCareEvent(person.id, "text", careEventNoteForReminderText(reminder));
-              markReminderHandled(reminder);
-            },
           });
         },
       },
@@ -1334,7 +1421,7 @@ export default function Home({
   function openSmartMessageSuggestions(args: {
     personName: string;
     phone: string;
-    suggestions: Array<{ id: "quick" | "friendly" | "thoughtful" | "simple" | "custom"; label: string; message: string }>;
+    suggestions: Array<{ id: string; label?: string; message: string }>;
     onAfterSend?: () => void;
   }) {
     setSmsSuggestions(args);
@@ -2085,24 +2172,26 @@ export default function Home({
         <main style={{ marginTop: "24px" }}>
           {isSearching ? null : activeTab === "contacts" ? (
             <section aria-label="Circle" style={{ marginTop: "24px", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
-              <div style={{ display: "grid", gap: "8px" }}>
-                <div style={{ display: "grid", gap: "6px" }}>
-                  <div
-                    style={{
-                      color: "var(--ink)",
-                      fontFamily: "var(--font-serif)",
-                      fontSize: "1.45rem",
-                      lineHeight: 1.02,
-                      letterSpacing: "-0.02em",
-                    }}
-                  >
-                    Who comes to mind?
-                  </div>
-                  <div style={{ color: "var(--muted)", lineHeight: 1.55, fontSize: "0.98rem", maxWidth: "34rem" }}>
-                    Add someone you care about. A birthday, milestone, or meaningful detail is enough to begin.
+              {!circleSuccessMessage || !recentlyAddedPerson ? (
+                <div style={{ display: "grid", gap: "8px" }}>
+                  <div style={{ display: "grid", gap: "6px" }}>
+                    <div
+                      style={{
+                        color: "var(--ink)",
+                        fontFamily: "var(--font-serif)",
+                        fontSize: "1.45rem",
+                        lineHeight: 1.02,
+                        letterSpacing: "-0.02em",
+                      }}
+                    >
+                      Who comes to mind?
+                    </div>
+                    <div style={{ color: "var(--muted)", lineHeight: 1.55, fontSize: "0.98rem", maxWidth: "34rem" }}>
+                      Add someone you care about. A birthday, milestone, or meaningful detail is enough to begin.
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : null}
 
               {circleSuccessMessage && recentlyAddedPerson ? (
                 <div
@@ -2164,8 +2253,8 @@ export default function Home({
                       type="button"
                       onClick={() => navigate(`/person/${recentlyAddedPerson.id}`)}
                       style={{
-                        border: "1px solid var(--ink)",
-                        background: "var(--ink)",
+                        border: `1px solid ${CIRCLE_NAVY}`,
+                        background: CIRCLE_NAVY,
                         color: "var(--paper)",
                         cursor: "pointer",
                         borderRadius: "12px",
@@ -2177,79 +2266,152 @@ export default function Home({
                     >
                       View {recentlyAddedPerson.name}
                     </button>
-                    <button
-                      type="button"
-                      onClick={navigateToAddPerson}
-                      style={{
-                        border: "1px solid var(--border-strong)",
-                        background: "rgba(255,255,255,0.7)",
-                        color: "var(--ink)",
-                        cursor: "pointer",
-                        borderRadius: "12px",
-                        padding: "0.76rem 1rem",
-                        fontSize: "0.95rem",
-                        fontWeight: 500,
-                        fontFamily: "var(--font-sans)",
-                      }}
-                    >
-                      Add another person
-                    </button>
                   </div>
                 </div>
               ) : null}
 
-              <div style={{ marginTop: "24px", display: "grid", gap: "12px" }}>
-                <button
-                  onClick={navigateToAddPerson}
-                  style={{
-                    width: "100%",
-                    border: "1px solid var(--ink)",
-                    background: "var(--ink)",
-                    color: "var(--paper)",
-                    cursor: "pointer",
-                    textAlign: "center",
-                    fontWeight: 600,
-                    letterSpacing: "0.01em",
-                    borderRadius: "12px",
-                    padding: "0.85rem 1rem",
-                    fontSize: "1rem",
-                    fontFamily: "var(--font-sans)",
-                  }}
-                >
-                  Add a Person
-                </button>
+              {circleSuccessMessage && recentlyAddedPerson ? (
                 <div
                   style={{
-                    marginTop: "6px",
-                    paddingTop: "16px",
-                    borderTop: "1px solid var(--border)",
+                    marginTop: "34px",
+                    paddingTop: "22px",
+                    borderTop: "1px solid rgba(10, 27, 42, 0.08)",
                     display: "grid",
-                    gap: "10px",
+                    gap: "12px",
                   }}
                 >
-                  <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5, textAlign: "center" }}>
-                    Building a bigger circle? Import your contacts to get started faster.
-                  </div>
-                  <button
-                    onClick={navigateToImportContacts}
+                  <div
                     style={{
+                      borderRadius: "18px",
+                      border: "1px solid rgba(10, 27, 42, 0.08)",
+                      background: "rgba(255,255,255,0.58)",
+                      padding: "16px",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="dkf-circle-shimmer-button"
+                      onClick={navigateToAddPerson}
+                      style={{
+                        width: "100%",
+                        border: "1px solid rgba(214, 205, 188, 0.9)",
+                        background: "linear-gradient(180deg, rgba(250, 245, 240, 0.98) 0%, rgba(239, 230, 219, 0.98) 100%)",
+                        color: CIRCLE_NAVY,
+                        cursor: "pointer",
+                        textAlign: "center",
+                        fontWeight: 600,
+                        letterSpacing: "0.01em",
+                        borderRadius: "14px",
+                        padding: "0.82rem 1rem",
+                        fontSize: "0.98rem",
+                        fontFamily: "var(--font-sans)",
+                        boxShadow:
+                          "0 16px 34px rgba(188, 176, 157, 0.16), 0 3px 10px rgba(188, 176, 157, 0.12), inset 0 1px 0 rgba(255,255,255,0.78)",
+                        transition: "background 180ms ease, box-shadow 180ms ease, border-color 180ms ease",
+                      }}
+                    >
+                      Add a Person
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      borderRadius: "18px",
+                      border: "1px solid rgba(10, 27, 42, 0.08)",
+                      background: "rgba(255,255,255,0.42)",
+                      padding: "14px 16px",
+                      display: "grid",
+                      gap: "8px",
+                    }}
+                  >
+                    <div style={{ color: "var(--muted)", fontSize: "0.9rem", lineHeight: 1.5 }}>
+                      Building a bigger circle? Import your contacts to get started faster.
+                    </div>
+                    <button
+                      onClick={navigateToImportContacts}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: "var(--muted)",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        fontWeight: 500,
+                        letterSpacing: "0.01em",
+                        borderRadius: "12px",
+                        padding: 0,
+                        fontSize: "0.92rem",
+                        fontFamily: "var(--font-sans)",
+                        textDecoration: "underline",
+                        textUnderlineOffset: "3px",
+                      }}
+                    >
+                      Import from Contacts
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    marginTop: "24px",
+                    display: "grid",
+                    gap: "12px",
+                  }}
+                >
+                  <button
+                    onClick={navigateToAddPerson}
+                    style={{
+                      width: "100%",
                       border: "1px solid var(--border-strong)",
-                      background: "transparent",
+                      background: "rgba(255,255,255,0.46)",
                       color: "var(--ink)",
                       cursor: "pointer",
                       textAlign: "center",
                       fontWeight: 500,
                       letterSpacing: "0.01em",
                       borderRadius: "12px",
-                      padding: "0.75rem 1rem",
-                      fontSize: "0.95rem",
+                      padding: "0.82rem 1rem",
+                      fontSize: "0.97rem",
                       fontFamily: "var(--font-sans)",
+                      boxShadow: "none",
                     }}
                   >
-                    Import from Contacts
+                    Add a Person
                   </button>
+                  <div
+                    style={{
+                      marginTop: "6px",
+                      paddingTop: "16px",
+                      borderTop: "1px solid var(--border)",
+                      display: "grid",
+                      gap: "10px",
+                    }}
+                  >
+                    <div style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5, textAlign: "center" }}>
+                      Building a bigger circle? Import your contacts to get started faster.
+                    </div>
+                    <button
+                      onClick={navigateToImportContacts}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: "var(--muted)",
+                        cursor: "pointer",
+                        textAlign: "center",
+                        fontWeight: 500,
+                        letterSpacing: "0.01em",
+                        borderRadius: "12px",
+                        padding: "0.2rem 0.5rem",
+                        fontSize: "0.92rem",
+                        fontFamily: "var(--font-sans)",
+                        textDecoration: "underline",
+                        textUnderlineOffset: "3px",
+                      }}
+                    >
+                      Import from Contacts
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {!isPremium && people.length >= FREE_LIMIT ? (
                 <div style={{ marginTop: "8px", color: "var(--muted)", fontSize: "0.88rem", lineHeight: 1.5 }}>
@@ -2424,6 +2586,7 @@ export default function Home({
                         const display = buildReminderDisplay(reminder, section);
                         const actions = buildReminderActions(reminder);
                         const isCompleted = Boolean(handledReminderActions[reminderId]);
+                        const isUndoable = undoableReminderId === reminderId;
                         const completionAction = isCompleted
                           ? null
                           : actions.find((action) => action.label === "✓ Mark as done") ?? null;
@@ -2448,25 +2611,14 @@ export default function Home({
                             }}
                           >
                             <div style={{ display: "grid", gap: "8px" }}>
-                              {display.eyebrow ? (
-                                <div
-                                  style={{
-                                    color: "var(--muted)",
-                                    fontSize: "0.82rem",
-                                    fontWeight: 700,
-                                    letterSpacing: "0.04em",
-                                    textTransform: "uppercase",
-                                  }}
-                                >
-                                  {display.eyebrow}
-                                </div>
-                              ) : null}
                               <div style={{ color: "var(--ink)", fontSize: "16px", lineHeight: 1.5, fontWeight: 700 }}>
                                 {display.title}
                               </div>
-                              <div style={{ color: "var(--ink)", fontSize: "16px", lineHeight: 1.5 }}>
-                                {display.date}
-                              </div>
+                              {section !== "today" ? (
+                                <div style={{ color: "var(--ink)", fontSize: "16px", lineHeight: 1.5 }}>
+                                  {display.date}
+                                </div>
+                              ) : null}
                               {display.support ? (
                                 <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
                                   {display.support}
@@ -2487,38 +2639,85 @@ export default function Home({
                             {isCompleted ? (
                               <div
                                 style={{
-                                  color: "var(--muted)",
-                                  fontSize: "0.98rem",
-                                  lineHeight: 1.5,
-                                  fontWeight: 600,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  gap: "12px",
                                 }}
                               >
-                                {completedReminderMessage(reminder)}
+                                <div
+                                  style={{
+                                    color: "var(--muted)",
+                                    fontSize: "0.98rem",
+                                    lineHeight: 1.5,
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {isUndoable ? "✓ Marked as done" : completedReminderMessage(reminder)}
+                                </div>
+                                {isUndoable ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => undoReminderHandled(reminder)}
+                                    style={{
+                                      border: "none",
+                                      background: "transparent",
+                                      padding: 0,
+                                      color: "var(--ink)",
+                                      fontSize: "0.95rem",
+                                      fontWeight: 600,
+                                      textDecoration: "underline",
+                                      textUnderlineOffset: "3px",
+                                    }}
+                                  >
+                                    Undo
+                                  </button>
+                                ) : null}
                               </div>
                             ) : null}
 
-                            {!isCompleted && display.ideaHeading && display.ideas.length ? (
+                            {!isCompleted && display.ideas.length ? (
                               <div
                                 style={{
                                   display: "grid",
-                                  gap: "8px",
-                                  paddingTop: "12px",
-                                  borderTop: "1px solid var(--border)",
+                                  gap: "10px",
+                                  paddingTop: "14px",
                                 }}
                               >
-                                <div style={{ color: "var(--muted)", fontSize: "0.95rem", fontWeight: 600 }}>
-                                  {display.ideaHeading}
-                                </div>
-                                <div style={{ display: "grid", gap: "4px", color: "var(--ink)", fontSize: "0.98rem", lineHeight: 1.5 }}>
+                                {display.ideaHeading ? (
+                                  <div style={{ color: "var(--muted)", fontSize: "0.95rem", fontWeight: 600 }}>
+                                    {display.ideaHeading}
+                                  </div>
+                                ) : null}
+                                <div
+                                  style={{
+                                    display: "grid",
+                                    gap: "8px",
+                                    color: "rgba(10, 27, 42, 0.82)",
+                                    fontSize: "0.98rem",
+                                    lineHeight: 1.55,
+                                  }}
+                                >
                                   {display.ideas.map((idea) => (
-                                    <div key={idea}>• {idea}</div>
+                                    <div
+                                      key={idea}
+                                      style={{
+                                        display: "grid",
+                                        gridTemplateColumns: "10px 1fr",
+                                        columnGap: "8px",
+                                        alignItems: "start",
+                                      }}
+                                    >
+                                      <span style={{ color: "var(--dkf-gold)", fontSize: "0.9rem", lineHeight: 1.45 }}>•</span>
+                                      <span>{idea}</span>
+                                    </div>
                                   ))}
                                 </div>
                               </div>
                             ) : null}
 
                             {primaryActions.length ? (
-                              <div style={{ display: "grid", gap: section === "today" ? "10px" : "8px" }}>
+                              <div style={{ display: "grid", gap: section === "today" ? "12px" : "8px", paddingTop: display.ideas.length ? "4px" : 0 }}>
                                 {display.actionHeading ? (
                                   <div style={{ color: "var(--muted)", fontSize: "0.95rem", fontWeight: 600 }}>
                                     {display.actionHeading}
@@ -2531,7 +2730,10 @@ export default function Home({
                                       href={action.href}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      onClick={action.onClick}
+                                      onClick={() => {
+                                        clearReminderUndoWindow();
+                                        action.onClick?.();
+                                      }}
                                       aria-disabled={"disabled" in action && action.disabled ? "true" : undefined}
                                       title={(action as { title?: string }).title}
                                       style={{
@@ -2561,7 +2763,12 @@ export default function Home({
                                     <button
                                       key={action.label}
                                       type="button"
-                                      onClick={action.onClick}
+                                      onClick={() => {
+                                        if (action.label !== "✓ Mark as done") {
+                                          clearReminderUndoWindow();
+                                        }
+                                        action.onClick();
+                                      }}
                                       disabled={Boolean("disabled" in action && action.disabled)}
                                       title={"title" in action && typeof action.title === "string" ? action.title : undefined}
                                       style={{
@@ -2678,6 +2885,23 @@ export default function Home({
                     const nextEvent = horizonEntries?.[0] ?? null;
                     const targetName = nextEvent?.moment.personName?.trim() || "them";
                     if (!nextEvent) return null;
+                    if (nextEvent.reminder) {
+                      const reminderContext = resolveReminderContext(
+                        nextEvent.reminder,
+                        people,
+                        relationships,
+                        today,
+                        relationshipV2Links
+                      );
+                      if (reminderContext?.kind === "childBirthday" || reminderContext?.kind === "childThroughRelationship") {
+                        return null;
+                      }
+                      if (reminderContext?.subjectAge !== undefined && reminderContext.subjectAge < 18) {
+                        return null;
+                      }
+                    } else if (nextEvent.moment.momentType === "childBirthday") {
+                      return null;
+                    }
 
                     return (
                       <div
@@ -2784,7 +3008,13 @@ export default function Home({
 
                       {horizonEntries.length > 0 ? (
                         <>
-                          <div style={{ ...headerStyle, marginTop: todayReminders.length > 0 || tomorrowReminders.length > 0 ? "24px" : "8px" }}>
+                          <div
+                            style={{
+                              ...headerStyle,
+                              marginTop: todayReminders.length > 0 || tomorrowReminders.length > 0 ? "36px" : "8px",
+                              color: "rgba(91, 110, 124, 0.88)",
+                            }}
+                          >
                             On the Horizon
                           </div>
                           <GoldenSunDivider />
@@ -2810,19 +3040,6 @@ export default function Home({
                                     }}
                                   >
                                     <div style={{ display: "grid", gap: "8px" }}>
-                                      {display.eyebrow ? (
-                                        <div
-                                          style={{
-                                            color: "var(--muted)",
-                                            fontSize: "0.82rem",
-                                            fontWeight: 700,
-                                            letterSpacing: "0.04em",
-                                            textTransform: "uppercase",
-                                          }}
-                                        >
-                                          {display.eyebrow}
-                                        </div>
-                                      ) : null}
                                       <div style={{ color: "var(--ink)", fontSize: "16px", lineHeight: 1.5, fontWeight: 700 }}>
                                         {display.title}
                                       </div>
@@ -2832,6 +3049,45 @@ export default function Home({
                                       {display.support ? (
                                         <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
                                           {display.support}
+                                        </div>
+                                      ) : null}
+                                      {display.horizonActions?.length ? (
+                                        <div
+                                          style={{
+                                            display: "grid",
+                                            gap: "8px",
+                                            paddingTop: "6px",
+                                          }}
+                                        >
+                                          <div style={{ color: "var(--muted)", fontSize: "0.95rem", fontWeight: 600 }}>
+                                            {display.horizonHeading}
+                                          </div>
+                                          <div
+                                            style={{
+                                              display: "grid",
+                                              gap: "8px",
+                                              color: "rgba(10, 27, 42, 0.82)",
+                                              fontSize: "0.96rem",
+                                              lineHeight: 1.55,
+                                            }}
+                                          >
+                                            {display.horizonActions.map((label: string) => (
+                                              <div
+                                                key={label}
+                                                style={{
+                                                  display: "grid",
+                                                  gridTemplateColumns: "10px 1fr",
+                                                  columnGap: "8px",
+                                                  alignItems: "start",
+                                                }}
+                                              >
+                                                <span style={{ color: "var(--dkf-gold)", fontSize: "0.9rem", lineHeight: 1.45 }}>
+                                                  •
+                                                </span>
+                                                <span>{label}</span>
+                                              </div>
+                                            ))}
+                                          </div>
                                         </div>
                                       ) : null}
                                       {display.giftLine ? (
@@ -2996,13 +3252,15 @@ export default function Home({
             isOpen
             personName={smsSuggestions.personName}
             suggestions={smsSuggestions.suggestions}
-            onClose={() => setSmsSuggestions(null)}
+            onClose={() => {
+              clearReminderUndoWindow();
+              setSmsSuggestions(null);
+            }}
             onPick={(message) => {
               const phone = smsSuggestions.phone;
-              const after = smsSuggestions.onAfterSend;
+              clearReminderUndoWindow();
               setSmsSuggestions(null);
               openSmsComposer(phone, message);
-              after?.();
             }}
           />
         ) : null}

@@ -669,6 +669,7 @@ export function generateCareSuggestions(people: Person[], baseDate = new Date())
     const children = person.children ?? [];
     const selectedHolidays = getSelectedHolidays(person);
     let personQuestionAdded = false;
+    const who = firstName(person);
 
     const combinedMoments = (() => {
       const byId = new Map<string, Moment>();
@@ -683,6 +684,25 @@ export function generateCareSuggestions(people: Person[], baseDate = new Date())
       }
       return Array.from(byId.values());
     })();
+
+    const hasReminderWorthyMoment =
+      Boolean((person.moments ?? []).some((moment) => moment.type === "birthday" || moment.type === "anniversary" || moment.type === "custom")) ||
+      Boolean((person.anniversary ?? "").trim());
+
+    if (hasReminderWorthyMoment && !(person.phone ?? "").trim()) {
+      suggestions.push({
+        id: `phone_${person.id}`,
+        type: "checkin",
+        personId: person.id,
+        title: `Texting ${who} becomes much easier with a number`,
+        message: `Add ${who}'s number so you can text ${who.toLowerCase()} on important days.`,
+        insight: "One tap matters more when the moment arrives.",
+        timelineCategory: "soon",
+        actionLabel: `Add ${who}'s number`,
+        action: { kind: "view", personId: person.id },
+        sortDaysUntil: 2,
+      });
+    }
 
     if (children.length) {
       for (const child of children) {

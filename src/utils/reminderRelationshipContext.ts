@@ -22,7 +22,7 @@ export type ResolvedReminderRecipient = {
 };
 
 export type ResolvedReminderContext = {
-  kind: "self" | "childThroughRelationship" | "childBirthday" | "anniversary";
+  kind: "self" | "selfChild" | "childThroughRelationship" | "childBirthday" | "anniversary";
   subjectName: string;
   subjectAge?: number;
   recipients: ResolvedReminderRecipient[];
@@ -242,6 +242,7 @@ export function resolveReminderContext(
     const birthdayMoment = (person.moments ?? []).find((moment) => moment.type === "birthday") ?? null;
     const birthdayIso = (birthdayMoment?.date ?? "").trim() || undefined;
     const subjectAge = birthdayIso && eventDate ? calculateAge(birthdayIso, eventDate) : undefined;
+    const isDirectChildOfUser = birthdayRelationshipContext.directLinkToUser?.relationshipToAnchor === "child";
 
     if (recipients.length > 0) {
       return {
@@ -256,7 +257,7 @@ export function resolveReminderContext(
     const recipient = mapPersonToRecipient(person);
     if (!recipient) return null;
     return {
-      kind: "self",
+      kind: isDirectChildOfUser ? "selfChild" : "self",
       subjectName: birthdayRelationshipContext.subject.name || personName,
       subjectAge,
       recipients: [recipient],
@@ -326,6 +327,9 @@ export function buildResolvedReminderLabel(
       return reminderContext.subjectAge !== undefined && reminderContext.subjectAge > 0
         ? `${reminderContext.subjectName} turns ${reminderContext.subjectAge} ${relative}`
         : `${possessive(reminderContext.subjectName)} birthday ${relative}`;
+    }
+    if (reminderContext?.subjectAge !== undefined && reminderContext.subjectAge > 0) {
+      return `${reminderContext.subjectName} turns ${reminderContext.subjectAge} ${relative}`;
     }
     return `${possessive(personName)} birthday ${relative}`;
   }

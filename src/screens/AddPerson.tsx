@@ -18,30 +18,7 @@ import { getSelectedHolidays } from "../utils/personHolidays";
 
 const FREE_LIMIT = 3;
 
-type DisplayRelationship =
-  | "partner"
-  | "friend"
-  | "child"
-  | "someoneElsesChild"
-  | "parent"
-  | "sibling"
-  | "neighbor";
-
 type ReminderChoice = "birthday" | "anniversary" | "custom";
-
-const RELATIONSHIP_OPTIONS: Array<{
-  value: DisplayRelationship;
-  label: string;
-  saveType: RelationshipType;
-}> = [
-  { value: "partner", label: "Partner", saveType: "partner" },
-  { value: "friend", label: "Friend", saveType: "friend" },
-  { value: "child", label: "My child", saveType: "child" },
-  { value: "someoneElsesChild", label: "Someone else's child", saveType: "child" },
-  { value: "parent", label: "Parent", saveType: "parent" },
-  { value: "sibling", label: "Sibling", saveType: "sibling" },
-  { value: "neighbor", label: "Neighbor", saveType: "other" },
-];
 
 const REMINDER_OPTIONS: Array<{ value: ReminderChoice; label: string }> = [
   { value: "birthday", label: "🎂 Birthday" },
@@ -143,15 +120,16 @@ function findMoment(person: Person | null, type: Moment["type"]) {
   return (person?.moments ?? []).find((moment) => moment.type === type) ?? null;
 }
 
-const PENDING_CHILD_DRAFT_STORAGE_KEY = "dkf_pending_child_relationship_draft";
+const PENDING_CONNECTION_DRAFT_STORAGE_KEY = "dkf_pending_connection_draft";
 
-type PendingChildRelationshipDraft = {
+type PendingConnectionDraft = {
   name: string;
   phone: string;
   birthdayMonthDay: string;
   birthdayYear: string;
   anniversary: string;
   customMoments: Array<{ title: string; date: string }>;
+  connectionRelationship: RelationshipType;
 };
 
 function SurfaceCard({
@@ -321,8 +299,10 @@ export default function AddPerson() {
 
   const editPersonId =
     (location.state as any)?.personId ?? (location.state as any)?.editPersonId ?? null;
-  const resumeLinkedChildDraft = (location.state as any)?.resumeLinkedChildDraft === true;
-  const linkedChildParentId = String((location.state as any)?.linkedChildParentId ?? "").trim();
+  const resumeLinkedConnectionDraft = (location.state as any)?.resumeLinkedConnectionDraft === true;
+  const linkedConnectionPersonId = String((location.state as any)?.linkedConnectionPersonId ?? "").trim();
+  const connectedToPersonId = String((location.state as any)?.connectedToPersonId ?? "").trim();
+  const connectedToPersonName = String((location.state as any)?.connectedToPersonName ?? "").trim();
   const editingPerson =
     (editPersonId ? people.find((p) => p.id === editPersonId) : null) ??
     ((location.state as any)?.person as Person | undefined) ??
@@ -335,9 +315,8 @@ export default function AddPerson() {
   const [trailPulse, setTrailPulse] = useState(false);
   const [phone, setPhone] = useState(editingPerson?.phone ?? "");
   const [phoneError, setPhoneError] = useState(false);
-  const [selectedRelationship, setSelectedRelationship] = useState<DisplayRelationship | null>(null);
   const [selectedConnectionId, setSelectedConnectionId] = useState("");
-  const [connectionRelationship, setConnectionRelationship] = useState<RelationshipType>("friend");
+  const [connectionRelationship, setConnectionRelationship] = useState<RelationshipType>("child");
   const [birthdayMonthDay, setBirthdayMonthDay] = useState(
     birthdayMoment?.date ? toDraftFromIso(birthdayMoment.date).monthDay : ""
   );
@@ -368,7 +347,7 @@ export default function AddPerson() {
   );
   const lastPrefilledPersonIdRef = useRef<string | null>(null);
   const previousHasNameRef = useRef(Boolean((editingPerson?.name ?? "").trim()));
-  const hasHydratedPendingChildDraftRef = useRef(false);
+  const hasHydratedPendingConnectionDraftRef = useRef(false);
 
   useEffect(() => {
     if (!editingPerson?.id) {
@@ -384,12 +363,12 @@ export default function AddPerson() {
   }, [editingPerson]);
 
   useEffect(() => {
-    if (!resumeLinkedChildDraft || hasHydratedPendingChildDraftRef.current || editingPerson) return;
-    hasHydratedPendingChildDraftRef.current = true;
+    if (!resumeLinkedConnectionDraft || hasHydratedPendingConnectionDraftRef.current || editingPerson) return;
+    hasHydratedPendingConnectionDraftRef.current = true;
     try {
-      const rawDraft = window.sessionStorage.getItem(PENDING_CHILD_DRAFT_STORAGE_KEY);
+      const rawDraft = window.sessionStorage.getItem(PENDING_CONNECTION_DRAFT_STORAGE_KEY);
       if (!rawDraft) return;
-      const draft = JSON.parse(rawDraft) as PendingChildRelationshipDraft;
+      const draft = JSON.parse(rawDraft) as PendingConnectionDraft;
       setName(draft.name ?? "");
       setPhone(draft.phone ?? "");
       setPhoneError(false);
@@ -403,9 +382,8 @@ export default function AddPerson() {
       );
       setAnniversaryDraftYear("");
       setCustomMoments(Array.isArray(draft.customMoments) ? draft.customMoments : []);
-      setSelectedRelationship("someoneElsesChild");
-      setSelectedConnectionId(linkedChildParentId);
-      setConnectionRelationship("child");
+      setSelectedConnectionId(linkedConnectionPersonId);
+      setConnectionRelationship(draft.connectionRelationship === "partner" ? "partner" : "child");
       setHasInteractedWithReminderArea(
         Boolean(
           buildBirthdayIso(draft.birthdayMonthDay ?? "", draft.birthdayYear ?? "") ||
@@ -413,35 +391,27 @@ export default function AddPerson() {
             (draft.customMoments ?? []).length
         )
       );
-      window.sessionStorage.removeItem(PENDING_CHILD_DRAFT_STORAGE_KEY);
+      window.sessionStorage.removeItem(PENDING_CONNECTION_DRAFT_STORAGE_KEY);
     } catch {
-      window.sessionStorage.removeItem(PENDING_CHILD_DRAFT_STORAGE_KEY);
+      window.sessionStorage.removeItem(PENDING_CONNECTION_DRAFT_STORAGE_KEY);
     }
-  }, [editingPerson, linkedChildParentId, resumeLinkedChildDraft]);
+  }, [editingPerson, linkedConnectionPersonId, resumeLinkedConnectionDraft]);
 
-  const selectedRelationshipOption = useMemo(
-    () => RELATIONSHIP_OPTIONS.find((option) => option.value === selectedRelationship) ?? null,
-    [selectedRelationship]
-  );
-  const availableParentConnections = useMemo(
+  const availableConnections = useMemo(
     () =>
       [...people]
         .filter((person) => person.id !== editPersonId && person.name.trim())
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })),
     [editPersonId, people]
   );
-  const selectedParentConnection = useMemo(
-    () => availableParentConnections.find((person) => person.id === selectedConnectionId) ?? null,
-    [availableParentConnections, selectedConnectionId]
+  const selectedConnection = useMemo(
+    () => availableConnections.find((person) => person.id === selectedConnectionId) ?? null,
+    [availableConnections, selectedConnectionId]
   );
 
   const promptName = formatPromptName(name);
   const promptPossessive = possessive(name);
   const hasName = Boolean(name.trim());
-  const requiresParentSelection = selectedRelationship === "someoneElsesChild";
-  const hasRelationship = requiresParentSelection
-    ? Boolean(selectedRelationshipOption && selectedConnectionId.trim())
-    : Boolean(selectedRelationshipOption);
   const canSaveCustomMoment = Boolean(customMomentTitle.trim() && customMomentDate);
   const hasAnyReminder = Boolean(
     buildBirthdayIso(birthdayMonthDay, birthdayYear) || anniversary || customMoments.length
@@ -449,13 +419,19 @@ export default function AddPerson() {
   const showStorySteps = isNameSettled;
   const canShowReminderCard = hasName;
   const canShowPhoneCard = canShowReminderCard && hasAnyReminder;
-  const canShowRelationshipCard = canShowPhoneCard;
-  const canSave = hasName && hasRelationship && hasAnyReminder;
+  const canShowConnectionCard = canShowPhoneCard;
+  const canSave = hasName && hasAnyReminder;
   const introStage = !showStorySteps;
   const savedBirthdayLabel = buildBirthdayIso(birthdayMonthDay, birthdayYear)
     ? formatMomentDate(buildBirthdayIso(birthdayMonthDay, birthdayYear))
     : null;
   const savedAnniversaryLabel = anniversary ? formatMonthDay(anniversary) : null;
+
+  useEffect(() => {
+    if (resumeLinkedConnectionDraft || editingPerson) return;
+    if (!connectedToPersonId.trim()) return;
+    setSelectedConnectionId((current) => current || connectedToPersonId);
+  }, [connectedToPersonId, editingPerson, resumeLinkedConnectionDraft]);
 
   useEffect(() => {
     if (!introStage || hasName) return;
@@ -514,23 +490,24 @@ export default function AddPerson() {
     setCustomMoments((prev) => prev.filter((_, idx) => idx !== index));
   }
 
-  function startAddParentFirst() {
-    const draft: PendingChildRelationshipDraft = {
+  function startAddConnectedPerson() {
+    const draft: PendingConnectionDraft = {
       name,
       phone,
       birthdayMonthDay,
       birthdayYear,
       anniversary,
       customMoments,
+      connectionRelationship,
     };
     try {
-      window.sessionStorage.setItem(PENDING_CHILD_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+      window.sessionStorage.setItem(PENDING_CONNECTION_DRAFT_STORAGE_KEY, JSON.stringify(draft));
     } catch {
       // ignore
     }
     navigate("/add", {
       state: {
-        addParentForLinkedChild: true,
+        addConnectedPersonFirst: true,
       },
     });
   }
@@ -580,7 +557,7 @@ export default function AddPerson() {
     const relationshipPersistence = buildAddPersonRelationshipPersistence({
       personId,
       makeId,
-      selectedRelationshipType: selectedRelationshipOption?.saveType ?? null,
+      selectedRelationshipType: null,
       selectedConnectionId,
       connectionRelationship,
     });
@@ -630,11 +607,11 @@ export default function AddPerson() {
       return;
     }
 
-    if ((location.state as any)?.addParentForLinkedChild === true) {
+    if ((location.state as any)?.addConnectedPersonFirst === true) {
       navigate("/add", {
         state: {
-          resumeLinkedChildDraft: true,
-          linkedChildParentId: person.id,
+          resumeLinkedConnectionDraft: true,
+          linkedConnectionPersonId: person.id,
         },
       });
       return;
@@ -1062,9 +1039,9 @@ export default function AddPerson() {
                       "linear-gradient(180deg, rgba(248, 238, 239, 0.24) 0%, rgba(255,255,255,0.18) 100%)",
                   }}
                 >
-                  <div style={{ color: "var(--ink)", fontWeight: 600 }}>Want to make reaching out easier later?</div>
+                  <div style={{ color: "var(--ink)", fontWeight: 600 }}>Texting makes this easy later</div>
                   <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
-                    Add a phone number so reminders can include quick actions like texting or calling.
+                    Add a number so you can text {promptName} in one tap when it matters.
                   </div>
                   <input
                     type="tel"
@@ -1092,10 +1069,21 @@ export default function AddPerson() {
             </SurfaceCard>
           ) : null}
 
-          {canShowRelationshipCard ? (
+          {canShowConnectionCard ? (
             <SurfaceCard className="dkf-story-step-card" style={{ scrollMarginTop: "120px" }}>
               <div style={{ display: "grid", gap: "0.95rem" }}>
                 <div>
+                  {connectedToPersonName ? (
+                    <div
+                      style={{
+                        color: "var(--muted)",
+                        fontSize: "0.92rem",
+                        marginBottom: "0.45rem",
+                      }}
+                    >
+                      You&apos;re adding someone connected to {connectedToPersonName}.
+                    </div>
+                  ) : null}
                   <div
                     style={{
                       fontSize: "1.1rem",
@@ -1103,36 +1091,61 @@ export default function AddPerson() {
                       color: "var(--ink)",
                     }}
                   >
-                    How does {promptName} fit into your life?
+                    Connect to someone (optional)
                   </div>
                 </div>
 
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(148px, 1fr))",
                     gap: "0.72rem",
                   }}
                 >
-                  {RELATIONSHIP_OPTIONS.map((option) => (
+                  <ChipButton
+                    active={!selectedConnectionId}
+                    label="No one"
+                    onClick={() => {
+                      setSelectedConnectionId("");
+                      setConnectionRelationship("child");
+                    }}
+                  />
+                  {availableConnections.map((person) => (
                     <ChipButton
-                      key={option.value}
-                      active={selectedRelationship === option.value}
-                      label={option.label}
+                      key={person.id}
+                      active={selectedConnectionId === person.id}
+                      label={person.name.trim()}
                       onClick={() => {
-                        setSelectedRelationship(option.value);
-                        if (option.value === "someoneElsesChild") {
+                        setSelectedConnectionId(person.id);
+                        if (connectedToPersonId && person.id === connectedToPersonId) {
                           setConnectionRelationship("child");
-                          return;
                         }
-                        setSelectedConnectionId("");
-                        setConnectionRelationship(option.saveType);
                       }}
                     />
                   ))}
                 </div>
 
-                {selectedRelationship === "someoneElsesChild" ? (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
+                  <button
+                    type="button"
+                    onClick={startAddConnectedPerson}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: "rgba(10, 27, 42, 0.92)",
+                      padding: 0,
+                      fontSize: "0.94rem",
+                      fontWeight: 600,
+                    }}
+                  >
+                    + Add new person
+                  </button>
+                  <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+                    Add them first, then we&apos;ll bring you right back.
+                  </div>
+                </div>
+
+                {selectedConnectionId ? (
                   <div
                     style={{
                       display: "grid",
@@ -1142,52 +1155,33 @@ export default function AddPerson() {
                   >
                     <div style={{ display: "grid", gap: "0.34rem" }}>
                       <div style={{ color: "var(--ink)", fontWeight: 600 }}>
-                        Whose child is this?
+                        How are they connected?
                       </div>
                       <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
-                        Choose the parent or guardian already in your circle.
+                        Keep it simple. This only helps with smarter reminder actions later.
                       </div>
                     </div>
 
-                    {availableParentConnections.length ? (
-                      <div style={{ display: "grid", gap: "0.72rem" }}>
-                        <div style={{ color: "rgba(10, 27, 42, 0.62)", fontSize: "0.82rem", fontWeight: 600, letterSpacing: "0.02em", textTransform: "uppercase" }}>
-                          In your circle
-                        </div>
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-                            gap: "0.72rem",
-                          }}
-                        >
-                        {availableParentConnections.map((person) => (
-                          <ChipButton
-                            key={person.id}
-                            active={selectedConnectionId === person.id}
-                            label={person.name.trim()}
-                            onClick={() => {
-                              setSelectedConnectionId(person.id);
-                              setConnectionRelationship("child");
-                            }}
-                          />
-                        ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div
-                        style={{
-                          color: "var(--muted)",
-                          fontSize: "0.92rem",
-                          lineHeight: 1.55,
-                          padding: "0.1rem 0 0.15rem",
-                        }}
-                      >
-                        There isn&apos;t anyone in your circle to connect {promptName} through yet.
-                      </div>
-                    )}
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(148px, 1fr))",
+                        gap: "0.72rem",
+                      }}
+                    >
+                      <ChipButton
+                        active={connectionRelationship === "child"}
+                        label="Child"
+                        onClick={() => setConnectionRelationship("child")}
+                      />
+                      <ChipButton
+                        active={connectionRelationship === "partner"}
+                        label="Partner"
+                        onClick={() => setConnectionRelationship("partner")}
+                      />
+                    </div>
 
-                    {selectedParentConnection ? (
+                    {selectedConnection ? (
                       <div
                         style={{
                           borderRadius: "18px",
@@ -1199,29 +1193,11 @@ export default function AddPerson() {
                           lineHeight: 1.45,
                         }}
                       >
-                        {promptName} will be connected through {selectedParentConnection.name.trim()}.
+                        {connectionRelationship === "partner"
+                          ? `${promptName} will be connected to ${selectedConnection.name.trim()} as a partner.`
+                          : `${promptName} will be connected through ${selectedConnection.name.trim()} as a child.`}
                       </div>
                     ) : null}
-
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
-                      <button
-                        type="button"
-                        onClick={startAddParentFirst}
-                        style={{
-                          border: "none",
-                          background: "transparent",
-                          color: "rgba(10, 27, 42, 0.92)",
-                          padding: 0,
-                          fontSize: "0.94rem",
-                          fontWeight: 600,
-                        }}
-                      >
-                        Add parent or guardian first
-                      </button>
-                      <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
-                        If they&apos;re not here yet, add them first and we&apos;ll bring you right back.
-                      </div>
-                    </div>
                   </div>
                 ) : null}
               </div>
@@ -1318,11 +1294,7 @@ export default function AddPerson() {
               fontSize: "0.9rem",
             }}
           >
-            {!hasAnyReminder
-              ? "Start with one moment that matters."
-              : !hasRelationship
-                ? `Add a little context so we can help you show up well for ${promptName}.`
-                : ""}
+            {!hasAnyReminder ? "Start with one moment that matters." : ""}
           </div>
         ) : null}
       </div>

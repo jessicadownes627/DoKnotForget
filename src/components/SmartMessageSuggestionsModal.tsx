@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 
 type Suggestion = {
-  id: "quick" | "friendly" | "thoughtful" | "simple" | "custom";
-  label: string;
+  id: string;
+  label?: string;
   message: string;
 };
 
@@ -104,10 +104,13 @@ export default function SmartMessageSuggestionsModal({
                 lineHeight: 1.35,
               }}
             >
-              <div style={{ color: "var(--muted)", fontSize: "0.85rem", fontWeight: 600, marginBottom: "6px" }}>
-                {s.label}
-              </div>
-              <div>{s.message}</div>
+              {s.label ? (
+                <div style={{ color: "var(--muted)", fontSize: "0.9rem", fontWeight: 600 }}>
+                  {s.label}
+                </div>
+              ) : (
+                <div>{s.message}</div>
+              )}
             </button>
           ))}
         </div>

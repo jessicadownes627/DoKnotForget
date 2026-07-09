@@ -30,8 +30,17 @@ function writeFiredReminders(reminders: FiredReminderMap) {
   }
 }
 
-export function getReminderId(reminder: Pick<ReminderEvent, "personId" | "momentType" | "reminderType" | "date">) {
-  return `${reminder.personId}-${reminder.momentType}-${reminder.reminderType}-${reminder.date}`;
+export function getReminderId(
+  reminder: Pick<ReminderEvent, "personId" | "momentType" | "reminderType" | "date" | "eventDate" | "label">
+) {
+  return [
+    reminder.personId,
+    reminder.momentType,
+    reminder.reminderType,
+    reminder.date,
+    reminder.eventDate,
+    reminder.label.trim().toLowerCase(),
+  ].join("-");
 }
 
 export function hasReminderFired(reminderId: string): boolean {
