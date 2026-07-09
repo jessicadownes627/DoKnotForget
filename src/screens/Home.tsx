@@ -445,7 +445,6 @@ function pickRandomRecommendations(recommendations: SheetRecommendation[]) {
 
 export default function Home({
 }: {}) {
-  const reminderUndoTimeoutRef = useRef<number | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { people, relationships, relationshipLinksV2, isPremium, updatePerson, updatePersonFields, createPerson, recordCareEvent } = useAppState();
@@ -464,7 +463,6 @@ export default function Home({
     }
   });
   const [dismissedReminderKeys, setDismissedReminderKeys] = useState<Record<string, true>>({});
-  const [undoableReminderId, setUndoableReminderId] = useState<string | null>(null);
   const [circleSuccessMessage, setCircleSuccessMessage] = useState("");
   const [recentlyAddedPersonId, setRecentlyAddedPersonId] = useState<string | null>(null);
   const [sheetRecommendations, setSheetRecommendations] = useState<SheetRecommendation[]>([]);
@@ -636,15 +634,6 @@ export default function Home({
       // ignore
     }
   }, [handledReminderActions]);
-
-  useEffect(
-    () => () => {
-      if (reminderUndoTimeoutRef.current) {
-        window.clearTimeout(reminderUndoTimeoutRef.current);
-      }
-    },
-    []
-  );
 
   useEffect(() => {
     try {
@@ -906,7 +895,7 @@ export default function Home({
     return label.endsWith(suffix) ? label.slice(0, -suffix.length) : label;
   }
 
-  function reminderCardPresentation(reminder: ReminderEvent) {
+  function reminderCardPresentation(reminder: ReminderEvent, section: "today" | "tomorrow" | "horizon") {
     const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
 
     if (reminderContext?.kind === "childBirthday" || reminderContext?.kind === "childThroughRelationship") {
@@ -940,7 +929,7 @@ export default function Home({
 
     return {
       eyebrow: "Reach out directly",
-      support: "Today might be a nice day to reach out.",
+      support: section === "tomorrow" ? "You could make tomorrow feel a little more special." : "Today might be a nice day to reach out.",
       border: "1px solid rgba(10, 27, 42, 0.1)",
       background: "linear-gradient(180deg, rgba(255,255,255,0.78) 0%, rgba(240, 236, 231, 0.88) 100%)",
     };
@@ -951,7 +940,7 @@ export default function Home({
     const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
     const childContext = getChildBirthdayContext(reminder, people, today);
     const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
-    const presentation = reminderCardPresentation(reminder);
+    const presentation = reminderCardPresentation(reminder, section);
     const latestGift = person?.giftHistory?.length ? person.giftHistory[person.giftHistory.length - 1] : null;
     const personName = (person?.name ?? reminder.personName).trim();
     const firstName = personName.split(" ")[0] || reminder.personName || "them";
@@ -1045,20 +1034,6 @@ export default function Home({
     };
   }
 
-  function completedReminderMessage(reminder: ReminderEvent) {
-    if (reminder.reminderType === "dayOf") return "✓ You reached out today";
-    if (reminder.reminderType === "oneDay") return "✓ You're all set for tomorrow";
-    return "✓ You're all set ahead of time";
-  }
-
-  function clearReminderUndoWindow() {
-    if (reminderUndoTimeoutRef.current) {
-      window.clearTimeout(reminderUndoTimeoutRef.current);
-      reminderUndoTimeoutRef.current = null;
-    }
-    setUndoableReminderId(null);
-  }
-
   function markReminderHandled(reminder: ReminderEvent) {
     const reminderId = getReminderId(reminder);
     // eslint-disable-next-line no-console
@@ -1082,11 +1057,6 @@ export default function Home({
 
   function undoReminderHandled(reminder: ReminderEvent) {
     const reminderId = getReminderId(reminder);
-    if (reminderUndoTimeoutRef.current) {
-      window.clearTimeout(reminderUndoTimeoutRef.current);
-      reminderUndoTimeoutRef.current = null;
-    }
-    setUndoableReminderId(null);
     setHandledReminderActions((prev) => {
       if (!prev[reminderId]) return prev;
       const next = { ...prev };
@@ -1102,15 +1072,8 @@ export default function Home({
   }
 
   function dismissReminderCard(reminder: ReminderEvent) {
-    clearReminderUndoWindow();
     recordCareEvent(reminder.personId, "reminderComplete", careEventReminderNote(reminder));
     markReminderHandled(reminder);
-    const reminderId = getReminderId(reminder);
-    setUndoableReminderId(reminderId);
-    reminderUndoTimeoutRef.current = window.setTimeout(() => {
-      setUndoableReminderId((current) => (current === reminderId ? null : current));
-      reminderUndoTimeoutRef.current = null;
-    }, 5000);
   }
 
   function recordGiftHistoryAction(reminder: ReminderEvent, type: "coffee" | "ecard" | "gift") {
@@ -1280,7 +1243,7 @@ export default function Home({
             ]
           : []),
         {
-          label: "✓ Mark as done",
+          label: "✓ All Set",
           onClick: () => dismissReminderCard(reminder),
         },
       ];
@@ -1293,7 +1256,7 @@ export default function Home({
     if (isYoungChild) {
       return [
         {
-          label: "✓ Mark as done",
+          label: "✓ All Set",
           onClick: () => dismissReminderCard(reminder),
         },
       ];
@@ -1389,7 +1352,7 @@ export default function Home({
         onClick: () => recordGiftHistoryAction(reminder, "coffee"),
       },
       {
-        label: "✓ Mark as done",
+        label: "✓ All Set",
         onClick: () => dismissReminderCard(reminder),
       },
     ];
@@ -2586,13 +2549,12 @@ export default function Home({
                         const display = buildReminderDisplay(reminder, section);
                         const actions = buildReminderActions(reminder);
                         const isCompleted = Boolean(handledReminderActions[reminderId]);
-                        const isUndoable = undoableReminderId === reminderId;
                         const completionAction = isCompleted
                           ? null
-                          : actions.find((action) => action.label === "✓ Mark as done") ?? null;
+                          : actions.find((action) => action.label === "✓ All Set") ?? null;
                         const primaryActions = isCompleted
                           ? []
-                          : actions.filter((action) => action.label !== "✓ Mark as done");
+                          : actions.filter((action) => action.label !== "✓ All Set");
 
                         return (
                           <div
@@ -2653,26 +2615,24 @@ export default function Home({
                                     fontWeight: 600,
                                   }}
                                 >
-                                  {isUndoable ? "✓ Marked as done" : completedReminderMessage(reminder)}
+                                  ✓ All Set
                                 </div>
-                                {isUndoable ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => undoReminderHandled(reminder)}
-                                    style={{
-                                      border: "none",
-                                      background: "transparent",
-                                      padding: 0,
-                                      color: "var(--ink)",
-                                      fontSize: "0.95rem",
-                                      fontWeight: 600,
-                                      textDecoration: "underline",
-                                      textUnderlineOffset: "3px",
-                                    }}
-                                  >
-                                    Undo
-                                  </button>
-                                ) : null}
+                                <button
+                                  type="button"
+                                  onClick={() => undoReminderHandled(reminder)}
+                                  style={{
+                                    border: "none",
+                                    background: "transparent",
+                                    padding: 0,
+                                    color: "var(--ink)",
+                                    fontSize: "0.95rem",
+                                    fontWeight: 600,
+                                    textDecoration: "underline",
+                                    textUnderlineOffset: "3px",
+                                  }}
+                                >
+                                  Undo
+                                </button>
                               </div>
                             ) : null}
 
@@ -2730,10 +2690,7 @@ export default function Home({
                                       href={action.href}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      onClick={() => {
-                                        clearReminderUndoWindow();
-                                        action.onClick?.();
-                                      }}
+                                      onClick={action.onClick}
                                       aria-disabled={"disabled" in action && action.disabled ? "true" : undefined}
                                       title={(action as { title?: string }).title}
                                       style={{
@@ -2763,12 +2720,7 @@ export default function Home({
                                     <button
                                       key={action.label}
                                       type="button"
-                                      onClick={() => {
-                                        if (action.label !== "✓ Mark as done") {
-                                          clearReminderUndoWindow();
-                                        }
-                                        action.onClick();
-                                      }}
+                                      onClick={action.onClick}
                                       disabled={Boolean("disabled" in action && action.disabled)}
                                       title={"title" in action && typeof action.title === "string" ? action.title : undefined}
                                       style={{
@@ -3252,13 +3204,9 @@ export default function Home({
             isOpen
             personName={smsSuggestions.personName}
             suggestions={smsSuggestions.suggestions}
-            onClose={() => {
-              clearReminderUndoWindow();
-              setSmsSuggestions(null);
-            }}
+            onClose={() => setSmsSuggestions(null)}
             onPick={(message) => {
               const phone = smsSuggestions.phone;
-              clearReminderUndoWindow();
               setSmsSuggestions(null);
               openSmsComposer(phone, message);
             }}
