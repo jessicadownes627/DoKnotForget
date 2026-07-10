@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChildParentContact, Person } from "../models/Person";
+import type { RelationshipType } from "../models/Relationship";
 import { openSmsComposer } from "../components/SoonReminderCard";
 import Brand from "../components/Brand";
 import BowIcon from "../components/BowIcon";
@@ -7,7 +8,7 @@ import PeopleIndex from "./PeopleIndex";
 import { generateCareSuggestions } from "../utils/careSuggestions";
 import { useLocation, useNavigate } from "../router";
 import { useAppState } from "../appState";
-import { getUpcomingReminders, type ReminderEvent } from "../engine/reminderEngine";
+import { getUpcomingReminders, type ReminderEvent, type ReminderMomentType } from "../engine/reminderEngine";
 import { getUpcomingMoments } from "../engine/momentEngine";
 import { getRemindersToFire } from "../engine/reminderScheduler";
 import { getReminderId, markReminderFired } from "../engine/reminderRegistry";
@@ -37,6 +38,7 @@ import MicroQuestionCard from "../components/MicroQuestionCard";
 import { displayNameOrFallback } from "../utils/displayName";
 import { formatLocalYmd, parseLocalDate } from "../utils/date";
 import { buildHomeSections } from "../utils/homeSections";
+import { buildAddPersonRelationshipPersistence } from "../utils/addPersonRelationshipPersistence";
 import { buildRelationshipV2Links } from "../utils/relationshipV2.js";
 import {
   buildResolvedReminderLabel,
@@ -117,6 +119,14 @@ const ADULT_QUICK_IDEAS = [
   "Stop by with ice cream",
 ];
 
+const ANNIVERSARY_IDEAS = [
+  "Send a thoughtful message",
+  "Celebrate them together",
+  "Drop off flowers or a bottle of wine",
+  "Acknowledge the day with a quick note",
+  "Plan something small but meaningful",
+];
+
 const RECOMMENDATIONS_SHEET_URL = (import.meta.env.VITE_RECOMMENDATIONS_SHEET_URL ?? "").trim();
 const FREE_LIMIT = 3;
 const CIRCLE_NAVY = "#17324d";
@@ -129,6 +139,10 @@ function startOfToday() {
 function msUntilNextMidnight(from = new Date()) {
   const next = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1);
   return Math.max(1000, next.getTime() - from.getTime());
+}
+
+function makeId() {
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 function possessive(name: string) {
@@ -333,8 +347,9 @@ function buildHorizonActionLabels(args: {
   subjectName: string;
   recipientName?: string;
   age?: number;
+  momentType: ReminderMomentType;
 }) {
-  const { seed, subjectName, recipientName, age } = args;
+  const { seed, subjectName, recipientName, age, momentType } = args;
   const subjectFirst = contactFirstName(subjectName);
   const recipientFirst = recipientName ? contactFirstName(recipientName) : "";
 
@@ -355,7 +370,9 @@ function buildHorizonActionLabels(args: {
   }
 
   const ideaPool =
-    age !== undefined && MILESTONE_AGES.has(age)
+    momentType === "anniversary"
+      ? ANNIVERSARY_IDEAS
+      : age !== undefined && MILESTONE_AGES.has(age)
       ? MILESTONE_QUICK_IDEAS
       : age !== undefined && age < 18
         ? TEEN_QUICK_IDEAS
@@ -447,7 +464,7 @@ export default function Home({
 }: {}) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { people, relationships, relationshipLinksV2, isPremium, updatePerson, updatePersonFields, createPerson, recordCareEvent } = useAppState();
+  const { people, relationships, relationshipLinksV2, isPremium, savePerson, updatePerson, updatePersonFields, createPerson, recordCareEvent } = useAppState();
   const [searchTerm, setSearchTerm] = useState("");
   const [questionTick, setQuestionTick] = useState(0);
   const [shouldPulseBow, setShouldPulseBow] = useState(false);
@@ -465,6 +482,11 @@ export default function Home({
   const [dismissedReminderKeys, setDismissedReminderKeys] = useState<Record<string, true>>({});
   const [circleSuccessMessage, setCircleSuccessMessage] = useState("");
   const [recentlyAddedPersonId, setRecentlyAddedPersonId] = useState<string | null>(null);
+  const [connectPersonConfirmation, setConnectPersonConfirmation] = useState("");
+  const [isConnectPersonOpen, setIsConnectPersonOpen] = useState(false);
+  const [connectPersonQuery, setConnectPersonQuery] = useState("");
+  const [selectedConnectionTargetId, setSelectedConnectionTargetId] = useState<string | null>(null);
+  const [selectedConnectionType, setSelectedConnectionType] = useState<RelationshipType | null>(null);
   const [sheetRecommendations, setSheetRecommendations] = useState<SheetRecommendation[]>([]);
   const [dismissedHorizonKeys] = useState<Record<string, true>>(() => {
     try {
@@ -490,6 +512,26 @@ export default function Home({
   const isSettings = location.pathname === "/settings";
   const activeTab: "home" | "contacts" = isContacts ? "contacts" : "home";
   const hasContacts = people.length > 0;
+  const recentlyAddedPerson =
+    recentlyAddedPersonId ? people.find((person) => person.id === recentlyAddedPersonId) ?? null : null;
+  const availableConnectionTargets = useMemo(() => {
+    if (!recentlyAddedPerson) return [];
+    return [...people]
+      .filter((person) => person.id !== recentlyAddedPerson.id && person.name.trim())
+      .sort((a, b) =>
+        displayNameOrFallback(a.name).localeCompare(displayNameOrFallback(b.name), undefined, {
+          sensitivity: "base",
+        })
+      );
+  }, [people, recentlyAddedPerson]);
+  const filteredConnectionTargets = useMemo(() => {
+    if (!connectPersonQuery.trim()) return availableConnectionTargets;
+    return filterContacts(availableConnectionTargets, connectPersonQuery);
+  }, [availableConnectionTargets, connectPersonQuery]);
+  const selectedConnectionTarget =
+    selectedConnectionTargetId
+      ? availableConnectionTargets.find((person) => person.id === selectedConnectionTargetId) ?? null
+      : null;
 
   useEffect(() => {
     function refreshToday() {
@@ -702,11 +744,6 @@ export default function Home({
     if (activeTab !== "home") return [];
     return getUpcomingMoments(people, today, 30);
   }, [activeTab, people, today]);
-  const recentlyAddedPerson = useMemo(
-    () => (recentlyAddedPersonId ? people.find((person) => person.id === recentlyAddedPersonId) ?? null : null),
-    [people, recentlyAddedPersonId]
-  );
-
   const homeSections = useMemo(
     () =>
       buildHomeSections({
@@ -958,7 +995,9 @@ export default function Home({
 
     reminderAge = reminderContext?.subjectAge ?? (birthdayForAge && eventDate ? calculateAge(birthdayForAge, eventDate) : undefined);
     const ideaPool =
-      reminderAge !== undefined && MILESTONE_AGES.has(reminderAge)
+      reminder.momentType === "anniversary"
+        ? ANNIVERSARY_IDEAS
+        : reminderAge !== undefined && MILESTONE_AGES.has(reminderAge)
         ? MILESTONE_QUICK_IDEAS
         : reminderAge !== undefined && reminderAge < 13
         ? CHILD_QUICK_IDEAS
@@ -1029,6 +1068,7 @@ export default function Home({
               subjectName: reminderContext?.subjectName ?? childName ?? firstName,
               recipientName: reminderContext?.recipients[0]?.name ?? personName,
               age: reminderAge,
+              momentType: reminder.momentType,
             })
           : [],
     };
@@ -1243,7 +1283,7 @@ export default function Home({
             ]
           : []),
         {
-          label: "✓ All Set",
+          label: "Mark as all set",
           onClick: () => dismissReminderCard(reminder),
         },
       ];
@@ -1256,7 +1296,7 @@ export default function Home({
     if (isYoungChild) {
       return [
         {
-          label: "✓ All Set",
+          label: "Mark as all set",
           onClick: () => dismissReminderCard(reminder),
         },
       ];
@@ -1352,7 +1392,7 @@ export default function Home({
         onClick: () => recordGiftHistoryAction(reminder, "coffee"),
       },
       {
-        label: "✓ All Set",
+        label: "Mark as all set",
         onClick: () => dismissReminderCard(reminder),
       },
     ];
@@ -1936,6 +1976,56 @@ export default function Home({
   function dismissCircleSuccess() {
     setCircleSuccessMessage("");
     setRecentlyAddedPersonId(null);
+    setConnectPersonConfirmation("");
+    setIsConnectPersonOpen(false);
+    setConnectPersonQuery("");
+    setSelectedConnectionTargetId(null);
+    setSelectedConnectionType(null);
+  }
+
+  function openConnectPersonFlow() {
+    setIsConnectPersonOpen(true);
+    setConnectPersonQuery("");
+    setSelectedConnectionTargetId(null);
+    setSelectedConnectionType(null);
+  }
+
+  function closeConnectPersonFlow() {
+    setIsConnectPersonOpen(false);
+    setConnectPersonQuery("");
+    setSelectedConnectionTargetId(null);
+    setSelectedConnectionType(null);
+  }
+
+  function saveConnectedPersonLink() {
+    if (!recentlyAddedPerson || !selectedConnectionTargetId || !selectedConnectionType) return;
+    const connectedPerson = availableConnectionTargets.find((person) => person.id === selectedConnectionTargetId) ?? null;
+    const relationshipPersistence = buildAddPersonRelationshipPersistence({
+      personId: recentlyAddedPerson.id,
+      makeId,
+      selectedRelationshipType: null,
+      selectedConnectionId: selectedConnectionTargetId,
+      connectionRelationship: selectedConnectionType,
+    });
+
+    const personPatch =
+      selectedConnectionType === "partner"
+        ? { ...recentlyAddedPerson, partnerId: selectedConnectionTargetId }
+        : recentlyAddedPerson;
+
+    savePerson({
+      person: personPatch,
+      createdPeople: [],
+      createdRelationships: relationshipPersistence.createdRelationships,
+      createdRelationshipLinksV2: relationshipPersistence.createdRelationshipLinksV2,
+      replaceRelationshipLinksV2ForPersonId: relationshipPersistence.replaceRelationshipLinksV2ForPersonId,
+    });
+    if (connectedPerson) {
+      setConnectPersonConfirmation(
+        `We'll help you reach out to ${displayNameOrFallback(connectedPerson.name)} for ${recentlyAddedPerson.name}.`
+      );
+    }
+    closeConnectPersonFlow();
   }
 
   useEffect(() => {
@@ -1947,6 +2037,7 @@ export default function Home({
     if (location.state?.circleSuccessMessage && isContacts) {
       const nextMessage = String(location.state.circleSuccessMessage);
       setCircleSuccessMessage(nextMessage);
+      setConnectPersonConfirmation("");
       setRecentlyAddedPersonId(
         location.state?.addedPersonId ? String(location.state.addedPersonId) : null
       );
@@ -2210,6 +2301,52 @@ export default function Home({
                       When the time comes, we&apos;ll help you show up for {recentlyAddedPerson.name}.
                     </div>
                   </div>
+
+                  {availableConnectionTargets.length ? (
+                    <div
+                      style={{
+                        display: "grid",
+                        gap: "8px",
+                        paddingTop: "2px",
+                      }}
+                    >
+                      <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
+                        Who should you reach out to for {recentlyAddedPerson.name}?
+                      </div>
+                      <div>
+                        <button
+                          type="button"
+                          onClick={openConnectPersonFlow}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            color: CIRCLE_NAVY,
+                            cursor: "pointer",
+                            padding: 0,
+                            fontSize: "0.95rem",
+                            fontWeight: 600,
+                            fontFamily: "var(--font-sans)",
+                            textDecoration: "underline",
+                            textUnderlineOffset: "3px",
+                          }}
+                        >
+                          Connect {recentlyAddedPerson.name}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {connectPersonConfirmation ? (
+                    <div
+                      style={{
+                        color: "var(--muted)",
+                        fontSize: "0.95rem",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {connectPersonConfirmation}
+                    </div>
+                  ) : null}
 
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
                     <button
@@ -2551,15 +2688,16 @@ export default function Home({
                         const isCompleted = Boolean(handledReminderActions[reminderId]);
                         const completionAction = isCompleted
                           ? null
-                          : actions.find((action) => action.label === "✓ All Set") ?? null;
+                          : actions.find((action) => action.label === "Mark as all set") ?? null;
                         const primaryActions = isCompleted
                           ? []
-                          : actions.filter((action) => action.label !== "✓ All Set");
+                          : actions.filter((action) => action.label !== "Mark as all set");
 
                         return (
                           <div
                             key={reminderId}
                             className="smart-card"
+                            onClick={() => navigate(`/person/${reminder.personId}`)}
                             style={{
                               border: display.cardBorder,
                               borderRadius: "16px",
@@ -2570,6 +2708,7 @@ export default function Home({
                               gap: "16px",
                               backdropFilter: "blur(6px)",
                               opacity: isCompleted ? 0.72 : 1,
+                              cursor: "pointer",
                             }}
                           >
                             <div style={{ display: "grid", gap: "8px" }}>
@@ -2619,7 +2758,10 @@ export default function Home({
                                 </div>
                                 <button
                                   type="button"
-                                  onClick={() => undoReminderHandled(reminder)}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    undoReminderHandled(reminder);
+                                  }}
                                   style={{
                                     border: "none",
                                     background: "transparent",
@@ -2690,7 +2832,10 @@ export default function Home({
                                       href={action.href}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      onClick={action.onClick}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        action.onClick?.();
+                                      }}
                                       aria-disabled={"disabled" in action && action.disabled ? "true" : undefined}
                                       title={(action as { title?: string }).title}
                                       style={{
@@ -2720,7 +2865,10 @@ export default function Home({
                                     <button
                                       key={action.label}
                                       type="button"
-                                      onClick={action.onClick}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        action.onClick();
+                                      }}
                                       disabled={Boolean("disabled" in action && action.disabled)}
                                       title={"title" in action && typeof action.title === "string" ? action.title : undefined}
                                       style={{
@@ -2747,7 +2895,10 @@ export default function Home({
                               >
                                 <button
                                   type="button"
-                                  onClick={completionAction.onClick}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    completionAction.onClick();
+                                  }}
                                   style={{
                                     borderRadius: "12px",
                                     padding: "0.75rem 1rem",
@@ -3211,6 +3362,226 @@ export default function Home({
               openSmsComposer(phone, message);
             }}
           />
+        ) : null}
+
+        {isConnectPersonOpen && recentlyAddedPerson ? (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Connect ${recentlyAddedPerson.name}`}
+            onClick={closeConnectPersonFlow}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(10, 18, 28, 0.24)",
+              display: "grid",
+              placeItems: "center",
+              padding: "20px 16px",
+              zIndex: 120,
+            }}
+          >
+            <div
+              onClick={(event) => event.stopPropagation()}
+              style={{
+                width: "100%",
+                maxWidth: "520px",
+                borderRadius: "24px",
+                border: "1px solid rgba(10, 27, 42, 0.08)",
+                background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248, 241, 233, 0.96) 100%)",
+                boxShadow: "0 24px 60px rgba(27,42,65,0.16)",
+                padding: "18px",
+                display: "grid",
+                gap: "16px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px" }}>
+                <div style={{ display: "grid", gap: "6px" }}>
+                  <div
+                    style={{
+                      color: "var(--ink)",
+                      fontFamily: "var(--font-serif)",
+                      fontSize: "1.4rem",
+                      lineHeight: 1.08,
+                      letterSpacing: "-0.02em",
+                    }}
+                  >
+                    Connect {recentlyAddedPerson.name}
+                  </div>
+                  <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
+                    Choose someone already in your circle.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeConnectPersonFlow}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: "var(--muted)",
+                    cursor: "pointer",
+                    padding: 0,
+                    fontSize: "0.9rem",
+                    fontWeight: 500,
+                    fontFamily: "var(--font-sans)",
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+
+              <input
+                type="search"
+                autoFocus
+                value={connectPersonQuery}
+                onChange={(event) => setConnectPersonQuery(event.target.value)}
+                placeholder="Search your circle"
+                style={{
+                  width: "100%",
+                  padding: "0.85rem 0.95rem",
+                  borderRadius: "14px",
+                  border: "1px solid rgba(10, 27, 42, 0.1)",
+                  background: "rgba(255,255,255,0.92)",
+                  color: "var(--ink)",
+                  fontSize: "0.98rem",
+                }}
+              />
+
+              {!connectPersonQuery.trim() ? (
+                <div style={{ color: "var(--muted)", fontSize: "0.9rem", lineHeight: 1.5 }}>
+                  Start typing to quickly find the right person.
+                </div>
+              ) : null}
+
+              <div
+                style={{
+                  display: "grid",
+                  gap: "10px",
+                  maxHeight: "240px",
+                  overflowY: "auto",
+                  paddingRight: "2px",
+                  opacity: connectPersonQuery.trim() ? 1 : 0.88,
+                }}
+              >
+                {filteredConnectionTargets.length ? (
+                  filteredConnectionTargets.map((person) => {
+                    const active = selectedConnectionTargetId === person.id;
+                    return (
+                      <button
+                        key={person.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedConnectionTargetId(person.id);
+                          setSelectedConnectionType(null);
+                        }}
+                        style={{
+                          textAlign: "left",
+                          borderRadius: "16px",
+                          border: active
+                            ? "1px solid rgba(23, 50, 77, 0.24)"
+                            : "1px solid rgba(10, 27, 42, 0.08)",
+                          background: active
+                            ? "linear-gradient(180deg, rgba(247, 239, 240, 0.96) 0%, rgba(250, 244, 236, 0.94) 100%)"
+                            : "rgba(255,255,255,0.82)",
+                          color: "var(--ink)",
+                          padding: "0.9rem 0.95rem",
+                          fontSize: "0.96rem",
+                          fontWeight: active ? 700 : 600,
+                          boxShadow: active ? "0 10px 22px rgba(27,42,65,0.08)" : "none",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {displayNameOrFallback(person.name)}
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div style={{ color: "var(--muted)", fontSize: "0.94rem", lineHeight: 1.5 }}>
+                    No one matches that search yet.
+                  </div>
+                )}
+              </div>
+
+              {selectedConnectionTarget ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "10px",
+                    paddingTop: "4px",
+                    borderTop: "1px solid rgba(10, 27, 42, 0.08)",
+                  }}
+                >
+                  <div style={{ color: "var(--ink)", fontWeight: 600 }}>
+                    How are they connected?
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
+                    {(["child", "partner"] as const).map((relationshipType) => {
+                      const active = selectedConnectionType === relationshipType;
+                      return (
+                        <button
+                          key={relationshipType}
+                          type="button"
+                          onClick={() => setSelectedConnectionType(relationshipType)}
+                          style={{
+                            borderRadius: "999px",
+                            border: active
+                              ? "1px solid rgba(23, 50, 77, 0.24)"
+                              : "1px solid rgba(10, 27, 42, 0.08)",
+                            background: active
+                              ? "linear-gradient(180deg, rgba(247, 239, 240, 0.96) 0%, rgba(250, 244, 236, 0.94) 100%)"
+                              : "rgba(255,255,255,0.82)",
+                            color: "var(--ink)",
+                            padding: "0.8rem 0.9rem",
+                            fontSize: "0.95rem",
+                            fontWeight: active ? 700 : 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {relationshipType === "child" ? "Child" : "Partner"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
+                <button
+                  type="button"
+                  onClick={closeConnectPersonFlow}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: "var(--muted)",
+                    cursor: "pointer",
+                    padding: 0,
+                    fontSize: "0.94rem",
+                    fontWeight: 500,
+                    fontFamily: "var(--font-sans)",
+                  }}
+                >
+                  Maybe later
+                </button>
+                <button
+                  type="button"
+                  onClick={saveConnectedPersonLink}
+                  disabled={!selectedConnectionTargetId || !selectedConnectionType}
+                  style={{
+                    border: `1px solid ${selectedConnectionTargetId && selectedConnectionType ? CIRCLE_NAVY : "rgba(10, 27, 42, 0.08)"}`,
+                    background: selectedConnectionTargetId && selectedConnectionType ? CIRCLE_NAVY : "rgba(255,255,255,0.7)",
+                    color: selectedConnectionTargetId && selectedConnectionType ? "var(--paper)" : "var(--muted)",
+                    cursor: selectedConnectionTargetId && selectedConnectionType ? "pointer" : "default",
+                    borderRadius: "12px",
+                    padding: "0.78rem 1rem",
+                    fontSize: "0.95rem",
+                    fontWeight: 600,
+                    fontFamily: "var(--font-sans)",
+                  }}
+                >
+                  Save connection
+                </button>
+              </div>
+            </div>
+          </div>
         ) : null}
       </div>
     </div>

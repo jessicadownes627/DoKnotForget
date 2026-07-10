@@ -320,8 +320,21 @@ export default function PersonDetail() {
   }, [relatedPeople]);
 
   const careHistory = useMemo(() => {
-    return [...careEvents]
+    const grouped = new Map<string, CareEvent>();
+
+    [...careEvents]
       .filter((event) => event.personId === person.id)
+      .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+      .forEach((event) => {
+        const day = event.timestamp.slice(0, 10);
+        const key = `${day}:${careEventContext(event)}`;
+        const existing = grouped.get(key);
+        if (!existing || careEventPriority(event) > careEventPriority(existing)) {
+          grouped.set(key, event);
+        }
+      });
+
+    return Array.from(grouped.values())
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
       .slice(0, 3);
   }, [careEvents, person.id]);
@@ -360,17 +373,41 @@ export default function PersonDetail() {
     return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(parsed);
   }
 
-  function describeCareEvent(event: CareEvent) {
+  function careEventContext(event: CareEvent) {
+    const note = (event.note ?? "").toLowerCase();
+    if (note.includes("birthday")) return "birthday";
+    if (note.includes("anniversary")) return "anniversary";
+    return "general";
+  }
+
+  function careEventPriority(event: CareEvent) {
+    if (event.type === "text") return 5;
+    if (event.type === "ecard") return 4;
+    if (event.type === "gift") return 3;
+    if (event.type === "coffee") return 2;
+    return 1;
+  }
+
+  function recentCareTitle(event: CareEvent) {
     const personName = resolvedPerson.name.trim() || "them";
-    if (event.note?.trim()) return event.note.trim();
-    if (event.type === "text") return `Texted ${personName}`;
-    if (event.type === "ecard") return `Sent ${personName} an eCard`;
-    if (event.type === "gift") return `Sent ${personName} a gift`;
-    if (event.type === "coffee") return `Bought ${personName} a coffee`;
-    if ((resolvedPerson.moments ?? []).some((moment) => moment.type === "birthday")) {
-      return `Completed ${possessive(personName)} birthday reminder`;
+    const date = formatCareEventDate(event.timestamp);
+    const context = careEventContext(event);
+
+    if (context === "birthday") return `${date} · ${possessive(personName)} birthday`;
+    if (context === "anniversary") return `${date} · Anniversary`;
+    return `${date} · ${personName}`;
+  }
+
+  function recentCareDetail(event: CareEvent) {
+    const personName = resolvedPerson.name.trim() || "them";
+    if (event.type === "text") return "You reached out";
+    if (event.type === "ecard") return "Sent an eCard";
+    if (event.type === "gift") return "Sent a gift";
+    if (event.type === "coffee") return "Sent a little treat";
+    if (careEventContext(event) === "birthday" || careEventContext(event) === "anniversary") {
+      return `You showed up for ${personName}`;
     }
-    return `Checked in with ${personName}`;
+    return "You showed up";
   }
 
   function updateMomentBuckets(nextMoments: Moment[]) {
@@ -704,9 +741,13 @@ export default function PersonDetail() {
                   <div style={{ fontWeight: 600 }}>Recent care</div>
                   <div style={{ marginTop: "0.7rem", display: "grid", gap: "0.6rem" }}>
                     {careHistory.map((event) => (
-                      <div key={event.id} style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
-                        <span style={{ color: "var(--ink)" }}>{formatCareEventDate(event.timestamp)}</span> ·{" "}
-                        {describeCareEvent(event)}
+                      <div key={event.id} style={{ display: "grid", gap: "0.18rem" }}>
+                        <div style={{ color: "var(--ink)", fontSize: "0.92rem", fontWeight: 600 }}>
+                          {recentCareTitle(event)}
+                        </div>
+                        <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
+                          {recentCareDetail(event)}
+                        </div>
                       </div>
                     ))}
                   </div>

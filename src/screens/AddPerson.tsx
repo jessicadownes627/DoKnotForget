@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   OnboardingBody,
   OnboardingEyebrow,
@@ -8,11 +8,9 @@ import {
   PrimaryButton,
 } from "../components/onboarding/OnboardingPrimitives";
 import type { Moment, Person } from "../models/Person";
-import type { RelationshipType } from "../models/Relationship";
 import MomentDatePicker from "../components/MomentDatePicker";
 import { useAppState } from "../appState";
 import { useLocation, useNavigate } from "../router";
-import { buildAddPersonRelationshipPersistence } from "../utils/addPersonRelationshipPersistence";
 import { normalizePhone } from "../utils/phone";
 import { getSelectedHolidays } from "../utils/personHolidays";
 
@@ -120,18 +118,6 @@ function findMoment(person: Person | null, type: Moment["type"]) {
   return (person?.moments ?? []).find((moment) => moment.type === type) ?? null;
 }
 
-const PENDING_CONNECTION_DRAFT_STORAGE_KEY = "dkf_pending_connection_draft";
-
-type PendingConnectionDraft = {
-  name: string;
-  phone: string;
-  birthdayMonthDay: string;
-  birthdayYear: string;
-  anniversary: string;
-  customMoments: Array<{ title: string; date: string }>;
-  connectionRelationship: RelationshipType;
-};
-
 function SurfaceCard({
   children,
   className,
@@ -158,38 +144,6 @@ function SurfaceCard({
     >
       {children}
     </section>
-  );
-}
-
-function ChipButton({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        borderRadius: "999px",
-        border: active ? "1px solid rgba(10, 27, 42, 0.16)" : "1px solid rgba(10, 27, 42, 0.08)",
-        background: active
-          ? "linear-gradient(180deg, rgba(247, 239, 240, 0.98) 0%, rgba(250, 244, 236, 0.96) 100%)"
-          : "rgba(255,255,255,0.52)",
-        color: active ? "rgba(10, 27, 42, 0.96)" : "var(--ink)",
-        padding: "0.82rem 1rem",
-        fontSize: "0.96rem",
-        fontWeight: active ? 700 : 600,
-        textAlign: "center",
-        boxShadow: active ? "0 8px 18px rgba(10, 27, 42, 0.06)" : "none",
-      }}
-    >
-      {label}
-    </button>
   );
 }
 
@@ -299,10 +253,6 @@ export default function AddPerson() {
 
   const editPersonId =
     (location.state as any)?.personId ?? (location.state as any)?.editPersonId ?? null;
-  const resumeLinkedConnectionDraft = (location.state as any)?.resumeLinkedConnectionDraft === true;
-  const linkedConnectionPersonId = String((location.state as any)?.linkedConnectionPersonId ?? "").trim();
-  const connectedToPersonId = String((location.state as any)?.connectedToPersonId ?? "").trim();
-  const connectedToPersonName = String((location.state as any)?.connectedToPersonName ?? "").trim();
   const editingPerson =
     (editPersonId ? people.find((p) => p.id === editPersonId) : null) ??
     ((location.state as any)?.person as Person | undefined) ??
@@ -315,8 +265,6 @@ export default function AddPerson() {
   const [trailPulse, setTrailPulse] = useState(false);
   const [phone, setPhone] = useState(editingPerson?.phone ?? "");
   const [phoneError, setPhoneError] = useState(false);
-  const [selectedConnectionId, setSelectedConnectionId] = useState("");
-  const [connectionRelationship, setConnectionRelationship] = useState<RelationshipType>("child");
   const [birthdayMonthDay, setBirthdayMonthDay] = useState(
     birthdayMoment?.date ? toDraftFromIso(birthdayMoment.date).monthDay : ""
   );
@@ -347,7 +295,6 @@ export default function AddPerson() {
   );
   const lastPrefilledPersonIdRef = useRef<string | null>(null);
   const previousHasNameRef = useRef(Boolean((editingPerson?.name ?? "").trim()));
-  const hasHydratedPendingConnectionDraftRef = useRef(false);
 
   useEffect(() => {
     if (!editingPerson?.id) {
@@ -362,53 +309,6 @@ export default function AddPerson() {
     setPhoneError(false);
   }, [editingPerson]);
 
-  useEffect(() => {
-    if (!resumeLinkedConnectionDraft || hasHydratedPendingConnectionDraftRef.current || editingPerson) return;
-    hasHydratedPendingConnectionDraftRef.current = true;
-    try {
-      const rawDraft = window.sessionStorage.getItem(PENDING_CONNECTION_DRAFT_STORAGE_KEY);
-      if (!rawDraft) return;
-      const draft = JSON.parse(rawDraft) as PendingConnectionDraft;
-      setName(draft.name ?? "");
-      setPhone(draft.phone ?? "");
-      setPhoneError(false);
-      setBirthdayMonthDay(draft.birthdayMonthDay ?? "");
-      setBirthdayYear(draft.birthdayYear ?? "");
-      setBirthdayDraftMonthDay(draft.birthdayMonthDay ?? "");
-      setBirthdayDraftYear(draft.birthdayYear ?? "");
-      setAnniversary(draft.anniversary ?? "");
-      setAnniversaryDraftMonthDay(
-        draft.anniversary ? toDraftFromIso(`0000-${draft.anniversary}`).monthDay : ""
-      );
-      setAnniversaryDraftYear("");
-      setCustomMoments(Array.isArray(draft.customMoments) ? draft.customMoments : []);
-      setSelectedConnectionId(linkedConnectionPersonId);
-      setConnectionRelationship(draft.connectionRelationship === "partner" ? "partner" : "child");
-      setHasInteractedWithReminderArea(
-        Boolean(
-          buildBirthdayIso(draft.birthdayMonthDay ?? "", draft.birthdayYear ?? "") ||
-            (draft.anniversary ?? "").trim() ||
-            (draft.customMoments ?? []).length
-        )
-      );
-      window.sessionStorage.removeItem(PENDING_CONNECTION_DRAFT_STORAGE_KEY);
-    } catch {
-      window.sessionStorage.removeItem(PENDING_CONNECTION_DRAFT_STORAGE_KEY);
-    }
-  }, [editingPerson, linkedConnectionPersonId, resumeLinkedConnectionDraft]);
-
-  const availableConnections = useMemo(
-    () =>
-      [...people]
-        .filter((person) => person.id !== editPersonId && person.name.trim())
-        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })),
-    [editPersonId, people]
-  );
-  const selectedConnection = useMemo(
-    () => availableConnections.find((person) => person.id === selectedConnectionId) ?? null,
-    [availableConnections, selectedConnectionId]
-  );
-
   const promptName = formatPromptName(name);
   const promptPossessive = possessive(name);
   const hasName = Boolean(name.trim());
@@ -419,19 +319,12 @@ export default function AddPerson() {
   const showStorySteps = isNameSettled;
   const canShowReminderCard = hasName;
   const canShowPhoneCard = canShowReminderCard && hasAnyReminder;
-  const canShowConnectionCard = canShowPhoneCard;
   const canSave = hasName && hasAnyReminder;
   const introStage = !showStorySteps;
   const savedBirthdayLabel = buildBirthdayIso(birthdayMonthDay, birthdayYear)
     ? formatMomentDate(buildBirthdayIso(birthdayMonthDay, birthdayYear))
     : null;
   const savedAnniversaryLabel = anniversary ? formatMonthDay(anniversary) : null;
-
-  useEffect(() => {
-    if (resumeLinkedConnectionDraft || editingPerson) return;
-    if (!connectedToPersonId.trim()) return;
-    setSelectedConnectionId((current) => current || connectedToPersonId);
-  }, [connectedToPersonId, editingPerson, resumeLinkedConnectionDraft]);
 
   useEffect(() => {
     if (!introStage || hasName) return;
@@ -490,28 +383,6 @@ export default function AddPerson() {
     setCustomMoments((prev) => prev.filter((_, idx) => idx !== index));
   }
 
-  function startAddConnectedPerson() {
-    const draft: PendingConnectionDraft = {
-      name,
-      phone,
-      birthdayMonthDay,
-      birthdayYear,
-      anniversary,
-      customMoments,
-      connectionRelationship,
-    };
-    try {
-      window.sessionStorage.setItem(PENDING_CONNECTION_DRAFT_STORAGE_KEY, JSON.stringify(draft));
-    } catch {
-      // ignore
-    }
-    navigate("/add", {
-      state: {
-        addConnectedPersonFirst: true,
-      },
-    });
-  }
-
   function handleSave() {
     if (!name.trim()) return;
 
@@ -553,14 +424,6 @@ export default function AddPerson() {
     }
 
     const personId = editingPerson?.id ?? makeId();
-    const createdPeople: Person[] = [];
-    const relationshipPersistence = buildAddPersonRelationshipPersistence({
-      personId,
-      makeId,
-      selectedRelationshipType: null,
-      selectedConnectionId,
-      connectionRelationship,
-    });
 
     const person: Person = {
       ...(editingPerson ?? {}),
@@ -568,12 +431,8 @@ export default function AddPerson() {
       name: name.trim(),
       phone: normalizedPhone || undefined,
       moments,
-      partnerId: relationshipPersistence.legacyPersonPatch.partnerId ?? undefined,
       anniversary: anniversary || undefined,
       hasKids: editingPerson?.hasKids,
-      parentRole: relationshipPersistence.legacyPersonPatch.parentRole,
-      isMother: relationshipPersistence.legacyPersonPatch.isMother,
-      isFather: relationshipPersistence.legacyPersonPatch.isFather,
       selectedHolidays: editingPerson ? getSelectedHolidays(editingPerson) : undefined,
       children: editingPerson?.children,
       importantDates: moments.filter((moment) => moment.type === "custom"),
@@ -591,10 +450,10 @@ export default function AddPerson() {
 
     savePerson({
       person,
-      createdPeople,
-      createdRelationships: relationshipPersistence.createdRelationships,
-      createdRelationshipLinksV2: relationshipPersistence.createdRelationshipLinksV2,
-      replaceRelationshipLinksV2ForPersonId: relationshipPersistence.replaceRelationshipLinksV2ForPersonId,
+      createdPeople: [],
+      createdRelationships: [],
+      createdRelationshipLinksV2: [],
+      replaceRelationshipLinksV2ForPersonId: null,
     });
 
     if (editingPerson) {
@@ -602,16 +461,6 @@ export default function AddPerson() {
         state: {
           defaultTab: "home",
           ...(person.partnerId ? { showPartnerLinkCheck: person.id } : null),
-        },
-      });
-      return;
-    }
-
-    if ((location.state as any)?.addConnectedPersonFirst === true) {
-      navigate("/add", {
-        state: {
-          resumeLinkedConnectionDraft: true,
-          linkedConnectionPersonId: person.id,
         },
       });
       return;
@@ -761,7 +610,7 @@ export default function AddPerson() {
                       }
                       inactiveCopy={
                         option.value === "birthday"
-                          ? "Easy to remember later."
+                          ? "A day worth remembering."
                           : option.value === "anniversary"
                             ? "Worth honoring well."
                             : "A moment that matters."
@@ -1069,140 +918,6 @@ export default function AddPerson() {
             </SurfaceCard>
           ) : null}
 
-          {canShowConnectionCard ? (
-            <SurfaceCard className="dkf-story-step-card" style={{ scrollMarginTop: "120px" }}>
-              <div style={{ display: "grid", gap: "0.95rem" }}>
-                <div>
-                  {connectedToPersonName ? (
-                    <div
-                      style={{
-                        color: "var(--muted)",
-                        fontSize: "0.92rem",
-                        marginBottom: "0.45rem",
-                      }}
-                    >
-                      You&apos;re adding someone connected to {connectedToPersonName}.
-                    </div>
-                  ) : null}
-                  <div
-                    style={{
-                      fontSize: "1.1rem",
-                      fontWeight: 600,
-                      color: "var(--ink)",
-                    }}
-                  >
-                    Connect to someone (optional)
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(148px, 1fr))",
-                    gap: "0.72rem",
-                  }}
-                >
-                  <ChipButton
-                    active={!selectedConnectionId}
-                    label="No one"
-                    onClick={() => {
-                      setSelectedConnectionId("");
-                      setConnectionRelationship("child");
-                    }}
-                  />
-                  {availableConnections.map((person) => (
-                    <ChipButton
-                      key={person.id}
-                      active={selectedConnectionId === person.id}
-                      label={person.name.trim()}
-                      onClick={() => {
-                        setSelectedConnectionId(person.id);
-                        if (connectedToPersonId && person.id === connectedToPersonId) {
-                          setConnectionRelationship("child");
-                        }
-                      }}
-                    />
-                  ))}
-                </div>
-
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
-                  <button
-                    type="button"
-                    onClick={startAddConnectedPerson}
-                    style={{
-                      border: "none",
-                      background: "transparent",
-                      color: "rgba(10, 27, 42, 0.92)",
-                      padding: 0,
-                      fontSize: "0.94rem",
-                      fontWeight: 600,
-                    }}
-                  >
-                    + Add new person
-                  </button>
-                  <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
-                    Add them first, then we&apos;ll bring you right back.
-                  </div>
-                </div>
-
-                {selectedConnectionId ? (
-                  <div
-                    style={{
-                      display: "grid",
-                      gap: "0.95rem",
-                      padding: "0.95rem 0 0.15rem",
-                    }}
-                  >
-                    <div style={{ display: "grid", gap: "0.34rem" }}>
-                      <div style={{ color: "var(--ink)", fontWeight: 600 }}>
-                        How are they connected?
-                      </div>
-                      <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
-                        Keep it simple. This only helps with smarter reminder actions later.
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit, minmax(148px, 1fr))",
-                        gap: "0.72rem",
-                      }}
-                    >
-                      <ChipButton
-                        active={connectionRelationship === "child"}
-                        label="Child"
-                        onClick={() => setConnectionRelationship("child")}
-                      />
-                      <ChipButton
-                        active={connectionRelationship === "partner"}
-                        label="Partner"
-                        onClick={() => setConnectionRelationship("partner")}
-                      />
-                    </div>
-
-                    {selectedConnection ? (
-                      <div
-                        style={{
-                          borderRadius: "18px",
-                          border: "1px solid rgba(10, 27, 42, 0.06)",
-                          background: "linear-gradient(180deg, rgba(247, 239, 240, 0.55) 0%, rgba(255,255,255,0.2) 100%)",
-                          padding: "0.9rem 0.95rem",
-                          color: "var(--ink)",
-                          fontSize: "0.92rem",
-                          lineHeight: 1.45,
-                        }}
-                      >
-                        {connectionRelationship === "partner"
-                          ? `${promptName} will be connected to ${selectedConnection.name.trim()} as a partner.`
-                          : `${promptName} will be connected through ${selectedConnection.name.trim()} as a child.`}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            </SurfaceCard>
-          ) : null}
         </div>
       </div>
 
@@ -1294,7 +1009,6 @@ export default function AddPerson() {
               fontSize: "0.9rem",
             }}
           >
-            {!hasAnyReminder ? "Start with one moment that matters." : ""}
           </div>
         ) : null}
       </div>
