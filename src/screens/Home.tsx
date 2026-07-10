@@ -127,6 +127,30 @@ const ANNIVERSARY_IDEAS = [
   "Plan something small but meaningful",
 ];
 
+const ADULT_BIRTHDAY_SUPPORT_LINES = [
+  "A quick message would mean a lot",
+  "A thoughtful note could make their day",
+  "This is a good one to reach out for",
+];
+
+const CHILD_BIRTHDAY_SUPPORT_LINES = [
+  "A small gesture could make their day",
+  "A little surprise could feel really special",
+  "Something thoughtful could make this feel bigger",
+];
+
+const ANNIVERSARY_SUPPORT_LINES = [
+  "This one deserves something thoughtful",
+  "A small note could make this feel special",
+  "This is a good moment to show up with care",
+];
+
+const MILESTONE_SUPPORT_LINES = [
+  "This one’s worth celebrating",
+  "A little extra thought would fit this one",
+  "This milestone deserves something special",
+];
+
 const RECOMMENDATIONS_SHEET_URL = (import.meta.env.VITE_RECOMMENDATIONS_SHEET_URL ?? "").trim();
 const FREE_LIMIT = 3;
 const CIRCLE_NAVY = "#17324d";
@@ -144,6 +168,8 @@ function msUntilNextMidnight(from = new Date()) {
 function makeId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
+
+type ReminderToneCategory = "adultBirthday" | "childBirthday" | "anniversary" | "milestone" | "other";
 
 function possessive(name: string) {
   return name.endsWith("s") ? `${name}'` : `${name}'s`;
@@ -756,6 +782,73 @@ export default function Home({
       }),
     [activeReminders, dismissedHorizonKeys, handledReminderActions, reminders, today, upcomingMoments]
   );
+  const reminderSupportLineOverrides = useMemo(() => {
+    const overrides: Record<string, string> = {};
+    const categoryCounts: Record<ReminderToneCategory, number> = {
+      adultBirthday: 0,
+      childBirthday: 0,
+      anniversary: 0,
+      milestone: 0,
+      other: 0,
+    };
+
+    const tonePoolForCategory = (category: ReminderToneCategory) => {
+      switch (category) {
+        case "adultBirthday":
+          return ADULT_BIRTHDAY_SUPPORT_LINES;
+        case "childBirthday":
+          return CHILD_BIRTHDAY_SUPPORT_LINES;
+        case "anniversary":
+          return ANNIVERSARY_SUPPORT_LINES;
+        case "milestone":
+          return MILESTONE_SUPPORT_LINES;
+        default:
+          return null;
+      }
+    };
+
+    const resolveToneCategory = (reminder: ReminderEvent): ReminderToneCategory => {
+      const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
+      const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
+      const eventDate = reminderEventDate(reminder);
+      let birthdayForAge: string | undefined;
+      if (reminder.momentType === "childBirthday") {
+        const childContext = getChildBirthdayContext(reminder, people, today);
+        birthdayForAge = childContext?.birthday;
+      } else {
+        const birthdayMoment = (person?.moments ?? []).find((moment) => moment.type === "birthday") ?? null;
+        birthdayForAge = (birthdayMoment?.date ?? "").trim() || undefined;
+      }
+
+      const reminderAge =
+        reminderContext?.subjectAge ?? (birthdayForAge && eventDate ? calculateAge(birthdayForAge, eventDate) : undefined);
+
+      if (reminder.momentType === "anniversary") return "anniversary";
+      if (reminderAge !== undefined && MILESTONE_AGES.has(reminderAge)) return "milestone";
+      if (reminder.momentType === "childBirthday" || (reminderAge !== undefined && reminderAge < 13)) return "childBirthday";
+      if (reminder.momentType === "birthday") return "adultBirthday";
+      return "other";
+    };
+
+    const visibleReminders: ReminderEvent[] = [
+      ...homeSections.activeTodayReminders,
+      ...homeSections.tomorrowReminders,
+      ...homeSections.horizonEntries
+        .map((entry) => entry.reminder)
+        .filter((reminder): reminder is ReminderEvent => Boolean(reminder)),
+    ];
+
+    for (const reminder of visibleReminders) {
+      const category = resolveToneCategory(reminder);
+      const pool = tonePoolForCategory(category);
+      if (!pool?.length) continue;
+      const index = categoryCounts[category] % pool.length;
+      overrides[getReminderId(reminder)] = pool[index] ?? pool[0] ?? "";
+      categoryCounts[category] += 1;
+    }
+
+    return overrides;
+  }, [homeSections.activeTodayReminders, homeSections.horizonEntries, homeSections.tomorrowReminders, people, relationships, relationshipV2Links, today]);
 
   useEffect(() => {
     if (activeTab !== "home") return;
@@ -1055,7 +1148,7 @@ export default function Home({
       title,
       date: formatReminderDate(eventDate ? formatYmd(eventDate) : reminder.date),
       eyebrow: presentation.eyebrow,
-      support: contextualSupport,
+      support: reminderSupportLineOverrides[getReminderId(reminder)] ?? contextualSupport,
       cardBorder: presentation.border,
       cardBackground: presentation.background,
       giftLine: latestGift ? formatGiftHistoryLine(latestGift, new Date()) : null,
