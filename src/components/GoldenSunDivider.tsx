@@ -1,6 +1,13 @@
-export default function GoldenSunDivider() {
+type GoldenSunDividerProps = {
+  variant?: "default" | "horizon";
+};
+
+export default function GoldenSunDivider({ variant = "default" }: GoldenSunDividerProps) {
+  const className =
+    variant === "horizon" ? "dkf-golden-sun-divider dkf-golden-sun-divider--horizon" : "dkf-golden-sun-divider";
+
   return (
-    <div className="dkf-golden-sun-divider" aria-hidden="true">
+    <div className={className} aria-hidden="true">
       <div className="dkf-golden-sun-divider-line" />
 
       <div className="dkf-golden-sun-divider-rays">

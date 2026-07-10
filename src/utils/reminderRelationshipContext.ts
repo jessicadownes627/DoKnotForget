@@ -22,7 +22,7 @@ export type ResolvedReminderRecipient = {
 };
 
 export type ResolvedReminderContext = {
-  kind: "self" | "selfChild" | "childThroughRelationship" | "childBirthday" | "anniversary";
+  kind: "self" | "selfChild" | "childThroughRelationship" | "childBirthday" | "careRecipient" | "anniversary";
   subjectName: string;
   subjectAge?: number;
   recipients: ResolvedReminderRecipient[];
@@ -237,6 +237,11 @@ export function resolveReminderContext(
       relationships,
       links: relationshipV2Links,
     });
+    const careRecipientPersonId = (person.careRecipientId ?? "").trim();
+    const careRecipient =
+      careRecipientPersonId && careRecipientPersonId !== person.id
+        ? mapPersonToRecipient(people.find((candidate) => candidate.id === careRecipientPersonId) ?? null)
+        : null;
     const recipients = resolveRecipientsFromAnchoredChildLinks(people, birthdayRelationshipContext);
     const eventDate = reminderEventDate(reminder);
     const birthdayMoment = (person.moments ?? []).find((moment) => moment.type === "birthday") ?? null;
@@ -251,6 +256,16 @@ export function resolveReminderContext(
         subjectAge,
         recipients,
         actionHeading: `Help ${joinRecipientFirstNames(recipients)} celebrate ${birthdayRelationshipContext.subject.name || personName}`,
+      };
+    }
+
+    if (careRecipient) {
+      return {
+        kind: "careRecipient",
+        subjectName: birthdayRelationshipContext.subject.name || personName,
+        subjectAge,
+        recipients: [careRecipient],
+        actionHeading: `Help ${joinRecipientFirstNames([careRecipient])} show up for ${birthdayRelationshipContext.subject.name || personName}`,
       };
     }
 

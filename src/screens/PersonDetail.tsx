@@ -141,16 +141,24 @@ function SurfaceCard({ children, style }: { children: React.ReactNode; style?: R
     <section
       className="dkf-enter"
       style={{
-        borderRadius: "28px",
-        border: "1px solid rgba(10, 27, 42, 0.08)",
-        background: "rgba(255,255,255,0.88)",
-        boxShadow: "0 16px 45px rgba(32, 26, 17, 0.06)",
-        padding: "1.1rem",
+        borderRadius: "26px",
+        border: "1px solid rgba(28, 28, 30, 0.06)",
+        background: "rgba(255,255,255,0.94)",
+        boxShadow: "0 12px 28px rgba(28, 28, 30, 0.045)",
+        padding: "1.05rem",
         ...style,
       }}
     >
       {children}
     </section>
+  );
+}
+
+function RowChevron() {
+  return (
+    <span aria-hidden="true" style={{ color: "rgba(28, 28, 30, 0.36)", fontSize: "1rem", lineHeight: 1 }}>
+      ›
+    </span>
   );
 }
 
@@ -174,6 +182,7 @@ export default function PersonDetail() {
   const [isPhoneEditorOpen, setIsPhoneEditorOpen] = useState(false);
   const [phoneDraft, setPhoneDraft] = useState("");
   const [phoneDraftError, setPhoneDraftError] = useState(false);
+  const [isConnectPersonOpen, setIsConnectPersonOpen] = useState(false);
   const today = useMemo(() => startOfDay(new Date()), []);
 
   useEffect(() => {
@@ -280,6 +289,21 @@ export default function PersonDetail() {
       return true;
     });
   })();
+
+  const careRecipient = useMemo(
+    () =>
+      resolvedPerson.careRecipientId
+        ? people.find((candidate) => candidate.id === resolvedPerson.careRecipientId) ?? null
+        : null,
+    [people, resolvedPerson.careRecipientId]
+  );
+
+  const availableConnectionTargets = useMemo(() => {
+    const excludedIds = new Set<string>([resolvedPerson.id, ...relatedPeople.map((item) => item.person.id)]);
+    return people
+      .filter((candidate) => !excludedIds.has(candidate.id) && candidate.name.trim())
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  }, [people, relatedPeople, resolvedPerson.id]);
 
   const groupedRelatedPeople = useMemo(() => {
     const relationshipOrder: Array<Relationship["type"]> = ["partner", "child", "parent", "sibling", "friend", "other"];
@@ -479,6 +503,16 @@ export default function PersonDetail() {
   }
 
   function openAddConnectedPerson() {
+    setIsConnectPersonOpen(true);
+  }
+
+  function connectExistingPerson(target: Person) {
+    updatePersonFields(resolvedPerson.id, { careRecipientId: target.id });
+    setIsConnectPersonOpen(false);
+  }
+
+  function openCreateConnectedPerson() {
+    setIsConnectPersonOpen(false);
     navigate("/add", {
       state: {
         connectedToPersonId: resolvedPerson.id,
@@ -547,7 +581,8 @@ export default function PersonDetail() {
                   width: "64px",
                   height: "64px",
                   borderRadius: "22px",
-                  background: "linear-gradient(145deg, rgba(240,225,196,0.95), rgba(222,196,145,0.95))",
+                  background: "linear-gradient(145deg, rgba(248,244,237,0.98), rgba(239,232,221,0.98))",
+                  border: "1px solid rgba(28, 28, 30, 0.06)",
                   display: "grid",
                   placeItems: "center",
                   color: "var(--ink)",
@@ -561,9 +596,9 @@ export default function PersonDetail() {
                 <div
                   style={{
                     fontFamily: "var(--font-serif)",
-                    fontSize: "2rem",
-                    lineHeight: 1,
-                    letterSpacing: "-0.03em",
+                    fontSize: "1.86rem",
+                    lineHeight: 1.02,
+                    letterSpacing: "-0.028em",
                   }}
                 >
                   {resolvedPerson.name.trim()}
@@ -590,40 +625,49 @@ export default function PersonDetail() {
                 type="button"
                 onClick={openPhoneEditor}
                 style={{
-                  border: "1px solid rgba(10, 27, 42, 0.08)",
-                  background: "rgba(255,255,255,0.84)",
-                  borderRadius: "20px",
-                  padding: "1rem",
+                  border: "1px solid rgba(28, 28, 30, 0.07)",
+                  background: "rgba(255,255,255,0.98)",
+                  borderRadius: "18px",
+                  padding: "0.95rem 1rem",
                   textAlign: "left",
                   color: "var(--ink)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "1rem",
+                  boxShadow: "0 6px 18px rgba(28, 28, 30, 0.03)",
                 }}
               >
-                <div style={{ fontWeight: 600 }}>📱 Phone number</div>
-                <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
-                  {resolvedPerson.phone
-                    ? `${resolvedPerson.phone} · ready for quick texting from reminders`
-                    : "Add a number if you'd like to text directly from reminders"}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 600 }}>Phone number</div>
+                  <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                    {resolvedPerson.phone
+                      ? `${resolvedPerson.phone} · ready for quick texting from reminders`
+                      : "Add a number if you'd like to text directly from reminders"}
+                  </div>
                 </div>
+                <RowChevron />
               </button>
 
               {selectedHolidays.length ? (
                 <div
                   style={{
-                    border: "1px solid rgba(10, 27, 42, 0.08)",
-                    background: "rgba(255,255,255,0.84)",
-                    borderRadius: "20px",
-                    padding: "1rem",
+                    border: "1px solid rgba(28, 28, 30, 0.07)",
+                    background: "rgba(255,255,255,0.98)",
+                    borderRadius: "18px",
+                    padding: "0.95rem 1rem",
                     color: "var(--ink)",
                   }}
                 >
-                  <div style={{ fontWeight: 600 }}>🎉 Holidays that matter</div>
+                  <div style={{ fontWeight: 600 }}>Holidays that matter</div>
                   <div style={{ marginTop: "0.5rem", display: "flex", flexWrap: "wrap", gap: "0.55rem" }}>
                     {selectedHolidays.map((holidayId) => (
                       <span
                         key={holidayId}
                         style={{
                           borderRadius: "999px",
-                          background: "rgba(242,231,210,0.95)",
+                          background: "rgba(246, 243, 238, 0.98)",
+                          border: "1px solid rgba(28, 28, 30, 0.06)",
                           padding: "0.5rem 0.7rem",
                           fontSize: "0.88rem",
                         }}
@@ -638,10 +682,10 @@ export default function PersonDetail() {
               {careHistory.length ? (
                 <div
                   style={{
-                    border: "1px solid rgba(10, 27, 42, 0.08)",
-                    background: "rgba(255,255,255,0.84)",
-                    borderRadius: "20px",
-                    padding: "1rem",
+                    border: "1px solid rgba(28, 28, 30, 0.07)",
+                    background: "rgba(255,255,255,0.98)",
+                    borderRadius: "18px",
+                    padding: "0.95rem 1rem",
                     color: "var(--ink)",
                   }}
                 >
@@ -678,40 +722,56 @@ export default function PersonDetail() {
                 type="button"
                 onClick={openBirthdayEditor}
                 style={{
-                  border: "1px solid rgba(10, 27, 42, 0.08)",
-                  background: "rgba(255,255,255,0.84)",
-                  borderRadius: "20px",
-                  padding: "1rem",
+                  border: "1px solid rgba(28, 28, 30, 0.07)",
+                  background: "rgba(255,255,255,0.98)",
+                  borderRadius: "18px",
+                  padding: "0.95rem 1rem",
                   textAlign: "left",
                   color: "var(--ink)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "1rem",
+                  boxShadow: "0 6px 18px rgba(28, 28, 30, 0.03)",
                 }}
               >
-                <div style={{ fontWeight: 600 }}>🎂 {possessive(resolvedPerson.name)} birthday</div>
-                <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
-                  {birthdayInfo
-                    ? birthdayInfo.isToday
-                      ? `${birthdayInfo.formattedDate} · today`
-                      : `${birthdayInfo.formattedDate} · in ${birthdayInfo.daysUntil} days`
-                    : "Add a date"}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 600 }}>{possessive(resolvedPerson.name)} birthday</div>
+                  <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                    {birthdayInfo
+                      ? birthdayInfo.isToday
+                        ? `${birthdayInfo.formattedDate} · today`
+                        : `${birthdayInfo.formattedDate} · in ${birthdayInfo.daysUntil} days`
+                      : "Add a date"}
+                  </div>
                 </div>
+                <RowChevron />
               </button>
 
               <button
                 type="button"
                 onClick={openAnniversaryEditor}
                 style={{
-                  border: "1px solid rgba(10, 27, 42, 0.08)",
-                  background: "rgba(255,255,255,0.84)",
-                  borderRadius: "20px",
-                  padding: "1rem",
+                  border: "1px solid rgba(28, 28, 30, 0.07)",
+                  background: "rgba(255,255,255,0.98)",
+                  borderRadius: "18px",
+                  padding: "0.95rem 1rem",
                   textAlign: "left",
                   color: "var(--ink)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "1rem",
+                  boxShadow: "0 6px 18px rgba(28, 28, 30, 0.03)",
                 }}
               >
-                <div style={{ fontWeight: 600 }}>💕 Anniversary</div>
-                <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
-                  {anniversaryDisplay ?? "Add a date"}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 600 }}>Anniversary</div>
+                  <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                    {anniversaryDisplay ?? "Add a date"}
+                  </div>
                 </div>
+                <RowChevron />
               </button>
 
               {otherMoments.map((moment) => (
@@ -720,22 +780,30 @@ export default function PersonDetail() {
                   type="button"
                   onClick={() => openCustomMomentEditor(moment)}
                   style={{
-                    border: "1px solid rgba(10, 27, 42, 0.08)",
-                    background: "rgba(255,255,255,0.84)",
-                    borderRadius: "20px",
-                    padding: "1rem",
+                    border: "1px solid rgba(28, 28, 30, 0.07)",
+                    background: "rgba(255,255,255,0.98)",
+                    borderRadius: "18px",
+                    padding: "0.95rem 1rem",
                     textAlign: "left",
                     color: "var(--ink)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "1rem",
+                    boxShadow: "0 6px 18px rgba(28, 28, 30, 0.03)",
                   }}
                 >
-                  <div style={{ fontWeight: 600 }}>✨ {moment.label}</div>
-                  <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
-                    {parseIsoDate(moment.date)
-                      ? Number(moment.date.split("-")[0] ?? 0) > 0
-                        ? fullDateFormatter.format(parseIsoDate(moment.date) as Date)
-                        : monthDayFormatter.format(parseIsoDate(moment.date) as Date)
-                      : moment.date}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600 }}>{moment.label}</div>
+                    <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                      {parseIsoDate(moment.date)
+                        ? Number(moment.date.split("-")[0] ?? 0) > 0
+                          ? fullDateFormatter.format(parseIsoDate(moment.date) as Date)
+                          : monthDayFormatter.format(parseIsoDate(moment.date) as Date)
+                        : moment.date}
+                    </div>
                   </div>
+                  <RowChevron />
                 </button>
               ))}
             </div>
@@ -765,10 +833,10 @@ export default function PersonDetail() {
                   <div
                     key={child.id}
                     style={{
-                      border: "1px solid rgba(10, 27, 42, 0.08)",
-                      background: "rgba(255,255,255,0.84)",
-                      borderRadius: "20px",
-                      padding: "1rem",
+                      border: "1px solid rgba(28, 28, 30, 0.07)",
+                      background: "rgba(255,255,255,0.98)",
+                      borderRadius: "18px",
+                      padding: "0.95rem 1rem",
                       color: "var(--ink)",
                     }}
                   >
@@ -787,23 +855,59 @@ export default function PersonDetail() {
                     type="button"
                     onClick={() => navigate(`/person/${item.person.id}`)}
                     style={{
-                      border: "1px solid rgba(10, 27, 42, 0.08)",
-                      background: "rgba(255,255,255,0.84)",
-                      borderRadius: "20px",
-                      padding: "1rem",
+                      border: "1px solid rgba(28, 28, 30, 0.07)",
+                      background: "rgba(255,255,255,0.98)",
+                      borderRadius: "18px",
+                      padding: "0.95rem 1rem",
                       textAlign: "left",
                       color: "var(--ink)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "1rem",
+                      boxShadow: "0 6px 18px rgba(28, 28, 30, 0.03)",
                     }}
                   >
-                    <div style={{ fontWeight: 600 }}>{item.person.name}</div>
-                    <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
-                      {formatRelationshipType(group.type)}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600 }}>{item.person.name}</div>
+                      <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                        {formatRelationshipType(group.type)}
+                      </div>
                     </div>
+                    <RowChevron />
                   </button>
                 ))
               )}
 
-              {!children.length && groupedRelatedPeople.length === 0 ? (
+              {careRecipient && !relatedPeople.some((item) => item.person.id === careRecipient.id) ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/person/${careRecipient.id}`)}
+                  style={{
+                    border: "1px solid rgba(28, 28, 30, 0.07)",
+                    background: "rgba(255,255,255,0.98)",
+                    borderRadius: "18px",
+                    padding: "0.95rem 1rem",
+                    textAlign: "left",
+                    color: "var(--ink)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "1rem",
+                    boxShadow: "0 6px 18px rgba(28, 28, 30, 0.03)",
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600 }}>{careRecipient.name}</div>
+                    <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                      Primary contact for reminders
+                    </div>
+                  </div>
+                  <RowChevron />
+                </button>
+              ) : null}
+
+              {!children.length && groupedRelatedPeople.length === 0 && !careRecipient ? (
                 <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>No one else is connected yet.</div>
               ) : null}
             </div>
@@ -1061,6 +1165,90 @@ export default function PersonDetail() {
                 style={{ border: "none", background: "none", padding: 0, color: "var(--ink)", fontSize: "0.95rem", fontWeight: 700 }}
               >
                 Save number
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isConnectPersonOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Connect ${resolvedPerson.name.trim()}`}
+          onClick={() => setIsConnectPersonOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10, 14, 20, 0.22)",
+            display: "grid",
+            placeItems: "center",
+            padding: "1.25rem",
+            zIndex: 80,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "520px",
+              borderRadius: "26px",
+              border: "1px solid rgba(10, 27, 42, 0.08)",
+              background: "rgba(255,255,255,0.98)",
+              boxShadow: "0 24px 60px rgba(20, 16, 10, 0.16)",
+              padding: "1.2rem",
+              display: "grid",
+              gap: "0.9rem",
+            }}
+          >
+            <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>Who should you reach out to for {resolvedPerson.name.trim()}?</div>
+            <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
+              Pick someone you've already added, or add someone new if they aren't here yet.
+            </div>
+
+            <div style={{ display: "grid", gap: "0.7rem", maxHeight: "320px", overflowY: "auto" }}>
+              {availableConnectionTargets.map((target) => (
+                <button
+                  key={target.id}
+                  type="button"
+                  onClick={() => connectExistingPerson(target)}
+                  style={{
+                    border: "1px solid rgba(28, 28, 30, 0.07)",
+                    background: "rgba(255,255,255,0.98)",
+                    borderRadius: "18px",
+                    padding: "0.95rem 1rem",
+                    textAlign: "left",
+                    color: "var(--ink)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "1rem",
+                    boxShadow: "0 6px 18px rgba(28, 28, 30, 0.03)",
+                  }}
+                >
+                  <div style={{ fontWeight: 600 }}>{target.name}</div>
+                  <RowChevron />
+                </button>
+              ))}
+              {!availableConnectionTargets.length ? (
+                <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>No one else is in your circle yet.</div>
+              ) : null}
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+              <button
+                type="button"
+                onClick={() => setIsConnectPersonOpen(false)}
+                style={{ border: "none", background: "none", padding: 0, color: "var(--muted)", fontSize: "0.92rem" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={openCreateConnectedPerson}
+                style={{ border: "none", background: "none", padding: 0, color: "var(--ink)", fontSize: "0.95rem", fontWeight: 700 }}
+              >
+                Someone else
               </button>
             </div>
           </div>

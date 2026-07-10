@@ -53,6 +53,7 @@ export type Person = {
   id: string;
   name: string;
   phone?: string;
+  careRecipientId?: string | null;
   moments: Moment[];
   giftHistory?: { type: string; date: string; timestamp?: string }[];
   isMother?: boolean | null; // null/undefined = unknown, true/false = answered

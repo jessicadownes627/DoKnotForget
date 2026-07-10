@@ -131,14 +131,12 @@ function SurfaceCard({
     <section
       className={className ? `dkf-enter dkf-memory-section ${className}` : "dkf-enter dkf-memory-section"}
       style={{
-        borderRadius: "26px",
-        border: "1px solid rgba(10, 27, 42, 0.05)",
-        background:
-          "linear-gradient(180deg, rgba(255,255,255,0.4) 0%, rgba(255,251,247,0.26) 100%)",
-        boxShadow:
-          "0 10px 28px rgba(10, 27, 42, 0.035), inset 0 1px 0 rgba(255,255,255,0.52)",
+        borderRadius: "24px",
+        border: "1px solid rgba(28, 28, 30, 0.06)",
+        background: "rgba(255,255,255,0.9)",
+        boxShadow: "0 10px 24px rgba(28, 28, 30, 0.035)",
         padding: "1.35rem 1.1rem 1.05rem",
-        backdropFilter: "blur(12px)",
+        backdropFilter: "blur(10px)",
         ...style,
       }}
     >
@@ -165,16 +163,16 @@ function ChoiceCard({
       style={{
         textAlign: "left",
         borderRadius: "22px",
-        border: active ? "1px solid rgba(10, 27, 42, 0.16)" : "1px solid rgba(10, 27, 42, 0.07)",
+        border: active ? "1px solid rgba(28, 28, 30, 0.14)" : "1px solid rgba(28, 28, 30, 0.07)",
         background: active
-          ? "linear-gradient(180deg, rgba(244, 228, 232, 0.96) 0%, rgba(248, 240, 231, 0.94) 100%)"
-          : "rgba(255,255,255,0.46)",
+          ? "linear-gradient(180deg, rgba(249,247,243,0.98) 0%, rgba(243,239,233,0.96) 100%)"
+          : "rgba(255,255,255,0.72)",
         color: "var(--ink)",
         padding: "1.08rem 1rem",
         display: "grid",
         gap: "0.32rem",
         minHeight: "88px",
-        boxShadow: active ? "0 12px 24px rgba(10, 27, 42, 0.08)" : "none",
+        boxShadow: active ? "0 10px 18px rgba(28, 28, 30, 0.05)" : "none",
       }}
     >
       <span style={{ fontSize: "1.02rem", fontWeight: 600 }}>{label}</span>
@@ -562,7 +560,7 @@ export default function AddPerson() {
                 style={{
                   position: "relative",
                   zIndex: 1,
-                  marginTop: "4.4rem",
+                  marginTop: "3.6rem",
                   marginLeft: "1.75rem",
                 }}
               >
@@ -846,9 +844,9 @@ export default function AddPerson() {
                           justifyContent: "space-between",
                           gap: "1rem",
                           borderRadius: "18px",
-                          background: "rgba(245, 233, 234, 0.34)",
+                          background: "rgba(255,255,255,0.96)",
                           padding: "0.95rem 1rem",
-                          border: "1px solid rgba(10, 27, 42, 0.05)",
+                          border: "1px solid rgba(28, 28, 30, 0.06)",
                         }}
                       >
                         <div style={{ minWidth: 0 }}>
@@ -883,9 +881,8 @@ export default function AddPerson() {
                     gap: "0.85rem",
                     padding: "0.85rem 0.95rem",
                     borderRadius: "22px",
-                    border: "1px solid rgba(10, 27, 42, 0.045)",
-                    background:
-                      "linear-gradient(180deg, rgba(248, 238, 239, 0.24) 0%, rgba(255,255,255,0.18) 100%)",
+                    border: "1px solid rgba(28, 28, 30, 0.05)",
+                    background: "linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(247,244,239,0.76) 100%)",
                   }}
                 >
                   <div style={{ color: "var(--ink)", fontWeight: 600 }}>Texting makes this easy later</div>
@@ -906,8 +903,8 @@ export default function AddPerson() {
                       width: "100%",
                       padding: "0.98rem 1rem",
                       borderRadius: "18px",
-                      border: "1px solid rgba(10, 27, 42, 0.08)",
-                      background: "rgba(255,255,255,0.46)",
+                      border: "1px solid rgba(28, 28, 30, 0.08)",
+                      background: "rgba(255,255,255,0.98)",
                     }}
                   />
                   {phoneError ? (
@@ -951,15 +948,15 @@ export default function AddPerson() {
             style={{
               padding: introStage ? "1.28rem 1.5rem" : "0.95rem 1rem",
               background: introStage
-                ? "linear-gradient(180deg, rgba(252,247,239,0.96) 0%, rgba(245,234,214,0.86) 100%)"
-                : "rgba(255,255,255,0.84)",
+                ? "rgba(255,255,255,0.92)"
+                : "rgba(255,255,255,0.9)",
               color: introStage ? "var(--ink)" : "var(--muted)",
               border: introStage
-                ? "1px solid rgba(232, 214, 180, 0.82)"
-                : "1px solid rgba(10, 27, 42, 0.08)",
+                ? "1px solid rgba(28, 28, 30, 0.08)"
+                : "1px solid rgba(28, 28, 30, 0.08)",
               borderRadius: introStage ? "28px" : "18px",
               minWidth: introStage ? "140px" : "96px",
-              boxShadow: introStage ? "0 16px 32px rgba(188, 160, 111, 0.12)" : "none",
+              boxShadow: introStage ? "0 10px 24px rgba(28, 28, 30, 0.05)" : "none",
               fontSize: introStage ? "1.02rem" : "1rem",
               fontWeight: introStage ? 600 : 500,
             }}
