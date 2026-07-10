@@ -1002,8 +1002,18 @@ export default function Home({
         : reminderAge !== undefined && reminderAge < 13
         ? CHILD_QUICK_IDEAS
         : reminderAge !== undefined && reminderAge < 18
-          ? TEEN_QUICK_IDEAS
-          : ADULT_QUICK_IDEAS;
+        ? TEEN_QUICK_IDEAS
+        : ADULT_QUICK_IDEAS;
+    const contextualSupport =
+      reminder.momentType === "anniversary"
+        ? "This one deserves something thoughtful"
+        : reminderAge !== undefined && MILESTONE_AGES.has(reminderAge)
+          ? "This one’s worth celebrating"
+          : reminder.momentType === "childBirthday" || (reminderAge !== undefined && reminderAge < 13)
+            ? "A small gesture could make their day"
+            : reminder.momentType === "birthday"
+              ? "A quick message would mean a lot"
+              : presentation.support;
 
     let title = display.label;
     if (section === "today" && reminder.reminderType === "oneDay") {
@@ -1045,7 +1055,7 @@ export default function Home({
       title,
       date: formatReminderDate(eventDate ? formatYmd(eventDate) : reminder.date),
       eyebrow: presentation.eyebrow,
-      support: presentation.support,
+      support: contextualSupport,
       cardBorder: presentation.border,
       cardBackground: presentation.background,
       giftLine: latestGift ? formatGiftHistoryLine(latestGift, new Date()) : null,
@@ -1114,46 +1124,6 @@ export default function Home({
   function dismissReminderCard(reminder: ReminderEvent) {
     recordCareEvent(reminder.personId, "reminderComplete", careEventReminderNote(reminder));
     markReminderHandled(reminder);
-  }
-
-  function recordGiftHistoryAction(reminder: ReminderEvent, type: "coffee" | "ecard" | "gift") {
-    const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
-    if (!person) return;
-    const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
-    const primaryRecipient = reminderContext?.recipients[0] ?? null;
-
-    const timestamp = new Date().toISOString();
-    updatePerson({
-      ...person,
-      giftHistory: [
-        ...(person.giftHistory ?? []),
-        {
-          type,
-          date: formatLocalYmd(new Date()),
-          timestamp,
-        },
-      ],
-    });
-
-    const note =
-      reminderContext?.kind === "childBirthday"
-        ? type === "coffee"
-          ? `Treated ${primaryRecipient?.name ?? person.name} to a coffee while celebrating ${reminderContext.subjectName}`
-          : type === "ecard"
-            ? `Sent ${primaryRecipient?.name ?? person.name} an eCard for ${reminderContext.subjectName}`
-            : `Sent a gift for ${reminderContext.subjectName}`
-        : reminderContext?.kind === "childThroughRelationship" && primaryRecipient
-          ? type === "coffee"
-            ? `Treated ${primaryRecipient.name} to a coffee while celebrating ${reminderContext.subjectName}`
-            : type === "ecard"
-              ? `Sent ${primaryRecipient.name} an eCard for ${reminderContext.subjectName}`
-              : `Planned a gift around ${reminderContext.subjectName}'s birthday`
-        : type === "coffee"
-          ? `Bought ${person.name} a coffee`
-          : type === "ecard"
-            ? `Sent ${person.name} an eCard`
-            : `Sent ${person.name} a gift`;
-    recordCareEvent(person.id, type, note);
   }
 
   function reminderTextActionLabel(reminder: ReminderEvent, person: Person | null) {
@@ -1278,12 +1248,11 @@ export default function Home({
               {
                 label: `Send ${recipientFirst} an eCard about ${reminderContext.subjectName}`,
                 href: "https://www.americangreetings.com/ecards",
-                onClick: () => recordGiftHistoryAction(reminder, "ecard"),
               },
             ]
           : []),
         {
-          label: "Mark as all set",
+          label: "Mark as done",
           onClick: () => dismissReminderCard(reminder),
         },
       ];
@@ -1296,7 +1265,7 @@ export default function Home({
     if (isYoungChild) {
       return [
         {
-          label: "Mark as all set",
+          label: "Mark as done",
           onClick: () => dismissReminderCard(reminder),
         },
       ];
@@ -1307,12 +1276,10 @@ export default function Home({
         {
           label: `Send ${first} an eCard`,
           href: "https://www.americangreetings.com/ecards",
-          onClick: () => recordGiftHistoryAction(reminder, "ecard"),
         },
         {
           label: "Send gift",
           href: "https://www.starbucks.com/gift",
-          onClick: () => recordGiftHistoryAction(reminder, "gift"),
         },
       ];
     }
@@ -1384,15 +1351,13 @@ export default function Home({
       {
         label: `Send ${first} an eCard`,
         href: "https://www.americangreetings.com/ecards",
-        onClick: () => recordGiftHistoryAction(reminder, "ecard"),
       },
       {
         label: `Treat ${first} to a coffee`,
         href: "https://www.starbucks.com/gift",
-        onClick: () => recordGiftHistoryAction(reminder, "coffee"),
       },
       {
-        label: "Mark as all set",
+        label: "Mark as done",
         onClick: () => dismissReminderCard(reminder),
       },
     ];
@@ -2076,6 +2041,33 @@ export default function Home({
           boxSizing: "border-box",
         }}
       >
+        <style>{`
+          @keyframes dkfReminderCompleteCard {
+            0% {
+              transform: translateY(0) scale(1);
+              opacity: 1;
+            }
+            45% {
+              transform: translateY(-3px) scale(1.01);
+              opacity: 1;
+            }
+            100% {
+              transform: translateY(0) scale(1);
+              opacity: 0.74;
+            }
+          }
+
+          @keyframes dkfReminderCompleteCheck {
+            0% {
+              opacity: 0;
+              transform: scale(0.88);
+            }
+            100% {
+              opacity: 1;
+              transform: scale(1);
+            }
+          }
+        `}</style>
         <div style={{ maxWidth: "560px", margin: "0 auto", paddingTop: "32px" }}>
           <header>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "1rem" }}>
@@ -2311,23 +2303,23 @@ export default function Home({
                       }}
                     >
                       <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
-                        Who should you reach out to for {recentlyAddedPerson.name}?
+                        Want to connect {recentlyAddedPerson.name} to someone?
                       </div>
                       <div>
                         <button
                           type="button"
                           onClick={openConnectPersonFlow}
                           style={{
-                            border: "none",
-                            background: "transparent",
+                            border: "1px solid rgba(10, 27, 42, 0.1)",
+                            background: "rgba(255,255,255,0.72)",
                             color: CIRCLE_NAVY,
                             cursor: "pointer",
-                            padding: 0,
+                            padding: "0.72rem 0.95rem",
                             fontSize: "0.95rem",
                             fontWeight: 600,
                             fontFamily: "var(--font-sans)",
-                            textDecoration: "underline",
-                            textUnderlineOffset: "3px",
+                            borderRadius: "12px",
+                            boxShadow: "0 6px 18px rgba(27,42,65,0.05)",
                           }}
                         >
                           Connect {recentlyAddedPerson.name}
@@ -2688,15 +2680,15 @@ export default function Home({
                         const isCompleted = Boolean(handledReminderActions[reminderId]);
                         const completionAction = isCompleted
                           ? null
-                          : actions.find((action) => action.label === "Mark as all set") ?? null;
+                          : actions.find((action) => action.label === "Mark as done") ?? null;
                         const primaryActions = isCompleted
                           ? []
-                          : actions.filter((action) => action.label !== "Mark as all set");
+                          : actions.filter((action) => action.label !== "Mark as done");
 
                         return (
                           <div
                             key={reminderId}
-                            className="smart-card"
+                            className={isCompleted ? "smart-card dkf-reminder-complete-card" : "smart-card"}
                             onClick={() => navigate(`/person/${reminder.personId}`)}
                             style={{
                               border: display.cardBorder,
@@ -2709,6 +2701,8 @@ export default function Home({
                               backdropFilter: "blur(6px)",
                               opacity: isCompleted ? 0.72 : 1,
                               cursor: "pointer",
+                              animation: isCompleted ? "dkfReminderCompleteCard 260ms ease-out" : undefined,
+                              transformOrigin: "center",
                             }}
                           >
                             <div style={{ display: "grid", gap: "8px" }}>
@@ -2723,11 +2717,6 @@ export default function Home({
                               {display.support ? (
                                 <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
                                   {display.support}
-                                </div>
-                              ) : null}
-                              {display.actionHeading ? (
-                                <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
-                                  {display.actionHeading}
                                 </div>
                               ) : null}
                               {display.giftLine ? (
@@ -2748,13 +2737,33 @@ export default function Home({
                               >
                                 <div
                                   style={{
-                                    color: "var(--muted)",
+                                    color: "var(--ink)",
                                     fontSize: "0.98rem",
                                     lineHeight: 1.5,
                                     fontWeight: 600,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.55rem",
+                                    animation: "dkfReminderCompleteCheck 180ms ease-out",
                                   }}
                                 >
-                                  ✓ All Set
+                                  <span
+                                    aria-hidden="true"
+                                    style={{
+                                      width: "1.35rem",
+                                      height: "1.35rem",
+                                      borderRadius: "999px",
+                                      display: "inline-grid",
+                                      placeItems: "center",
+                                      background: "rgba(215, 186, 118, 0.18)",
+                                      color: "var(--ink)",
+                                      fontSize: "0.85rem",
+                                      lineHeight: 1,
+                                    }}
+                                  >
+                                    ✓
+                                  </span>
+                                  {`You showed up for ${displayNameOrFallback(reminder.personName)} today`}
                                 </div>
                                 <button
                                   type="button"
@@ -2834,7 +2843,6 @@ export default function Home({
                                       rel="noopener noreferrer"
                                       onClick={(event) => {
                                         event.stopPropagation();
-                                        action.onClick?.();
                                       }}
                                       aria-disabled={"disabled" in action && action.disabled ? "true" : undefined}
                                       title={(action as { title?: string }).title}
@@ -2867,7 +2875,9 @@ export default function Home({
                                       type="button"
                                       onClick={(event) => {
                                         event.stopPropagation();
-                                        action.onClick();
+                                        if ("onClick" in action && typeof action.onClick === "function") {
+                                          action.onClick();
+                                        }
                                       }}
                                       disabled={Boolean("disabled" in action && action.disabled)}
                                       title={"title" in action && typeof action.title === "string" ? action.title : undefined}
@@ -2897,7 +2907,9 @@ export default function Home({
                                   type="button"
                                   onClick={(event) => {
                                     event.stopPropagation();
-                                    completionAction.onClick();
+                                    if (typeof completionAction.onClick === "function") {
+                                      completionAction.onClick();
+                                    }
                                   }}
                                   style={{
                                     borderRadius: "12px",
@@ -3408,7 +3420,7 @@ export default function Home({
                     Connect {recentlyAddedPerson.name}
                   </div>
                   <div style={{ color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
-                    Choose someone already in your circle.
+                    Pick someone you already added.
                   </div>
                 </div>
                 <button
@@ -3511,7 +3523,7 @@ export default function Home({
                   }}
                 >
                   <div style={{ color: "var(--ink)", fontWeight: 600 }}>
-                    How are they connected?
+                    Who is {recentlyAddedPerson.name} to {displayNameOrFallback(selectedConnectionTarget.name)}?
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
                     {(["child", "partner"] as const).map((relationshipType) => {

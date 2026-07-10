@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import type { CareEvent } from "../models/CareEvent";
 import type { Moment, Person } from "../models/Person";
 import type { Relationship } from "../models/Relationship";
-import PersonEditDrawer from "../components/PersonEditDrawer";
-import type { FamilyChildDraft } from "../components/PersonEditDrawer";
 import MomentDatePicker from "../components/MomentDatePicker";
 import { useAppState } from "../appState";
 import { useLocation, useNavigate, useParams } from "../router";
@@ -11,7 +9,6 @@ import { getNextBirthdayFromIso } from "../utils/birthdayUtils";
 import { parseLocalDate } from "../utils/date";
 import { normalizePhone } from "../utils/phone";
 import { getSelectedHolidays, holidayOptionLabel } from "../utils/personHolidays";
-import { buildAddPersonRelationshipPersistence } from "../utils/addPersonRelationshipPersistence";
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -135,7 +132,6 @@ type EditableConnection = {
 
 type MomentComposerState =
   | { kind: "hidden" }
-  | { kind: "chooser" }
   | { kind: "birthday" }
   | { kind: "anniversary" }
   | { kind: "custom"; momentId: string | null };
@@ -158,35 +154,13 @@ function SurfaceCard({ children, style }: { children: React.ReactNode; style?: R
   );
 }
 
-function ActionPill({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        borderRadius: "999px",
-        border: "1px solid rgba(10, 27, 42, 0.1)",
-        background: "rgba(255,255,255,0.92)",
-        color: "var(--ink)",
-        padding: "0.8rem 0.95rem",
-        fontSize: "0.94rem",
-        fontWeight: 600,
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
 export default function PersonDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams<{ id: string }>();
-  const { people, relationships, careEvents, updatePerson, updatePersonFields, deletePerson, savePerson } =
+  const { people, relationships, careEvents, updatePerson, updatePersonFields, deletePerson } =
     useAppState();
   const person = people.find((p) => p.id === id) ?? null;
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [startWithNewChild, setStartWithNewChild] = useState(false);
   const [momentComposer, setMomentComposer] = useState<MomentComposerState>({ kind: "hidden" });
   const [birthdayDraftMonthDay, setBirthdayDraftMonthDay] = useState("");
   const [birthdayDraftYear, setBirthdayDraftYear] = useState("");
@@ -498,16 +472,6 @@ export default function PersonDetail() {
     resetMomentComposer();
   }
 
-  function openPersonEditor() {
-    setStartWithNewChild(false);
-    setIsEditOpen(true);
-  }
-
-  function openChildEditor(_childId: string) {
-    setStartWithNewChild(false);
-    setIsEditOpen(true);
-  }
-
   function openPhoneEditor() {
     setPhoneDraft(resolvedPerson.phone ?? "");
     setPhoneDraftError(false);
@@ -533,55 +497,6 @@ export default function PersonDetail() {
     setIsPhoneEditorOpen(false);
   }
 
-  function saveFamilyChildren(updatedParent: Person, drafts: FamilyChildDraft[]) {
-    const createdPeople: Person[] = [];
-    const createdRelationships: Relationship[] = [];
-    const createdRelationshipLinksV2 = [];
-
-    for (const draft of drafts) {
-      const childName = draft.name.trim();
-      const birthdayIso = buildMomentIso(draft.monthDay, draft.year, false);
-      if (!childName || !birthdayIso) continue;
-
-      const childId = makeId();
-      const childBirthdayMoment: Moment = {
-        id: makeId(),
-        type: "birthday",
-        label: "Birthday",
-        date: birthdayIso,
-        recurring: true,
-      };
-
-      createdPeople.push({
-        id: childId,
-        name: childName,
-        moments: [childBirthdayMoment],
-        importantDates: [],
-        sensitiveMoments: [],
-      });
-
-      const relationshipPersistence = buildAddPersonRelationshipPersistence({
-        personId: childId,
-        makeId,
-        selectedRelationshipType: "child",
-        selectedConnectionId: updatedParent.id,
-        connectionRelationship: "child",
-      });
-
-      createdRelationships.push(...relationshipPersistence.createdRelationships);
-      createdRelationshipLinksV2.push(...relationshipPersistence.createdRelationshipLinksV2);
-    }
-
-    if (!createdPeople.length) return;
-
-    savePerson({
-      person: updatedParent,
-      createdPeople,
-      createdRelationships,
-      createdRelationshipLinksV2,
-    });
-  }
-
   const pageBackground =
     "radial-gradient(circle at top, rgba(243, 232, 209, 0.95) 0%, rgba(247, 244, 238, 0.96) 36%, rgba(244, 239, 231, 1) 100%)";
 
@@ -601,7 +516,6 @@ export default function PersonDetail() {
             style={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
               gap: "1rem",
             }}
           >
@@ -622,13 +536,6 @@ export default function PersonDetail() {
                 ←
               </span>
               Back
-            </button>
-            <button
-              type="button"
-              onClick={openPersonEditor}
-              style={{ border: "none", background: "none", color: "var(--muted)", padding: 0 }}
-            >
-              Edit
             </button>
           </div>
 
@@ -855,16 +762,13 @@ export default function PersonDetail() {
               {children.map((child) => {
                 const birthday = formatBirthday(child.birthday ?? child.birthdate ?? undefined, monthDayFormatter, fullDateFormatter);
                 return (
-                  <button
+                  <div
                     key={child.id}
-                    type="button"
-                    onClick={() => openChildEditor(child.id)}
                     style={{
                       border: "1px solid rgba(10, 27, 42, 0.08)",
                       background: "rgba(255,255,255,0.84)",
                       borderRadius: "20px",
                       padding: "1rem",
-                      textAlign: "left",
                       color: "var(--ink)",
                     }}
                   >
@@ -872,7 +776,7 @@ export default function PersonDetail() {
                     <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
                       {birthday ? `Birthday: ${birthday}` : "Child in your circle"}
                     </div>
-                  </button>
+                  </div>
                 );
               })}
 
@@ -936,51 +840,6 @@ export default function PersonDetail() {
           </div>
         </div>
       </div>
-
-      {momentComposer.kind === "chooser" ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Add a moment"
-          onClick={resetMomentComposer}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(10, 14, 20, 0.22)",
-            display: "grid",
-            placeItems: "center",
-            padding: "1.25rem",
-            zIndex: 80,
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: "520px",
-              borderRadius: "26px",
-              border: "1px solid rgba(10, 27, 42, 0.08)",
-              background: "rgba(255,255,255,0.98)",
-              boxShadow: "0 24px 60px rgba(20, 16, 10, 0.16)",
-              padding: "1.2rem",
-              display: "grid",
-              gap: "0.8rem",
-            }}
-          >
-            <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>What should we remember for {resolvedPerson.name.trim()}?</div>
-            <ActionPill label="🎂 Birthday" onClick={openBirthdayEditor} />
-            <ActionPill label="💕 Anniversary" onClick={openAnniversaryEditor} />
-            <ActionPill label="✨ Important date" onClick={() => openCustomMomentEditor()} />
-            <button
-              type="button"
-              onClick={resetMomentComposer}
-              style={{ border: "none", background: "none", color: "var(--muted)", padding: 0, justifySelf: "start" }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       <MomentDatePicker
         isOpen={momentComposer.kind === "birthday"}
@@ -1207,24 +1066,6 @@ export default function PersonDetail() {
           </div>
         </div>
       ) : null}
-
-      <PersonEditDrawer
-        isOpen={isEditOpen}
-        person={person}
-        startWithNewChild={startWithNewChild}
-        onClose={() => {
-          setIsEditOpen(false);
-          setStartWithNewChild(false);
-        }}
-        onSave={(updated) => {
-          updatePerson(updated);
-          setStartWithNewChild(false);
-        }}
-        onAddChildren={(updatedParent, children) => {
-          saveFamilyChildren(updatedParent, children);
-          setStartWithNewChild(false);
-        }}
-      />
     </div>
   );
 }
