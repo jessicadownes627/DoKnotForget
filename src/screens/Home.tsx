@@ -131,11 +131,11 @@ const ANNIVERSARY_IDEAS = [
 ];
 
 const CHILD_PREP_IDEAS = [
-  "Pick out a card they'd love",
-  "Grab a balloon or small surprise",
-  "Pick up a cupcake or favorite treat",
-  "Get a small toy they'd love",
-  "Plan something fun they can open",
+  "A card they'd love",
+  "A balloon or small surprise",
+  "A cupcake or favorite treat",
+  "Something small they can open",
+  "Something fun to unwrap",
 ];
 
 const CHILD_HORIZON_IDEAS = [
@@ -146,10 +146,10 @@ const CHILD_HORIZON_IDEAS = [
 ];
 
 const TEEN_PREP_IDEAS = [
-  "Pick something they're into right now",
-  "Set up a fun treat or gift card",
-  "Think of something they'd actually want",
-  "Plan a little surprise for the day",
+  "Something they're into right now",
+  "A fun treat or gift card",
+  "Something they'd actually want",
+  "A little surprise for the day",
 ];
 
 const TEEN_HORIZON_IDEAS = [
@@ -160,11 +160,11 @@ const TEEN_HORIZON_IDEAS = [
 ];
 
 const ADULT_PREP_IDEAS = [
-  "Pick out a thoughtful card",
-  "Plan a dessert or favorite treat",
-  "Choose flowers or a small gift",
-  "Set aside time to call",
-  "Think of a favorite memory to send",
+  "A thoughtful card",
+  "A dessert or favorite treat",
+  "Flowers or a small gift",
+  "Time for a call",
+  "A favorite memory to send",
 ];
 
 const ADULT_HORIZON_IDEAS = [
@@ -175,10 +175,10 @@ const ADULT_HORIZON_IDEAS = [
 ];
 
 const ANNIVERSARY_PREP_IDEAS = [
-  "Plan a thoughtful note",
-  "Choose flowers, wine, or dessert",
-  "Think of something small but meaningful",
-  "Set aside time to celebrate together",
+  "A thoughtful note",
+  "Flowers, wine, or dessert",
+  "Something small but meaningful",
+  "Time to celebrate together",
 ];
 
 const ANNIVERSARY_HORIZON_IDEAS = [
@@ -1063,8 +1063,8 @@ function buildUpcomingPlanningIdeas(args: {
 
     if (age !== undefined && age < 13) {
       const reflectiveChildIdea = recipientFirst
-        ? `Check what ${subjectFirst} is into this year`
-        : `Think about something small ${subjectFirst} would love`;
+        ? `What ${subjectFirst} is into this year`
+        : `Something small ${subjectFirst} would love`;
       return [reflectiveChildIdea, ...pickQuickIdeas(seed, CHILD_HORIZON_IDEAS).slice(0, count - 1)];
     }
 
@@ -1081,8 +1081,8 @@ function buildUpcomingPlanningIdeas(args: {
 
   if (age !== undefined && age < 13) {
     const relationalIdea = recipientFirst
-      ? `Ask ${recipientFirst} what ${subjectFirst} is into`
-      : `Think about what ${subjectFirst} would love`;
+      ? `${subjectFirst}'s favorite things lately`
+      : `Something ${subjectFirst} would love`;
     return [relationalIdea, ...pickQuickIdeas(seed, CHILD_PREP_IDEAS).slice(0, count - 1)];
   }
 
@@ -1104,21 +1104,21 @@ function buildHorizonPlanningNudge(args: {
   const recipientFirst = recipientName ? contactFirstName(recipientName) : "";
 
   if (momentType === "anniversary") {
-    return "You could think about one small way to mark the day.";
+    return "One small way to mark the day.";
   }
 
   if (age !== undefined && age < 13) {
     if (recipientFirst) {
-      return `Ask ${recipientFirst} this week what ${subjectFirst} is into lately.`;
+      return `Check with ${recipientFirst} this week what ${subjectFirst} is into lately.`;
     }
-    return `You could think about something small ${subjectFirst} would love.`;
+    return `Something small ${subjectFirst} would love.`;
   }
 
   if (age !== undefined && age < 18) {
-    return `You could think about something small ${subjectFirst} would love.`;
+    return `Something small ${subjectFirst} would love.`;
   }
 
-  return `You could think about something small ${subjectFirst} would love.`;
+  return `Something small ${subjectFirst} would love.`;
 }
 
   function reminderCardPresentation(reminder: ReminderEvent, section: "today" | "tomorrow" | "horizon") {
@@ -1229,7 +1229,7 @@ function buildHorizonPlanningNudge(args: {
       title = `Coming up: ${display.label.replace(/ in 7 days$/, "")}`;
     } else if (section === "tomorrow" && reminder.reminderType === "dayOf") {
       const tomorrowLabel = stripRelativeSuffix(display.label, "today");
-      title = `${tomorrowLabel}${reminder.momentType === "birthday" ? " 🎂" : ""}`;
+      title = tomorrowLabel;
     } else if (section === "horizon") {
       const horizonLabel = stripRelativeSuffix(stripRelativeSuffix(display.label, "today"), "tomorrow").replace(/ in 7 days$/, "");
       title = horizonLabel;
@@ -1248,7 +1248,13 @@ function buildHorizonPlanningNudge(args: {
       reminderAge !== undefined &&
       MILESTONE_AGES.has(reminderAge)
     ) {
-      title = `${personName} turns ${reminderAge} today 🎉`;
+      title = `${personName} turns ${reminderAge} today`;
+    }
+
+    if (reminder.momentType === "birthday" || reminder.momentType === "childBirthday") {
+      title = `🎂 ${title}`;
+    } else if (reminder.momentType === "anniversary") {
+      title = `💗 ${title}`;
     }
 
     return {
@@ -3428,12 +3434,7 @@ function buildHorizonPlanningNudge(args: {
                             <div className="dkf-golden-sun-divider-line" />
                           </div>
                           {todayReminders.length > 0 ? (
-                            <>
-                              <div style={{ marginTop: "10px", color: "var(--muted)", fontSize: "16px", lineHeight: 1.5 }}>
-                                You remembered. That already counts.
-                              </div>
-                              {renderPromptGrid(renderReminderCards(todayReminders, "today"))}
-                            </>
+                            <>{renderPromptGrid(renderReminderCards(todayReminders, "today"))}</>
                           ) : null}
                         </>
                       ) : null}
@@ -3486,11 +3487,36 @@ function buildHorizonPlanningNudge(args: {
                           <div
                             style={{
                               ...headerStyle,
-                              marginTop: todayReminders.length > 0 || tomorrowReminders.length > 0 ? "58px" : "14px",
+                              marginTop: todayReminders.length > 0 || tomorrowReminders.length > 0 ? "72px" : "18px",
                               color: "rgba(108, 111, 115, 0.82)",
+                              textAlign: "center",
+                              justifyContent: "center",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "10px",
                             }}
                           >
-                            On the Horizon
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                width: "6px",
+                                height: "6px",
+                                borderRadius: "999px",
+                                background: "var(--dkf-gold)",
+                                flexShrink: 0,
+                              }}
+                            />
+                            <span>On the Horizon</span>
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                width: "6px",
+                                height: "6px",
+                                borderRadius: "999px",
+                                background: "var(--dkf-gold)",
+                                flexShrink: 0,
+                              }}
+                            />
                           </div>
                           <div className="dkf-horizon-divider" aria-hidden="true" />
                           <div style={{ display: "grid", gap: "16px", marginTop: "16px" }}>

@@ -180,9 +180,11 @@ export default function PersonDetail() {
   const [customDraftYear, setCustomDraftYear] = useState("");
   const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] = useState(false);
   const [isPhoneEditorOpen, setIsPhoneEditorOpen] = useState(false);
+  const [phoneEditorMode, setPhoneEditorMode] = useState<"direct" | "separate">("direct");
   const [phoneDraft, setPhoneDraft] = useState("");
   const [phoneDraftError, setPhoneDraftError] = useState(false);
   const [isConnectPersonOpen, setIsConnectPersonOpen] = useState(false);
+  const [contactChoiceTarget, setContactChoiceTarget] = useState<Person | null>(null);
   const today = useMemo(() => startOfDay(new Date()), []);
 
   useEffect(() => {
@@ -499,6 +501,7 @@ export default function PersonDetail() {
   function openPhoneEditor() {
     setPhoneDraft(resolvedPerson.phone ?? "");
     setPhoneDraftError(false);
+    setPhoneEditorMode("direct");
     setIsPhoneEditorOpen(true);
   }
 
@@ -507,8 +510,26 @@ export default function PersonDetail() {
   }
 
   function connectExistingPerson(target: Person) {
-    updatePersonFields(resolvedPerson.id, { careRecipientId: target.id });
     setIsConnectPersonOpen(false);
+    if (target.phone) {
+      setContactChoiceTarget(target);
+      return;
+    }
+    updatePersonFields(resolvedPerson.id, { careRecipientId: target.id });
+  }
+
+  function useConnectedPersonNumber() {
+    if (!contactChoiceTarget) return;
+    updatePersonFields(resolvedPerson.id, { careRecipientId: contactChoiceTarget.id });
+    setContactChoiceTarget(null);
+  }
+
+  function addSeparatePhoneNumber() {
+    setContactChoiceTarget(null);
+    setPhoneDraft(resolvedPerson.phone ?? "");
+    setPhoneDraftError(false);
+    setPhoneEditorMode("separate");
+    setIsPhoneEditorOpen(true);
   }
 
   function openCreateConnectedPerson() {
@@ -527,8 +548,11 @@ export default function PersonDetail() {
       setPhoneDraftError(true);
       return;
     }
-    updatePersonFields(resolvedPerson.id, { phone: normalizedPhone || undefined });
+    updatePersonFields(resolvedPerson.id, {
+      phone: normalizedPhone || undefined,
+    });
     setIsPhoneEditorOpen(false);
+    setPhoneEditorMode("direct");
   }
 
   const pageBackground =
@@ -606,6 +630,31 @@ export default function PersonDetail() {
                 <div style={{ marginTop: "0.4rem", color: "var(--muted)", fontSize: "0.95rem" }}>
                   {portraitSubtitle}
                 </div>
+                {careRecipient ? (
+                  <div style={{ marginTop: "0.35rem", color: "rgba(28, 28, 30, 0.62)", fontSize: "0.88rem" }}>
+                    <span>{`Messages for ${resolvedPerson.name.trim()} will go to `}</span>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/person/${careRecipient.id}`)}
+                      style={{
+                        border: "none",
+                        background: "none",
+                        padding: 0,
+                        margin: 0,
+                        color: "var(--ink)",
+                        fontSize: "inherit",
+                        fontWeight: 600,
+                        fontFamily: "inherit",
+                        textDecoration: "underline",
+                        textUnderlineOffset: "2px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {careRecipient.name}
+                    </button>
+                    <span>{`'s phone.`}</span>
+                  </div>
+                ) : null}
               </div>
             </div>
           </SurfaceCard>
@@ -1104,7 +1153,10 @@ export default function PersonDetail() {
           role="dialog"
           aria-modal="true"
           aria-label="Phone number"
-          onClick={() => setIsPhoneEditorOpen(false)}
+          onClick={() => {
+            setIsPhoneEditorOpen(false);
+            setPhoneEditorMode("direct");
+          }}
           style={{
             position: "fixed",
             inset: 0,
@@ -1129,9 +1181,13 @@ export default function PersonDetail() {
               gap: "0.8rem",
             }}
           >
-            <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>Make reaching out easier</div>
+            <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>
+              {phoneEditorMode === "separate" ? `Add a different number for ${resolvedPerson.name.trim()}` : "Make reaching out easier"}
+            </div>
             <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
-              If you'd like to text {resolvedPerson.name.trim()} directly from reminders, add a phone number.
+              {phoneEditorMode === "separate"
+                ? `Use a separate number for ${resolvedPerson.name.trim()} instead of routing reminders through someone else.`
+                : `If you'd like to text ${resolvedPerson.name.trim()} directly from reminders, add a phone number.`}
             </div>
             <input
               type="tel"
@@ -1154,7 +1210,10 @@ export default function PersonDetail() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
               <button
                 type="button"
-                onClick={() => setIsPhoneEditorOpen(false)}
+                onClick={() => {
+                  setIsPhoneEditorOpen(false);
+                  setPhoneEditorMode("direct");
+                }}
                 style={{ border: "none", background: "none", padding: 0, color: "var(--muted)", fontSize: "0.92rem" }}
               >
                 Cancel
@@ -1165,6 +1224,102 @@ export default function PersonDetail() {
                 style={{ border: "none", background: "none", padding: 0, color: "var(--ink)", fontSize: "0.95rem", fontWeight: 700 }}
               >
                 Save number
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {contactChoiceTarget ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Use ${contactChoiceTarget.name.trim()} as contact`}
+          onClick={() => setContactChoiceTarget(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10, 14, 20, 0.22)",
+            display: "grid",
+            placeItems: "center",
+            padding: "1.25rem",
+            zIndex: 80,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "520px",
+              borderRadius: "26px",
+              border: "1px solid rgba(10, 27, 42, 0.08)",
+              background: "rgba(255,255,255,0.98)",
+              boxShadow: "0 24px 60px rgba(20, 16, 10, 0.16)",
+              padding: "1.2rem",
+              display: "grid",
+              gap: "0.9rem",
+            }}
+          >
+            <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>
+              {`Use ${contactChoiceTarget.name.trim()}'s number when reaching out about ${resolvedPerson.name.trim()}?`}
+            </div>
+            <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
+              {`${contactChoiceTarget.name.trim()} can be the contact point for reminders about ${resolvedPerson.name.trim()} without copying their number.`}
+            </div>
+
+            <div style={{ display: "grid", gap: "0.7rem" }}>
+              <button
+                type="button"
+                onClick={useConnectedPersonNumber}
+                style={{
+                  border: "1px solid rgba(28, 28, 30, 0.07)",
+                  background: "rgba(255,255,255,0.98)",
+                  borderRadius: "18px",
+                  padding: "0.95rem 1rem",
+                  textAlign: "left",
+                  color: "var(--ink)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "1rem",
+                  boxShadow: "0 6px 18px rgba(28, 28, 30, 0.03)",
+                }}
+              >
+                <div style={{ fontWeight: 600 }}>
+                  {`Text ${contactChoiceTarget.name.trim()} for ${resolvedPerson.name.trim()}`}
+                </div>
+                <RowChevron />
+              </button>
+
+              <button
+                type="button"
+                onClick={addSeparatePhoneNumber}
+                style={{
+                  border: "1px solid rgba(28, 28, 30, 0.07)",
+                  background: "rgba(255,255,255,0.98)",
+                  borderRadius: "18px",
+                  padding: "0.95rem 1rem",
+                  textAlign: "left",
+                  color: "var(--ink)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "1rem",
+                  boxShadow: "0 6px 18px rgba(28, 28, 30, 0.03)",
+                }}
+              >
+                <div style={{ fontWeight: 600 }}>{`${resolvedPerson.name.trim()} has their own number`}</div>
+                <RowChevron />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-start" }}>
+              <button
+                type="button"
+                onClick={() => setContactChoiceTarget(null)}
+                style={{ border: "none", background: "none", padding: 0, color: "var(--muted)", fontSize: "0.92rem" }}
+              >
+                Not now
               </button>
             </div>
           </div>
