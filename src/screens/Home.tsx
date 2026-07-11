@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChildParentContact, Person } from "../models/Person";
-import type { RelationshipType } from "../models/Relationship";
+import type { Relationship, RelationshipType } from "../models/Relationship";
 import { openSmsComposer } from "../components/SoonReminderCard";
 import Brand from "../components/Brand";
 import BowIcon from "../components/BowIcon";
@@ -353,6 +353,27 @@ function reminderSecondaryActionLabel(label: string) {
   if (lowered.includes("dessert")) return "Order dessert";
   if (lowered.includes("gift")) return "Send a small gift";
   return label;
+}
+
+function reminderActionRecipientName(
+  reminder: ReminderEvent,
+  person: Person | null,
+  people: Person[],
+  relationships: Relationship[],
+  today: Date,
+  relationshipV2Links: ReturnType<typeof buildRelationshipV2Links>
+) {
+  const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
+  if (
+    (reminderContext?.kind === "childBirthday" ||
+      reminderContext?.kind === "childThroughRelationship" ||
+      reminderContext?.kind === "careRecipient") &&
+    reminderContext.recipients.length > 0
+  ) {
+    return contactFirstName(reminderContext.recipients[0]?.name ?? reminder.personName);
+  }
+
+  return contactFirstName((person?.name ?? reminder.personName).trim() || reminder.personName);
 }
 
 function hashText(value: string) {
@@ -1274,6 +1295,12 @@ function buildHorizonPlanningNudge(args: {
       title = `💗 ${title}`;
     }
 
+    const childFocusedIdeaHeading =
+      section === "today" &&
+      (reminderContext?.kind === "childBirthday" || reminderContext?.kind === "childThroughRelationship")
+        ? `Something ${contactFirstName(reminderContext.subjectName)} would love:`
+        : null;
+
     return {
       title,
       date: formatReminderDate(eventDate ? formatYmd(eventDate) : reminder.date),
@@ -1293,8 +1320,13 @@ function buildHorizonPlanningNudge(args: {
               momentType: reminder.momentType,
             })
           : null,
-      actionHeading: reminderContext?.actionHeading ?? null,
-      ideaHeading: section === "tomorrow" ? "To make the day feel a little more personal:" : null,
+      actionHeading:
+        section === "today"
+          ? `Send ${reminderActionRecipientName(reminder, person, people, relationships, today, relationshipV2Links)}:`
+          : null,
+      ideaHeading:
+        childFocusedIdeaHeading ??
+        (section === "tomorrow" ? "To make the day feel a little more personal:" : null),
       ideas:
         section === "tomorrow"
           ? buildUpcomingPlanningIdeas({
@@ -1446,8 +1478,6 @@ function buildHorizonPlanningNudge(args: {
     const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
     const first = ((person?.name ?? reminder.personName).trim().split(" ")[0] || reminder.personName || "them").trim();
     const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
-    const subjectAge = reminderContext?.subjectAge;
-    const isYoungChild = subjectAge !== undefined && subjectAge < 13;
     const relationalRecipients =
       reminderContext?.kind === "childThroughRelationship" ||
       reminderContext?.kind === "childBirthday" ||
@@ -1496,15 +1526,6 @@ function buildHorizonPlanningNudge(args: {
               },
             ]
           : []),
-        {
-          label: "Done for today",
-          onClick: () => dismissReminderCard(reminder),
-        },
-      ];
-    }
-
-    if (isYoungChild) {
-      return [
         {
           label: "Done for today",
           onClick: () => dismissReminderCard(reminder),
@@ -3137,6 +3158,20 @@ function buildHorizonPlanningNudge(args: {
                                           width: "138px",
                                         }}
                                       >
+                                        {display.actionHeading ? (
+                                          <div
+                                            style={{
+                                              color: "rgba(108, 111, 115, 0.82)",
+                                              fontSize: "0.76rem",
+                                              lineHeight: 1.4,
+                                              fontWeight: 600,
+                                              letterSpacing: "0.02em",
+                                              marginBottom: "2px",
+                                            }}
+                                          >
+                                            {display.actionHeading}
+                                          </div>
+                                        ) : null}
                                         {primaryActions.slice(1).map((action) =>
                                           "href" in action && action.href ? (
                                             <a
