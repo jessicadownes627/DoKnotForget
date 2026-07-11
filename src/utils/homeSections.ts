@@ -68,6 +68,33 @@ function reminderMatchesMoment(reminder: ReminderEvent, moment: UpcomingMomentEv
   return true;
 }
 
+function buildMomentReminderEntries(moments: UpcomingMomentEvent[], reminders: ReminderEvent[]) {
+  const cardsByEvent = new Map<string, { moment: UpcomingMomentEvent; reminder: ReminderEvent | null }>();
+  for (const moment of moments) {
+    const key = momentEventKey(moment);
+    if (!cardsByEvent.has(key)) {
+      cardsByEvent.set(key, { moment, reminder: null });
+    }
+  }
+
+  for (const reminder of reminders) {
+    const key = reminderEventKey(reminder);
+    const existingCard = cardsByEvent.get(key);
+    if (!existingCard) continue;
+    if (!reminderMatchesMoment(reminder, existingCard.moment)) continue;
+
+    const existingReminder = existingCard.reminder;
+    if (!existingReminder || reminderPriority(reminder) > reminderPriority(existingReminder)) {
+      cardsByEvent.set(key, { ...existingCard, reminder });
+    }
+  }
+
+  return Array.from(cardsByEvent.values()).sort((a, b) => {
+    if (a.moment.eventDate !== b.moment.eventDate) return a.moment.eventDate.localeCompare(b.moment.eventDate);
+    return a.moment.personName.localeCompare(b.moment.personName, undefined, { sensitivity: "base" });
+  });
+}
+
 type Args = {
   reminders: ReminderEvent[];
   activeReminders: ReminderEvent[];
@@ -109,36 +136,23 @@ export function buildHomeSections({
     const eventDate = parseLocalDate(moment.eventDate);
     if (!eventDate) return false;
     const daysAway = dayDifference(eventDate, today);
-    return daysAway >= 2 && daysAway <= 10;
+    return daysAway >= 2 && daysAway <= 7;
+  });
+  const expandedHorizonMoments = upcomingMoments.filter((moment) => {
+    if (dismissedHorizonKeys[moment.id]) return false;
+    const eventDate = parseLocalDate(moment.eventDate);
+    if (!eventDate) return false;
+    const daysAway = dayDifference(eventDate, today);
+    return daysAway >= 8 && daysAway <= 28;
   });
 
-  const cardsByEvent = new Map<string, { moment: UpcomingMomentEvent; reminder: ReminderEvent | null }>();
-  for (const moment of horizonMoments) {
-    const key = momentEventKey(moment);
-    if (!cardsByEvent.has(key)) {
-      cardsByEvent.set(key, { moment, reminder: null });
-    }
-  }
-
-  for (const reminder of reminders) {
-    const key = reminderEventKey(reminder);
-    const existingCard = cardsByEvent.get(key);
-    if (!existingCard) continue;
-    if (!reminderMatchesMoment(reminder, existingCard.moment)) continue;
-
-    const existingReminder = existingCard.reminder;
-    if (!existingReminder || reminderPriority(reminder) > reminderPriority(existingReminder)) {
-      cardsByEvent.set(key, { ...existingCard, reminder });
-    }
-  }
-  const horizonEntries = Array.from(cardsByEvent.values()).sort((a, b) => {
-    if (a.moment.eventDate !== b.moment.eventDate) return a.moment.eventDate.localeCompare(b.moment.eventDate);
-    return a.moment.personName.localeCompare(b.moment.personName, undefined, { sensitivity: "base" });
-  });
+  const horizonEntries = buildMomentReminderEntries(horizonMoments, reminders);
+  const expandedHorizonEntries = buildMomentReminderEntries(expandedHorizonMoments, reminders);
 
   return {
     activeTodayReminders,
     tomorrowReminders,
     horizonEntries,
+    expandedHorizonEntries,
   };
 }

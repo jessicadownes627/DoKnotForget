@@ -120,7 +120,7 @@ function possessive(name: string) {
 }
 
 function formatRelationshipType(type: Relationship["type"] | "parent") {
-  if (type === "other") return "Someone important";
+  if (type === "other") return "In your circle";
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
@@ -166,7 +166,7 @@ export default function PersonDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams<{ id: string }>();
-  const { people, relationships, careEvents, updatePerson, updatePersonFields, deletePerson } =
+  const { people, relationships, careEvents, updatePerson, upsertRelationship, updatePersonFields, deletePerson } =
     useAppState();
   const person = people.find((p) => p.id === id) ?? null;
   const [momentComposer, setMomentComposer] = useState<MomentComposerState>({ kind: "hidden" });
@@ -318,6 +318,14 @@ export default function PersonDetail() {
       }))
       .filter((group) => group.items.length > 0);
   }, [relatedPeople]);
+
+  const reverseCareDependents = useMemo(() => {
+    const explicitRelatedIds = new Set(relatedPeople.map((item) => item.person.id));
+    return people
+      .filter((candidate) => candidate.id !== resolvedPerson.id && candidate.careRecipientId === resolvedPerson.id)
+      .filter((candidate) => !explicitRelatedIds.has(candidate.id))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  }, [people, relatedPeople, resolvedPerson.id]);
 
   const careHistory = useMemo(() => {
     const grouped = new Map<string, CareEvent>();
@@ -499,6 +507,10 @@ export default function PersonDetail() {
   }
 
   function openPhoneEditor() {
+    if (careRecipient) {
+      setContactChoiceTarget(careRecipient);
+      return;
+    }
     setPhoneDraft(resolvedPerson.phone ?? "");
     setPhoneDraftError(false);
     setPhoneEditorMode("direct");
@@ -511,11 +523,22 @@ export default function PersonDetail() {
 
   function connectExistingPerson(target: Person) {
     setIsConnectPersonOpen(false);
-    if (target.phone) {
-      setContactChoiceTarget(target);
-      return;
+    const existingRelationship =
+      relationships.find(
+        (relationship) =>
+          (relationship.fromId === resolvedPerson.id && relationship.toId === target.id) ||
+          (relationship.fromId === target.id && relationship.toId === resolvedPerson.id)
+      ) ?? null;
+
+    if (!existingRelationship) {
+      upsertRelationship({
+        id: makeId(),
+        fromId: resolvedPerson.id,
+        toId: target.id,
+        type: "other",
+      });
     }
-    updatePersonFields(resolvedPerson.id, { careRecipientId: target.id });
+    setContactChoiceTarget(target);
   }
 
   function useConnectedPersonNumber() {
@@ -526,6 +549,7 @@ export default function PersonDetail() {
 
   function addSeparatePhoneNumber() {
     setContactChoiceTarget(null);
+    updatePersonFields(resolvedPerson.id, { careRecipientId: null });
     setPhoneDraft(resolvedPerson.phone ?? "");
     setPhoneDraftError(false);
     setPhoneEditorMode("separate");
@@ -630,31 +654,6 @@ export default function PersonDetail() {
                 <div style={{ marginTop: "0.4rem", color: "var(--muted)", fontSize: "0.95rem" }}>
                   {portraitSubtitle}
                 </div>
-                {careRecipient ? (
-                  <div style={{ marginTop: "0.35rem", color: "rgba(28, 28, 30, 0.62)", fontSize: "0.88rem" }}>
-                    <span>{`Messages for ${resolvedPerson.name.trim()} will go to `}</span>
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/person/${careRecipient.id}`)}
-                      style={{
-                        border: "none",
-                        background: "none",
-                        padding: 0,
-                        margin: 0,
-                        color: "var(--ink)",
-                        fontSize: "inherit",
-                        fontWeight: 600,
-                        fontFamily: "inherit",
-                        textDecoration: "underline",
-                        textUnderlineOffset: "2px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {careRecipient.name}
-                    </button>
-                    <span>{`'s phone.`}</span>
-                  </div>
-                ) : null}
               </div>
             </div>
           </SurfaceCard>
@@ -689,11 +688,41 @@ export default function PersonDetail() {
               >
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 600 }}>Phone number</div>
-                  <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
-                    {resolvedPerson.phone
-                      ? `${resolvedPerson.phone} · ready for quick texting from reminders`
-                      : "Add a number if you'd like to text directly from reminders"}
-                  </div>
+                  {careRecipient ? (
+                    <div style={{ marginTop: "0.28rem", display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
+                      <span style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.45 }}>
+                        {`Messages for ${resolvedPerson.name.trim()} will go to ${careRecipient.name}.`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setContactChoiceTarget(careRecipient);
+                        }}
+                        style={{
+                          border: "none",
+                          background: "none",
+                          padding: 0,
+                          margin: 0,
+                          color: "rgba(28, 28, 30, 0.62)",
+                          fontSize: "0.86rem",
+                          fontWeight: 600,
+                          fontFamily: "inherit",
+                          textDecoration: "underline",
+                          textUnderlineOffset: "2px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Change
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
+                      {resolvedPerson.phone
+                        ? `${resolvedPerson.phone} · ready for quick texting from reminders`
+                        : "Add a number if you'd like to text directly from reminders"}
+                    </div>
+                  )}
                 </div>
                 <RowChevron />
               </button>
@@ -919,8 +948,38 @@ export default function PersonDetail() {
                   >
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: 600 }}>{item.person.name}</div>
-                      <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
-                        {formatRelationshipType(group.type)}
+                      <div style={{ marginTop: "0.28rem", display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
+                        <span style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
+                          {formatRelationshipType(group.type)}
+                        </span>
+                        {careRecipient?.id === item.person.id ? (
+                          <span style={{ color: "rgba(28, 28, 30, 0.62)", fontSize: "0.86rem", fontWeight: 600 }}>
+                            Primary contact
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              updatePersonFields(resolvedPerson.id, { careRecipientId: item.person.id });
+                            }}
+                            style={{
+                              border: "none",
+                              background: "none",
+                              padding: 0,
+                              margin: 0,
+                              color: "rgba(28, 28, 30, 0.62)",
+                              fontSize: "0.86rem",
+                              fontWeight: 600,
+                              fontFamily: "inherit",
+                              textDecoration: "underline",
+                              textUnderlineOffset: "2px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Make primary
+                          </button>
+                        )}
                       </div>
                     </div>
                     <RowChevron />
@@ -953,10 +1012,67 @@ export default function PersonDetail() {
                     </div>
                   </div>
                   <RowChevron />
-                </button>
-              ) : null}
+                  </button>
+                ) : null}
 
-              {!children.length && groupedRelatedPeople.length === 0 && !careRecipient ? (
+              {reverseCareDependents.map((dependent) => (
+                <button
+                  key={`care-${dependent.id}`}
+                  type="button"
+                  onClick={() => navigate(`/person/${dependent.id}`)}
+                  style={{
+                    border: "1px solid rgba(28, 28, 30, 0.07)",
+                    background: "rgba(255,255,255,0.98)",
+                    borderRadius: "18px",
+                    padding: "0.95rem 1rem",
+                    textAlign: "left",
+                    color: "var(--ink)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "1rem",
+                    boxShadow: "0 6px 18px rgba(28, 28, 30, 0.03)",
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600 }}>{dependent.name}</div>
+                    <div style={{ marginTop: "0.28rem", display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
+                      <span style={{ color: "var(--muted)", fontSize: "0.92rem" }}>In your circle</span>
+                      {careRecipient?.id === dependent.id ? (
+                        <span style={{ color: "rgba(28, 28, 30, 0.62)", fontSize: "0.86rem", fontWeight: 600 }}>
+                          Primary contact
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            updatePersonFields(resolvedPerson.id, { careRecipientId: dependent.id });
+                          }}
+                          style={{
+                            border: "none",
+                            background: "none",
+                            padding: 0,
+                            margin: 0,
+                            color: "rgba(28, 28, 30, 0.62)",
+                            fontSize: "0.86rem",
+                            fontWeight: 600,
+                            fontFamily: "inherit",
+                            textDecoration: "underline",
+                            textUnderlineOffset: "2px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Make primary
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <RowChevron />
+                </button>
+              ))}
+
+              {!children.length && groupedRelatedPeople.length === 0 && !careRecipient && reverseCareDependents.length === 0 ? (
                 <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>No one else is connected yet.</div>
               ) : null}
             </div>
@@ -1261,10 +1377,10 @@ export default function PersonDetail() {
             }}
           >
             <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>
-              {`Use ${contactChoiceTarget.name.trim()}'s number when reaching out about ${resolvedPerson.name.trim()}?`}
+              {`Who should receive messages for ${resolvedPerson.name.trim()}?`}
             </div>
             <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
-              {`${contactChoiceTarget.name.trim()} can be the contact point for reminders about ${resolvedPerson.name.trim()} without copying their number.`}
+              {`Choose whether reminders about ${resolvedPerson.name.trim()} should go through ${contactChoiceTarget.name.trim()} or to a number of their own.`}
             </div>
 
             <div style={{ display: "grid", gap: "0.7rem" }}>

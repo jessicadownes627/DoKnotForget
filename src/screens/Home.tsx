@@ -64,6 +64,7 @@ const homeHeaderDateFormatter = new Intl.DateTimeFormat("en-US", {
   weekday: "long",
   month: "long",
   day: "numeric",
+  year: "numeric",
 });
 
 const weekdayFormatter = new Intl.DateTimeFormat("en-US", {
@@ -500,6 +501,7 @@ export default function Home({
   const [selectedConnectionTargetId, setSelectedConnectionTargetId] = useState<string | null>(null);
   const [selectedConnectionType, setSelectedConnectionType] = useState<RelationshipType | null>(null);
   const [sheetRecommendations, setSheetRecommendations] = useState<SheetRecommendation[]>([]);
+  const [isHorizonExpanded, setIsHorizonExpanded] = useState(false);
   const [dismissedHorizonKeys] = useState<Record<string, true>>(() => {
     try {
       const raw = window.localStorage.getItem("doknotforget_dismissed_horizon_v1");
@@ -822,6 +824,9 @@ export default function Home({
       ...homeSections.horizonEntries
         .map((entry) => entry.reminder)
         .filter((reminder): reminder is ReminderEvent => Boolean(reminder)),
+      ...(isHorizonExpanded ? homeSections.expandedHorizonEntries : [])
+        .map((entry) => entry.reminder)
+        .filter((reminder): reminder is ReminderEvent => Boolean(reminder)),
     ];
 
     for (const reminder of visibleReminders) {
@@ -834,7 +839,17 @@ export default function Home({
     }
 
     return overrides;
-  }, [homeSections.activeTodayReminders, homeSections.horizonEntries, homeSections.tomorrowReminders, people, relationships, relationshipV2Links, today]);
+  }, [
+    homeSections.activeTodayReminders,
+    homeSections.expandedHorizonEntries,
+    homeSections.horizonEntries,
+    homeSections.tomorrowReminders,
+    isHorizonExpanded,
+    people,
+    relationships,
+    relationshipV2Links,
+    today,
+  ]);
 
   useEffect(() => {
     if (activeTab !== "home") return;
@@ -1020,11 +1035,13 @@ function upcomingRelationshipContextLine(
   const subjectName = (reminderContext?.subjectName ?? personName).trim() || "them";
   const recipientName = reminderContext?.recipients[0]?.name?.trim() || "";
   const recipientFirst = recipientName ? contactFirstName(recipientName) : "";
-  const dayLabel = eventDate ? weekdayFormatter.format(eventDate) : "that day";
+  const fullDayLabel = eventDate
+    ? `${weekdayFormatter.format(eventDate)} (${eventDate.getMonth() + 1}/${eventDate.getDate()})`
+    : "that day";
 
   if ((reminderContext?.kind === "childBirthday" || reminderContext?.kind === "childThroughRelationship") && recipientFirst) {
     if (section === "horizon") {
-      return `Text ${recipientFirst} to wish ${subjectName} a happy birthday on ${dayLabel}.`;
+      return `Text ${recipientFirst} to wish ${subjectName} a happy birthday on ${fullDayLabel}.`;
     }
     return section === "tomorrow"
       ? `Text ${recipientFirst} to wish ${subjectName} a happy birthday tomorrow.`
@@ -1033,7 +1050,7 @@ function upcomingRelationshipContextLine(
 
   if (reminderContext?.kind === "careRecipient" && recipientFirst) {
     if (section === "horizon") {
-      return `Text ${recipientFirst} to wish ${subjectName} a happy birthday on ${dayLabel}.`;
+      return `Text ${recipientFirst} to wish ${subjectName} a happy birthday on ${fullDayLabel}.`;
     }
     return section === "tomorrow"
       ? `Text ${recipientFirst} to wish ${subjectName} a happy birthday tomorrow.`
@@ -1277,7 +1294,7 @@ function buildHorizonPlanningNudge(args: {
             })
           : null,
       actionHeading: reminderContext?.actionHeading ?? null,
-      ideaHeading: null,
+      ideaHeading: section === "tomorrow" ? "To make the day feel a little more personal:" : null,
       ideas:
         section === "tomorrow"
           ? buildUpcomingPlanningIdeas({
@@ -2312,21 +2329,31 @@ function buildHorizonPlanningNudge(args: {
             </h1>
           </div>
 
+          {isContacts ? (
+            <div
+              style={{
+                marginTop: "12px",
+                color: "var(--ink)",
+                fontSize: "30px",
+                fontWeight: 600,
+                letterSpacing: "-0.01em",
+                lineHeight: 1.35,
+                fontFamily: "var(--font-sans)",
+              }}
+            >
+              {greetingText}
+            </div>
+          ) : null}
+
           <div
             style={{
-              marginTop: "12px",
-              color: "var(--ink)",
-              fontSize: "30px",
-              fontWeight: 600,
-              letterSpacing: "-0.01em",
-              lineHeight: 1.35,
+              marginTop: isContacts ? "10px" : "12px",
+              color: "var(--muted)",
+              fontSize: "18px",
+              lineHeight: 1.45,
               fontFamily: "var(--font-sans)",
             }}
           >
-            {greetingText}
-          </div>
-
-          <div style={{ marginTop: "10px", color: "var(--muted)", fontSize: "14px", fontFamily: "var(--font-sans)" }}>
             {homeHeaderDateFormatter.format(today)}
           </div>
 
@@ -2758,6 +2785,9 @@ function buildHorizonPlanningNudge(args: {
                   const todayReminders = homeSections.activeTodayReminders;
                   const tomorrowReminders = homeSections.tomorrowReminders;
                   const horizonEntries = homeSections.horizonEntries;
+                  const expandedHorizonEntries = homeSections.expandedHorizonEntries;
+                  const hasMoreHorizonEntries = expandedHorizonEntries.length > 0;
+                  const showHorizonSection = horizonEntries.length > 0 || hasMoreHorizonEntries;
                   const hasPendingReminders = todayReminders.length > 0 || tomorrowReminders.length > 0 || horizonEntries.length > 0;
                   void handleSuggestionAction;
                   void handleQuestionChoose;
@@ -3482,7 +3512,7 @@ function buildHorizonPlanningNudge(args: {
                         </>
                       ) : null}
 
-                      {horizonEntries.length > 0 ? (
+                      {showHorizonSection ? (
                         <>
                           <div
                             style={{
@@ -3552,7 +3582,61 @@ function buildHorizonPlanningNudge(args: {
                                 </div>
                               );
                             })}
+                            {isHorizonExpanded
+                              ? expandedHorizonEntries.map(({ moment, reminder }) => {
+                                  if (reminder) {
+                                    return (
+                                      <div key={getReminderId(reminder)}>{renderReminderCards([reminder], "horizon")}</div>
+                                    );
+                                  }
+
+                                  return (
+                                    <div
+                                      key={moment.id}
+                                      className="smart-card"
+                                      onClick={() => navigate(`/person/${moment.personId}`)}
+                                      style={{
+                                        border: "1px solid var(--border)",
+                                        borderRadius: "20px",
+                                        background: "linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(248,246,242,0.92) 100%)",
+                                        padding: "18px",
+                                        display: "grid",
+                                        gap: "8px",
+                                        backdropFilter: "blur(4px)",
+                                        boxShadow: "0 8px 18px rgba(28, 28, 30, 0.03)",
+                                      }}
+                                    >
+                                      <div style={{ color: "var(--ink)", fontSize: "16px", lineHeight: 1.5, fontWeight: 700 }}>
+                                        {moment.label}
+                                      </div>
+                                      <div style={{ color: "var(--ink)", fontSize: "16px", lineHeight: 1.5 }}>
+                                        {formatReminderDate(moment.eventDate)}
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              : null}
                           </div>
+                          {hasMoreHorizonEntries ? (
+                            <div style={{ marginTop: "14px", textAlign: "center" }}>
+                              <button
+                                type="button"
+                                onClick={() => setIsHorizonExpanded((prev) => !prev)}
+                                style={{
+                                  border: "none",
+                                  background: "transparent",
+                                  padding: 0,
+                                  color: "rgba(23, 50, 77, 0.82)",
+                                  fontSize: "15px",
+                                  lineHeight: 1.5,
+                                  fontWeight: 500,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {isHorizonExpanded ? "Show less" : "See what’s coming up next"}
+                              </button>
+                            </div>
+                          ) : null}
                           {renderRecommendationsSection("16px")}
                         </>
                       ) : null}
