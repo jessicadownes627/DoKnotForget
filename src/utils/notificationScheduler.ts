@@ -282,14 +282,17 @@ export async function scheduleReminderNotifications(
       return leftAt - rightAt;
     });
 
-  const nextNotification = notifications[0] ?? null;
-  if (!nextNotification) {
+  if (!notifications.length) {
     await cancelScheduledReminderNotifications();
     return;
   }
 
-  const scheduledAt = nextNotification.schedule?.at instanceof Date ? nextNotification.schedule.at.toISOString() : "";
-  const signature = `${nextNotification.id}:${scheduledAt}`;
+  const signature = notifications
+    .map((notification) => {
+      const scheduledAt = notification.schedule?.at instanceof Date ? notification.schedule.at.toISOString() : "";
+      return `${notification.id}:${scheduledAt}`;
+    })
+    .join("|");
   try {
     const existingSignature = window.localStorage.getItem(SCHEDULED_REMINDER_SIGNATURE_STORAGE_KEY);
     if (existingSignature === signature) return;
@@ -299,16 +302,19 @@ export async function scheduleReminderNotifications(
 
   await cancelScheduledReminderNotifications();
   // eslint-disable-next-line no-console
-  console.log("[DKF DEBUG] Schedule reminder notification", {
+  console.log("[DKF DEBUG] Schedule reminder notifications", {
     todayLocal: formatLocalYmd(now),
-    notificationId: nextNotification.id,
-    scheduledForLocal:
-      nextNotification.schedule?.at instanceof Date ? formatLocalYmd(nextNotification.schedule.at) : "",
-    reminderId: nextNotification.extra?.reminderId ?? "",
-    eventDateLocal: nextNotification.extra?.eventDate ?? "",
-    triggerDateLocal: nextNotification.extra?.triggerDate ?? "",
+    count: notifications.length,
+    notifications: notifications.map((notification) => ({
+      notificationId: notification.id,
+      scheduledForLocal: notification.schedule?.at instanceof Date ? formatLocalYmd(notification.schedule.at) : "",
+      reminderId: notification.extra?.reminderId ?? "",
+      eventDateLocal: notification.extra?.eventDate ?? "",
+      triggerDateLocal: notification.extra?.triggerDate ?? "",
+      variant: notification.extra?.variant ?? "",
+    })),
   });
-  await LocalNotifications.schedule({ notifications: [nextNotification] });
+  await LocalNotifications.schedule({ notifications });
   try {
     window.localStorage.setItem(SCHEDULED_REMINDER_SIGNATURE_STORAGE_KEY, signature);
   } catch {
@@ -316,7 +322,7 @@ export async function scheduleReminderNotifications(
   }
 }
 
-export async function scheduleTestReminderNotification() {
+export async function scheduleTestReminderNotification(delayMs = 10_000) {
   if (!isNativeNotificationsSupported()) return;
 
   const now = new Date();
@@ -333,7 +339,7 @@ export async function scheduleTestReminderNotification() {
         channelId: REMINDER_NOTIFICATION_CATEGORY,
         threadIdentifier: REMINDER_NOTIFICATION_CATEGORY,
         schedule: {
-          at: new Date(now.getTime() + 60_000),
+          at: new Date(now.getTime() + delayMs),
         },
         extra: {
           source: TEST_NOTIFICATION_SOURCE,

@@ -72,6 +72,10 @@ export type CareSuggestion = {
   question?: CareSuggestionQuestion;
 };
 
+function possessive(name: string) {
+  return name.endsWith("s") ? `${name}’` : `${name}’s`;
+}
+
 function startOfToday(base = new Date()) {
   return new Date(base.getFullYear(), base.getMonth(), base.getDate());
 }
@@ -1003,16 +1007,16 @@ export function generateCareSuggestions(people: Person[], baseDate = new Date())
         const title =
           turning !== null
             ? `${who} turns ${turning} ${formatInDays(occ.daysUntil)}`
-            : `${who}'s birthday is ${formatInDays(occ.daysUntil)}`;
+            : `${possessive(who)} birthday is ${formatInDays(occ.daysUntil)}`;
 
-        const birthdayTemplates: string[] = ["{name} has a birthday coming up.", "{name}'s birthday is almost here."];
+        const birthdayTemplates: string[] = ["{name} has a birthday coming up.", "{possessiveName} birthday is almost here."];
         if (turning !== null && occ.daysUntil <= 7) {
           birthdayTemplates.unshift("{name} turns {age} this week — want to reach out?");
         }
 
         const message = applyTemplate(
           pickTemplate(birthdayTemplates, `birthday|${person.id}|${moment.id}|${todaySeed}`),
-          { name: who, age: turning ?? "" }
+          { name: who, possessiveName: possessive(who), age: turning ?? "" }
         );
 
         const insight = milestoneInsight(turning) ?? parentInsight(person);
@@ -1040,8 +1044,8 @@ export function generateCareSuggestions(people: Person[], baseDate = new Date())
           parts && parts.y > 0 ? Math.max(0, occ.year - parts.y) : null;
         const yearsText = years !== null && years > 0 ? `${years} years` : null;
         const title = yearsText
-          ? `${who}'s anniversary is ${formatInDays(occ.daysUntil)} · ${yearsText}`
-          : `${who}'s anniversary is ${formatInDays(occ.daysUntil)}`;
+          ? `${possessive(who)} anniversary is ${formatInDays(occ.daysUntil)} · ${yearsText}`
+          : `${possessive(who)} anniversary is ${formatInDays(occ.daysUntil)}`;
 
         const action: CareSuggestionAction = person.phone
           ? { kind: "text", personId: person.id, body: `Thinking of you today, ${who}.` }
@@ -1050,10 +1054,10 @@ export function generateCareSuggestions(people: Person[], baseDate = new Date())
 
         const message = applyTemplate(
           pickTemplate(
-            ["{name}'s anniversary is coming up.", "An anniversary is approaching for {name}."],
+            ["{possessiveName} anniversary is coming up.", "An anniversary is approaching for {name}."],
             `anniversary|${person.id}|${moment.id}|${todaySeed}`
           ),
-          { name: who }
+          { name: who, possessiveName: possessive(who) }
         );
 
         const cue: CareSuggestion["cue"] =

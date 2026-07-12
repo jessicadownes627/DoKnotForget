@@ -3,10 +3,18 @@ import type { Person } from "./models/Person";
 import type { CareEvent, CareEventType } from "./models/CareEvent";
 import type { Relationship } from "./models/Relationship";
 import type { RelationshipV2Link } from "./models/RelationshipV2";
+import { getUpcomingReminders } from "./engine/reminderEngine";
 import { normalizePhone } from "./utils/phone";
 import { canonicalizeRelationship, normalizeRelationships } from "./utils/relationshipModel";
 import { loadRelationshipLinksV2, RELATIONSHIP_LINKS_V2_STORAGE_KEY } from "./utils/relationshipLinksV2Storage";
 import { normalizeRelationshipV2Links } from "./utils/relationshipV2";
+import {
+  cancelScheduledReminderNotifications,
+  configureReminderNotifications,
+  isNativeNotificationsSupported,
+  requestReminderNotificationPermission,
+  scheduleReminderNotifications,
+} from "./utils/notificationScheduler";
 import {
   loadUserSettings,
   normalizeUserSettings,
@@ -51,6 +59,11 @@ const CARE_EVENTS_STORAGE_KEY = "doknotforget_care_events";
 const ONBOARDING_STORAGE_KEY = "doknotforget_onboardingComplete";
 
 const AppStateContext = createContext<AppState | null>(null);
+
+function startOfToday() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [hasHydrated, setHasHydrated] = useState(false);
@@ -218,6 +231,43 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     if (!hasHydrated) return;
     savePremiumStatus(isPremium);
   }, [hasHydrated, isPremium]);
+
+  useEffect(() => {
+    if (!hasHydrated) return;
+    if (!isNativeNotificationsSupported()) return;
+
+    let cancelled = false;
+
+    async function syncNativeReminderNotifications() {
+      await configureReminderNotifications();
+      if (cancelled) return;
+
+      if (!userSettings.notificationsEnabled) {
+        await cancelScheduledReminderNotifications();
+        return;
+      }
+
+      const permission = await requestReminderNotificationPermission();
+      if (cancelled) return;
+      if (!permission || permission.display !== "granted") return;
+
+      const reminders = getUpcomingReminders(people, startOfToday());
+      await scheduleReminderNotifications(
+        reminders,
+        new Date(),
+        userSettings,
+        people,
+        relationships,
+        relationshipLinksV2
+      );
+    }
+
+    void syncNativeReminderNotifications();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasHydrated, people, relationshipLinksV2, relationships, userSettings]);
 
   const value = useMemo<AppState>(() => {
     return {

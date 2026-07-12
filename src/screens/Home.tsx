@@ -74,18 +74,18 @@ const weekdayFormatter = new Intl.DateTimeFormat("en-US", {
 const CHILD_QUICK_IDEAS = [
   "Grab a balloon or small surprise",
   "Pick up a coloring book or craft",
-  "Get a small toy they'd love",
+  "Get a small toy {name} would love",
   "Bring something fun they can open",
-  "Pick out a card they'd love",
+  "Pick out a card {name} would love",
   "Bring a cupcake",
   "Leave a birthday surprise at the door",
 ];
 
 const TEEN_QUICK_IDEAS = [
-  "Send a funny meme",
-  "Send a Spotify song",
-  "Share a throwback photo",
-  "Send a funny TikTok",
+  "Send {name} a funny meme",
+  "Send {name} a Spotify song",
+  "Share a throwback photo with {name}",
+  "Send {name} a funny TikTok",
 ];
 
 const MILESTONE_QUICK_IDEAS = [
@@ -101,26 +101,26 @@ const MILESTONE_AGES = new Set([13, 16, 18, 21, 30, 40, 50, 60]);
 
 const ADULT_QUICK_IDEAS = [
   "Drop off a cupcake",
-  "Pick up flowers",
+  "Pick up flowers for {name}",
   "Buy a scratch-off ticket",
-  "Send a funny meme",
+  "Send {name} a funny meme",
   "Call and sing happy birthday",
-  "Share a favorite memory",
-  "Send a photo from the past",
+  "Share a favorite memory with {name}",
+  "Send {name} a photo from the past",
   "Leave a voicemail surprise",
-  "Send a song from Apple Music",
-  "Tag them in a memory",
+  "Send {name} a song from Apple Music",
+  "Tag {name} in a memory",
   "Send a GIF",
-  "Write a quick compliment",
+  "Write {name} a quick compliment",
   "Drop off a bottle of wine",
   "Bring donuts",
   "Send a pizza",
-  "Take them to lunch",
-  "Record a quick birthday video",
+  "Take {name} to lunch",
+  "Record a quick birthday video for {name}",
   "Bring balloons",
-  "Write a quick card",
-  "Send a voice message",
-  "Stop by with ice cream",
+  "Write {name} a quick card",
+  "Send {name} a voice message",
+  "Stop by with ice cream for {name}",
 ];
 
 const ANNIVERSARY_IDEAS = [
@@ -132,7 +132,7 @@ const ANNIVERSARY_IDEAS = [
 ];
 
 const CHILD_PREP_IDEAS = [
-  "A card they'd love",
+  "A card {name} would love",
   "A balloon or small surprise",
   "A cupcake or favorite treat",
   "Something small they can open",
@@ -140,36 +140,36 @@ const CHILD_PREP_IDEAS = [
 ];
 
 const CHILD_HORIZON_IDEAS = [
-  "Check what they're into this year",
-  "Think about something small they'd love",
+  "Check what {name} is into this year",
+  "Think about something small {name} would love",
   "Keep it simple - you don't need much",
   "A little thought will go a long way",
 ];
 
 const TEEN_PREP_IDEAS = [
-  "Something they're into right now",
-  "A fun treat or gift card",
-  "Something they'd actually want",
-  "A little surprise for the day",
+  "Something {name} is into right now",
+  "A fun treat or gift card for {name}",
+  "Something {name} would actually want",
+  "A little surprise for {name}’s day",
 ];
 
 const TEEN_HORIZON_IDEAS = [
-  "Think about what would feel like them this year",
-  "A small idea is enough to start with",
+  "Think about what would feel like {name} this year",
+  "A small idea for {name} is enough to start with",
   "Keep it easy - something thoughtful is plenty",
   "A little planning now will make this easier later",
 ];
 
 const ADULT_PREP_IDEAS = [
-  "A thoughtful card",
-  "A dessert or favorite treat",
-  "Flowers or a small gift",
-  "Time for a call",
-  "A favorite memory to send",
+  "A thoughtful card for {name}",
+  "A dessert or favorite treat for {name}",
+  "Flowers or a small gift for {name}",
+  "Time for a call with {name}",
+  "A favorite memory to send {name}",
 ];
 
 const ADULT_HORIZON_IDEAS = [
-  "Think about what would feel meaningful this year",
+  "Think about what would feel meaningful for {name} this year",
   "A small gesture will be enough",
   "You don't need much to make this feel thoughtful",
   "A little planning now can make this easier later",
@@ -234,7 +234,7 @@ function makeId() {
 type ReminderToneCategory = "adultBirthday" | "childBirthday" | "anniversary" | "milestone" | "other";
 
 function possessive(name: string) {
-  return name.endsWith("s") ? `${name}'` : `${name}'s`;
+  return name.endsWith("s") ? `${name}’` : `${name}’s`;
 }
 
 function careEventDisplayName(name: string) {
@@ -340,7 +340,7 @@ function careEventReminderNote(reminder: ReminderEvent) {
   }
 
   if (reminder.label.trim()) {
-    return `Completed ${personName}'s ${reminder.label.trim().toLowerCase()} reminder`;
+    return `Completed ${possessive(personName)} ${reminder.label.trim().toLowerCase()} reminder`;
   }
 
   return `Checked in with ${personName}`;
@@ -353,6 +353,10 @@ function reminderSecondaryActionLabel(label: string) {
   if (lowered.includes("dessert")) return "Order dessert";
   if (lowered.includes("gift")) return "Send a small gift";
   return label;
+}
+
+function personalizeIdea(idea: string, subjectName: string) {
+  return idea.replaceAll("{name}", contactFirstName(subjectName));
 }
 
 function reminderActionRecipientName(
@@ -1101,16 +1105,25 @@ function buildUpcomingPlanningIdeas(args: {
 
     if (age !== undefined && age < 13) {
       const reflectiveChildIdea = recipientFirst
-        ? `What ${subjectFirst} is into this year`
+        ? `Something ${subjectFirst} is into this year`
         : `Something small ${subjectFirst} would love`;
-      return [reflectiveChildIdea, ...pickQuickIdeas(seed, CHILD_HORIZON_IDEAS).slice(0, count - 1)];
+      return [
+        reflectiveChildIdea,
+        ...pickQuickIdeas(seed, CHILD_HORIZON_IDEAS)
+          .slice(0, count - 1)
+          .map((idea) => personalizeIdea(idea, subjectName)),
+      ];
     }
 
     if (age !== undefined && age < 18) {
-      return pickQuickIdeas(seed, TEEN_HORIZON_IDEAS).slice(0, count);
+      return pickQuickIdeas(seed, TEEN_HORIZON_IDEAS)
+        .slice(0, count)
+        .map((idea) => personalizeIdea(idea, subjectName));
     }
 
-    return pickQuickIdeas(seed, ADULT_HORIZON_IDEAS).slice(0, count);
+    return pickQuickIdeas(seed, ADULT_HORIZON_IDEAS)
+      .slice(0, count)
+      .map((idea) => personalizeIdea(idea, subjectName));
   }
 
   if (momentType === "anniversary") {
@@ -1119,16 +1132,25 @@ function buildUpcomingPlanningIdeas(args: {
 
   if (age !== undefined && age < 13) {
     const relationalIdea = recipientFirst
-      ? `${subjectFirst}'s favorite things lately`
+      ? `Something ${subjectFirst} is into lately`
       : `Something ${subjectFirst} would love`;
-    return [relationalIdea, ...pickQuickIdeas(seed, CHILD_PREP_IDEAS).slice(0, count - 1)];
+    return [
+      relationalIdea,
+      ...pickQuickIdeas(seed, CHILD_PREP_IDEAS)
+        .slice(0, count - 1)
+        .map((idea) => personalizeIdea(idea, subjectName)),
+    ];
   }
 
   if (age !== undefined && age < 18) {
-    return pickQuickIdeas(seed, TEEN_PREP_IDEAS).slice(0, count);
+    return pickQuickIdeas(seed, TEEN_PREP_IDEAS)
+      .slice(0, count)
+      .map((idea) => personalizeIdea(idea, subjectName));
   }
 
-  return pickQuickIdeas(seed, ADULT_PREP_IDEAS).slice(0, count);
+  return pickQuickIdeas(seed, ADULT_PREP_IDEAS)
+    .slice(0, count)
+    .map((idea) => personalizeIdea(idea, subjectName));
 }
 
 function buildHorizonPlanningNudge(args: {
@@ -1338,10 +1360,14 @@ function buildHorizonPlanningNudge(args: {
               section,
             })
           : reminderAge !== undefined && reminderAge < 13 && section === "today"
-          ? pickQuickIdeas(getReminderId(reminder), CHILD_QUICK_IDEAS).slice(0, 3)
+          ? pickQuickIdeas(getReminderId(reminder), CHILD_QUICK_IDEAS)
+              .slice(0, 3)
+              .map((idea) => personalizeIdea(idea, reminderContext?.subjectName ?? personName))
           : (reminder.momentType === "birthday" || reminder.momentType === "childBirthday") &&
             section === "today"
-          ? pickQuickIdeas(getReminderId(reminder), ideaPool).slice(0, 3)
+          ? pickQuickIdeas(getReminderId(reminder), ideaPool)
+              .slice(0, 3)
+              .map((idea) => personalizeIdea(idea, reminderContext?.subjectName ?? personName))
           : reminder.reminderType === "dayOf" && section === "today"
           ? pickQuickIdeas(getReminderId(reminder), ideaPool).slice(0, 1)
           : [],

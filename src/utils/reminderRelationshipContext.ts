@@ -30,7 +30,7 @@ export type ResolvedReminderContext = {
 };
 
 function possessive(name: string) {
-  return name.endsWith("s") ? `${name}'` : `${name}'s`;
+  return name.endsWith("s") ? `${name}’` : `${name}’s`;
 }
 
 function contactFirstName(name: string) {

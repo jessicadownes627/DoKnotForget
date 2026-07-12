@@ -8,7 +8,9 @@ import {
   cancelScheduledReminderNotifications,
   configureReminderNotifications,
   isNativeNotificationsSupported,
+  requestReminderNotificationPermission,
   scheduleReminderNotifications,
+  scheduleTestReminderNotification,
 } from "../utils/notificationScheduler";
 
 function formatTimeValue(hour: number, minute: number) {
@@ -25,6 +27,7 @@ export default function Settings() {
   const { people, relationships, relationshipLinksV2, userSettings, updateUserSettings } = useAppState();
   const [notificationStatus, setNotificationStatus] = useState<"on" | "off">("off");
   const [appVersionLabel, setAppVersionLabel] = useState<string>("");
+  const [testNotificationMessage, setTestNotificationMessage] = useState<string>("");
 
   const reminderTimeValue = useMemo(
     () => formatTimeValue(userSettings.reminderHour, userSettings.reminderMinute),
@@ -130,6 +133,25 @@ export default function Settings() {
       ...userSettings,
       notificationsEnabled: true,
     }, people, relationships, relationshipLinksV2);
+  }
+
+  async function handleTestNotification() {
+    if (!isNativeNotificationsSupported()) {
+      setTestNotificationMessage("Native notifications aren’t available in the browser.");
+      return;
+    }
+
+    await configureReminderNotifications();
+    const permission = await requestReminderNotificationPermission();
+    setNotificationStatus(permission?.display === "granted" ? "on" : "off");
+
+    if (!permission || permission.display !== "granted") {
+      setTestNotificationMessage("Notifications are not allowed on this device yet.");
+      return;
+    }
+
+    await scheduleTestReminderNotification(10_000);
+    setTestNotificationMessage("Test notification scheduled for 10 seconds from now.");
   }
 
   return (
@@ -326,6 +348,81 @@ export default function Settings() {
               }}
             />
           </div>
+        </section>
+
+        <section
+          style={{
+            marginTop: "18px",
+            border: "1px solid var(--border)",
+            borderRadius: "16px",
+            background: "var(--card)",
+            padding: "18px 16px",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "1rem",
+              fontWeight: 600,
+              color: "var(--ink)",
+              fontFamily: "var(--font-sans)",
+            }}
+          >
+            Notification Test
+          </div>
+          <div
+            style={{
+              marginTop: "8px",
+              color: "var(--muted)",
+              fontSize: "0.95rem",
+              lineHeight: 1.5,
+              fontFamily: "var(--font-sans)",
+            }}
+          >
+            Send a one-time native test notification in 10 seconds.
+          </div>
+          <div
+            style={{
+              marginTop: "14px",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                void handleTestNotification();
+              }}
+              style={{
+                minWidth: "180px",
+                padding: "0.85rem 1.4rem",
+                borderRadius: "999px",
+                border: "1px solid var(--border-strong)",
+                background: "rgba(255,255,255,0.82)",
+                color: "var(--ink)",
+                fontSize: "0.95rem",
+                fontWeight: 600,
+                fontFamily: "var(--font-sans)",
+                cursor: "pointer",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.55)",
+              }}
+            >
+              Test Notification
+            </button>
+          </div>
+          {testNotificationMessage ? (
+            <div
+              style={{
+                marginTop: "12px",
+                color: "var(--muted)",
+                fontSize: "0.9rem",
+                lineHeight: 1.5,
+                textAlign: "center",
+                fontFamily: "var(--font-sans)",
+              }}
+            >
+              {testNotificationMessage}
+            </div>
+          ) : null}
         </section>
 
         <div
