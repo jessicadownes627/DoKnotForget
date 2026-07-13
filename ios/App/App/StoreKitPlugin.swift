@@ -10,7 +10,8 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
 
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "purchase", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "restorePurchases", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "restorePurchases", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getEntitlementStatus", returnType: CAPPluginReturnPromise)
     ]
 
     @objc public func purchase(_ call: CAPPluginCall) {
@@ -73,6 +74,30 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
             } else {
                 call.resolve(["success": false])
             }
+        }
+    }
+
+    @objc public func getEntitlementStatus(_ call: CAPPluginCall) {
+        guard let productId = call.getString("productId") else {
+            call.reject("Missing productId")
+            return
+        }
+
+        Task {
+            var hasActiveEntitlement = false
+
+            for await result in Transaction.currentEntitlements {
+                switch result {
+                case .verified(let transaction):
+                    if transaction.productID == productId {
+                        hasActiveEntitlement = true
+                    }
+                case .unverified:
+                    continue
+                }
+            }
+
+            call.resolve(["active": hasActiveEntitlement])
         }
     }
 }

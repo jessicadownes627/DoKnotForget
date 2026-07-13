@@ -39,12 +39,12 @@ function buildMomentIso(monthDay: string, year: string, requireYear: boolean) {
 
 export default function MicroQuestionCard({ suggestion, onChoose, onDismiss }: Props) {
   const question = suggestion.question;
-  if (!question) return null;
-
   const [childName, setChildName] = useState("");
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [draftMonthDay, setDraftMonthDay] = useState("");
   const [draftYear, setDraftYear] = useState("");
+
+  if (!question) return null;
 
   return (
     <FeedCardShell>

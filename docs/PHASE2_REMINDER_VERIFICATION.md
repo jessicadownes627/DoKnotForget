@@ -12,16 +12,16 @@ Verified scenarios:
 
 | Scenario | Reminder wording | Recipient | Text target | eCard target | Coffee | Gift | Notification title |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Direct friend birthday | `Ryan's birthday today` | `Ryan` | `Ryan` | `Ryan` | Yes | No | `Ryan's birthday today` |
+| Direct friend birthday | `Ryan turns 36 today` | `Ryan` | `Ryan` | `Ryan` | Yes | No | `Ryan turns 36 today` |
 | My child's birthday | `Sam turns 7 today` | `Alex` | `Alex about Sam` | `Alex about Sam` | No | No | `Sam turns 7 today` |
 | Friend's child's birthday | `Jane turns 7 today` | `Ashley` | `Ashley about Jane` | `Ashley about Jane` | No | No | `Jane turns 7 today` |
-| Parent birthday | `Mom's birthday today` | `Mom` | `Mom` | `Mom` | Yes | No | `Mom's birthday today` |
-| Partner birthday | `Ben's birthday today` | `Ben` | `Ben` | `Ben` | Yes | No | `Ben's birthday today` |
-| Anniversary | `J & Ben anniversary today` | `J` | `J` | `J` | Yes | No | `J & Ben anniversary today` |
-| Standalone person with no relationship | `Taylor's birthday today` | `Taylor` | `Taylor` | `Taylor` | Yes | No | `Taylor's birthday today` |
+| Parent birthday | `Mom turns 66 today` | `Mom` | `Mom` | `Mom` | Yes | No | `Mom turns 66 today` |
+| Partner birthday | `Ben turns 38 today` | `Ben` | `Ben` | `Ben` | Yes | No | `Ben turns 38 today` |
+| Anniversary | `Ben & J’s anniversary today` | `J` | `J` | `J` | Yes | No | `Ben & J’s anniversary today` |
+| Standalone person with no relationship | `Taylor turns 34 today` | `Taylor` | `Taylor` | `Taylor` | Yes | No | `Taylor turns 34 today` |
 | Embedded legacy child | `Anthony turns 7 today` | `Jessica` | `Jessica about Anthony` | `Jessica about Anthony` | No | No | `Anthony turns 7 today` |
 | V2 graph child | `Jane turns 7 today` | `Ashley` | `Ashley about Jane` | `Ashley about Jane` | No | No | `Jane turns 7 today` |
-| Person with unknown relationship context | `Morgan's birthday today` | `Morgan` | `Morgan` | `Morgan` | Yes | No | `Morgan's birthday today` |
+| Person with unknown relationship context | `Morgan turns 31 today` | `Morgan` | `Morgan` | `Morgan` | Yes | No | `Morgan turns 31 today` |
 
 Notes:
 

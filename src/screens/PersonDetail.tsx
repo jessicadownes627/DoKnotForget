@@ -170,6 +170,7 @@ export default function PersonDetail() {
   const { people, relationships, careEvents, updatePerson, upsertRelationship, updatePersonFields, deletePerson } =
     useAppState();
   const person = people.find((p) => p.id === id) ?? null;
+  const resolvedPerson = useMemo<Person>(() => person ?? { id: "", name: "", moments: [] }, [person]);
   const [momentComposer, setMomentComposer] = useState<MomentComposerState>({ kind: "hidden" });
   const [birthdayDraftMonthDay, setBirthdayDraftMonthDay] = useState("");
   const [birthdayDraftYear, setBirthdayDraftYear] = useState("");
@@ -191,10 +192,6 @@ export default function PersonDetail() {
   useEffect(() => {
     if (!person) navigate("/home", { replace: true });
   }, [navigate, person]);
-
-  if (!person) return null;
-
-  const resolvedPerson = person;
   const reviewImportedIds = Array.isArray(location.state?.reviewImportedIds)
     ? (location.state.reviewImportedIds as unknown[]).filter(
         (value): value is string => typeof value === "string" && value.trim().length > 0
@@ -220,12 +217,12 @@ export default function PersonDetail() {
   );
 
   const birthdayMoment = useMemo(
-    () => (person.moments ?? []).find((m) => m.type === "birthday") ?? null,
-    [person.moments]
+    () => (resolvedPerson.moments ?? []).find((m) => m.type === "birthday") ?? null,
+    [resolvedPerson.moments]
   );
   const anniversaryMoment = useMemo(
-    () => (person.moments ?? []).find((m) => m.type === "anniversary") ?? null,
-    [person.moments]
+    () => (resolvedPerson.moments ?? []).find((m) => m.type === "anniversary") ?? null,
+    [resolvedPerson.moments]
   );
 
   const birthdayInfo = useMemo(() => {
@@ -245,30 +242,30 @@ export default function PersonDetail() {
   }, [birthdayMoment, fullDateFormatter, monthDayFormatter, today]);
 
   const anniversaryDisplay = useMemo(() => {
-    const mmdd = getAnniversaryMonthDay(person);
+    const mmdd = getAnniversaryMonthDay(resolvedPerson);
     if (!mmdd) return null;
     return formatMonthDay(mmdd, monthDayFormatter);
-  }, [monthDayFormatter, person]);
+  }, [monthDayFormatter, resolvedPerson]);
 
   const otherMoments = useMemo(() => {
-    return (person.moments ?? [])
+    return (resolvedPerson.moments ?? [])
       .filter((moment) => moment.type === "custom")
       .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
-  }, [person.moments]);
+  }, [resolvedPerson.moments]);
 
   const relationshipsForPerson = (relationships ?? []).filter(
-    (rel) => rel.fromId === person.id || rel.toId === person.id
+    (rel) => rel.fromId === resolvedPerson.id || rel.toId === resolvedPerson.id
   );
 
   const relatedPeople = (() => {
     const items: EditableConnection[] = relationshipsForPerson
       .map((rel) => {
-        const otherId = rel.fromId === person.id ? rel.toId : rel.fromId;
+        const otherId = rel.fromId === resolvedPerson.id ? rel.toId : rel.fromId;
         const otherPerson = (people ?? []).find((p) => p.id === otherId) ?? null;
         if (!otherPerson) return null;
         const displayType: EditableConnection["type"] =
           rel.type === "child"
-            ? rel.fromId === person.id
+            ? rel.fromId === resolvedPerson.id
               ? "child"
               : "parent"
             : rel.type;
@@ -277,10 +274,10 @@ export default function PersonDetail() {
       .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
     const hasPartnerRelationship = items.some(
-      (item) => item.type === "partner" && item.person.id === person.partnerId
+      (item) => item.type === "partner" && item.person.id === resolvedPerson.partnerId
     );
-    if (person.partnerId && !hasPartnerRelationship) {
-      const partner = people.find((candidate) => candidate.id === person.partnerId) ?? null;
+    if (resolvedPerson.partnerId && !hasPartnerRelationship) {
+      const partner = people.find((candidate) => candidate.id === resolvedPerson.partnerId) ?? null;
       if (partner) items.push({ person: partner, type: "partner", relationshipId: null });
     }
 
@@ -336,7 +333,7 @@ export default function PersonDetail() {
     const grouped = new Map<string, CareEvent>();
 
     [...careEvents]
-      .filter((event) => event.personId === person.id)
+      .filter((event) => event.personId === resolvedPerson.id)
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
       .forEach((event) => {
         const day = event.timestamp.slice(0, 10);
@@ -350,15 +347,15 @@ export default function PersonDetail() {
     return Array.from(grouped.values())
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
       .slice(0, 3);
-  }, [careEvents, person.id]);
+  }, [careEvents, resolvedPerson.id]);
 
   const children = useMemo(() => {
-    return [...(person.children ?? [])].sort((a, b) =>
+    return [...(resolvedPerson.children ?? [])].sort((a, b) =>
       (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" })
     );
-  }, [person.children]);
+  }, [resolvedPerson.children]);
 
-  const selectedHolidays = getSelectedHolidays(person);
+  const selectedHolidays = getSelectedHolidays(resolvedPerson);
 
   const relationshipLine = useMemo(() => {
     const primary = groupedRelatedPeople[0];
@@ -372,13 +369,15 @@ export default function PersonDetail() {
 
   const portraitSubtitle = birthdayInfo
     ? birthdayInfo.isToday
-      ? `${possessive(person.name)} birthday is today`
+      ? `${possessive(resolvedPersonName)} birthday is today`
       : birthdayInfo.daysUntil === 1
-        ? `${possessive(person.name)} birthday is tomorrow`
-        : `${possessive(person.name)} birthday is in ${birthdayInfo.daysUntil} days`
+        ? `${possessive(resolvedPersonName)} birthday is tomorrow`
+        : `${possessive(resolvedPersonName)} birthday is in ${birthdayInfo.daysUntil} days`
     : anniversaryDisplay
       ? `Anniversary on ${anniversaryDisplay}`
       : relationshipLine ?? "A living page in your circle";
+
+  if (!person) return null;
 
   function formatCareEventDate(timestamp: string) {
     const parsed = parseLocalDate(timestamp.slice(0, 10));

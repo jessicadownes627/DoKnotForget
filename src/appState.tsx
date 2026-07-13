@@ -22,6 +22,7 @@ import {
   type UserSettings,
 } from "./utils/userSettings";
 import { loadPremiumStatus, savePremiumStatus } from "./utils/premium";
+import { getPremiumEntitlementStatus } from "./utils/storeKit";
 
 type SavePersonPayload = {
   person: Person;
@@ -231,6 +232,24 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     if (!hasHydrated) return;
     savePremiumStatus(isPremium);
   }, [hasHydrated, isPremium]);
+
+  useEffect(() => {
+    if (!hasHydrated) return;
+
+    let cancelled = false;
+
+    async function syncPremiumEntitlement() {
+      const entitlementActive = await getPremiumEntitlementStatus();
+      if (cancelled || entitlementActive === null) return;
+      setIsPremium(entitlementActive);
+    }
+
+    void syncPremiumEntitlement();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasHydrated]);
 
   useEffect(() => {
     if (!hasHydrated) return;
