@@ -351,9 +351,8 @@ export function buildResolvedReminderLabel(
 
   if (reminder.momentType === "anniversary") {
     const combinedNames = reminderContext?.kind === "anniversary" ? reminderContext.subjectName : null;
-    return combinedNames && combinedNames.includes("&")
-      ? `${combinedNames} anniversary ${relative}`
-      : `${possessive(personName)} anniversary ${relative}`;
+    const anniversaryName = (combinedNames ?? personName).trim() || personName;
+    return `${possessive(anniversaryName)} anniversary ${relative}`;
   }
 
   if (reminder.momentType === "childBirthday") {

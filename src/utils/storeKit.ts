@@ -1,4 +1,4 @@
-import { registerPlugin } from "@capacitor/core";
+ ;import { registerPlugin } from "@capacitor/core";
 
 type StoreKitPlugin = {
   purchase(options: { productId: string }): Promise<{ success: boolean }>;

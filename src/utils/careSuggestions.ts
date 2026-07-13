@@ -692,17 +692,22 @@ export function generateCareSuggestions(people: Person[], baseDate = new Date())
     const hasReminderWorthyMoment =
       Boolean((person.moments ?? []).some((moment) => moment.type === "birthday" || moment.type === "anniversary" || moment.type === "custom")) ||
       Boolean((person.anniversary ?? "").trim());
+    const careRecipient = person.careRecipientId
+      ? people.find((candidate) => candidate.id === person.careRecipientId) ?? null
+      : null;
+    const hasOwnPhone = Boolean((person.phone ?? "").trim());
+    const hasCareRecipientNumber = Boolean((careRecipient?.phone ?? "").trim());
+    const hasRouting = Boolean(person.careRecipientId);
 
-    if (hasReminderWorthyMoment && !(person.phone ?? "").trim()) {
+    if (hasReminderWorthyMoment && !hasOwnPhone && !hasCareRecipientNumber && !hasRouting) {
       suggestions.push({
         id: `phone_${person.id}`,
         type: "checkin",
         personId: person.id,
-        title: `Texting ${who} becomes much easier with a number`,
-        message: `Add ${who}'s number so you can text ${who.toLowerCase()} on important days.`,
-        insight: "One tap matters more when the moment arrives.",
+        title: "",
+        message: `Add ${who}'s number to make texting easy later.`,
         timelineCategory: "soon",
-        actionLabel: `Add ${who}'s number`,
+        actionLabel: "Add number",
         action: { kind: "view", personId: person.id },
         sortDaysUntil: 2,
       });

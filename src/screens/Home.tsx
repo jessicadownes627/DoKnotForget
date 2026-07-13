@@ -38,7 +38,7 @@ import { displayNameOrFallback } from "../utils/displayName";
 import { formatLocalYmd, parseLocalDate } from "../utils/date";
 import { buildHomeSections } from "../utils/homeSections";
 import { buildAddPersonRelationshipPersistence } from "../utils/addPersonRelationshipPersistence";
-import { buildRelationshipV2Links } from "../utils/relationshipV2.js";
+import { buildRelationshipV2Links, resolveRelationshipV2Context } from "../utils/relationshipV2.js";
 import {
   buildResolvedReminderLabel,
   reminderEventDate,
@@ -378,6 +378,26 @@ function reminderActionRecipientName(
   }
 
   return contactFirstName((person?.name ?? reminder.personName).trim() || reminder.personName);
+}
+
+function reminderActionHeadingLabel(
+  reminder: ReminderEvent,
+  person: Person | null,
+  people: Person[],
+  relationships: Relationship[],
+  today: Date,
+  relationshipV2Links: ReturnType<typeof buildRelationshipV2Links>
+) {
+  const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
+
+  if (reminder.momentType === "anniversary" && reminderContext?.kind === "anniversary") {
+    const subjectName = reminderContext.subjectName.trim();
+    if (subjectName.includes("&")) {
+      return `For ${subjectName.replace(/\s*&\s*/g, " and ")}`;
+    }
+  }
+
+  return `For ${reminderActionRecipientName(reminder, person, people, relationships, today, relationshipV2Links)}`;
 }
 
 function hashText(value: string) {
@@ -1344,7 +1364,7 @@ function buildHorizonPlanningNudge(args: {
           : null,
       actionHeading:
         section === "today"
-          ? `Send ${reminderActionRecipientName(reminder, person, people, relationships, today, relationshipV2Links)}:`
+          ? reminderActionHeadingLabel(reminder, person, people, relationships, today, relationshipV2Links)
           : null,
       ideaHeading:
         childFocusedIdeaHeading ??
@@ -1434,6 +1454,91 @@ function buildHorizonPlanningNudge(args: {
     return `Text ${first}`;
   }
 
+  function buildReminderTextSuggestions(reminder: ReminderEvent, targetPerson: Person) {
+    const first = ((targetPerson.name ?? "").trim().split(" ")[0] || reminder.personName || "them").trim();
+    const display = formatReminderCard(reminder);
+    const childLine = display.label;
+    const childName = childLine.split(" turns ")[0]?.split("'s birthday")[0]?.trim() || "";
+
+    const isBirthday = reminder.momentType === "birthday";
+    const isKidBirthday = reminder.momentType === "childBirthday";
+    const isAnniversary = reminder.momentType === "anniversary";
+
+    const short = isKidBirthday
+      ? `Happy birthday ${childName || "to your little one"}!! 🎉`
+      : isBirthday
+        ? `Happy birthday ${first}!! 🎉`
+        : isAnniversary
+          ? `Happy anniversary ${first}! ❤️`
+          : `Thinking of you today, ${first}.`;
+
+    const warm = isKidBirthday
+      ? `Hope ${childName || "your little one"} has the sweetest birthday today.`
+      : isBirthday
+        ? "Hope today’s a good one — you deserve it."
+        : isAnniversary
+          ? "Hope you both get a little time to celebrate today."
+          : "Hope today feels a little lighter. Thinking of you.";
+
+    const playful = isKidBirthday
+      ? `Hope ${childName || "your little one"} is living their best birthday life today 😂`
+      : isBirthday
+        ? "Another year older, still crushing it 🙌"
+        : isAnniversary
+          ? "Still cute together after all this time 😂"
+          : "Just checking in before today runs away with you.";
+
+    const deeper = isKidBirthday
+      ? `Thinking of ${childName || "your little one"} today — hope it’s a really special birthday.`
+      : isBirthday
+        ? "Hope today feels special in all the right ways."
+        : isAnniversary
+          ? "Hope today brings back some really good memories."
+          : "Just wanted to say I’m thinking of you today.";
+
+    return {
+      personName: first,
+      phone: targetPerson.phone ?? "",
+      suggestions: [
+        { id: "short", message: short },
+        { id: "warm", message: warm },
+        { id: "playful", message: playful },
+        { id: "deeper", message: deeper },
+        { id: "custom", label: "Write my own", message: "" },
+      ],
+    };
+  }
+
+  function getAnniversaryTextTargets(reminder: ReminderEvent, person: Person | null) {
+    if (reminder.momentType !== "anniversary" || !person) return [];
+
+    const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
+    if (reminderContext?.kind !== "anniversary" || !reminderContext.subjectName.includes("&")) return [];
+    if ((person.careRecipientId ?? "").trim()) return [];
+
+    const anniversaryRelationshipContext = resolveRelationshipV2Context({
+      subject: { kind: "person", personId: person.id },
+      people,
+      relationships,
+      links: relationshipV2Links,
+    });
+    const partnerLink =
+      anniversaryRelationshipContext.allLinks.find(
+        (link) => link.anchor.kind === "person" && link.relationshipToAnchor === "partner"
+      ) ?? null;
+    const partnerAnchor = partnerLink?.anchor;
+    const partner =
+      partnerAnchor?.kind === "person"
+        ? people.find((candidate) => candidate.id === partnerAnchor.personId) ?? null
+        : null;
+
+    if (!partner || partner.id === person.id || (partner.careRecipientId ?? "").trim()) return [];
+
+    return [person, partner]
+      .filter((candidate, index, all) => all.findIndex((item) => item.id === candidate.id) === index)
+      .filter((candidate) => Boolean((candidate.phone ?? "").trim()));
+  }
+
   function buildRelationshipAwareBirthdaySuggestions(reminder: ReminderEvent, subjectName: string) {
     if (reminder.reminderType === "dayOf") {
       return [
@@ -1502,8 +1607,8 @@ function buildHorizonPlanningNudge(args: {
 
   function buildReminderActions(reminder: ReminderEvent) {
     const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
-    const first = ((person?.name ?? reminder.personName).trim().split(" ")[0] || reminder.personName || "them").trim();
     const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
+    const anniversaryTextTargets = getAnniversaryTextTargets(reminder, person);
     const relationalRecipients =
       reminderContext?.kind === "childThroughRelationship" ||
       reminderContext?.kind === "childBirthday" ||
@@ -1559,6 +1664,40 @@ function buildHorizonPlanningNudge(args: {
       ];
     }
 
+    if (anniversaryTextTargets.length > 0) {
+      const textActions = anniversaryTextTargets.map((targetPerson) => ({
+        label: `Text ${contactFirstName(targetPerson.name)}`,
+        layout: anniversaryTextTargets.length === 2 ? ("peerPrimary" as const) : undefined,
+        onClick: () => {
+          openSmartMessageSuggestions(buildReminderTextSuggestions(reminder, targetPerson));
+        },
+      }));
+
+      return [
+        ...textActions,
+        {
+          label: "Card",
+          href: "https://www.americangreetings.com/ecards",
+        },
+        {
+          label: "Coffee",
+          href: "https://www.starbucks.com/gift",
+        },
+        {
+          label: "Gift",
+          href: "https://www.amazon.com/gift-cards",
+        },
+        {
+          label: "Dessert",
+          href: "https://www.ubereats.com/",
+        },
+        {
+          label: "Done for today",
+          onClick: () => dismissReminderCard(reminder),
+        },
+      ];
+    }
+
     return [
       {
         label: reminderTextActionLabel(reminder, person),
@@ -1568,59 +1707,7 @@ function buildHorizonPlanningNudge(args: {
             window.alert("Add a phone number to text them.");
             return;
           }
-
-          const toName = (person.name ?? "").trim().split(" ")[0] || person.name || first;
-          const display = formatReminderCard(reminder);
-          const childLine = display.label;
-          const childName = childLine.split(" turns ")[0]?.split("'s birthday")[0]?.trim() || "";
-
-          const isBirthday = reminder.momentType === "birthday";
-          const isKidBirthday = reminder.momentType === "childBirthday";
-          const isAnniversary = reminder.momentType === "anniversary";
-
-          const short = isKidBirthday
-            ? `Happy birthday ${childName || "to your little one"}!! 🎉`
-            : isBirthday
-              ? `Happy birthday ${toName}!! 🎉`
-              : isAnniversary
-                ? `Happy anniversary ${toName}! ❤️`
-                : `Thinking of you today, ${toName}.`;
-
-          const warm = isKidBirthday
-            ? `Hope ${childName || "your little one"} has the sweetest birthday today.`
-            : isBirthday
-              ? "Hope today’s a good one — you deserve it."
-              : isAnniversary
-                ? "Hope you both get a little time to celebrate today."
-                : "Hope today feels a little lighter. Thinking of you.";
-
-          const playful = isKidBirthday
-            ? `Hope ${childName || "your little one"} is living their best birthday life today 😂`
-            : isBirthday
-              ? "Another year older, still crushing it 🙌"
-              : isAnniversary
-                ? "Still cute together after all this time 😂"
-                : "Just checking in before today runs away with you.";
-
-          const deeper = isKidBirthday
-            ? `Thinking of ${childName || "your little one"} today — hope it’s a really special birthday.`
-            : isBirthday
-              ? "Hope today feels special in all the right ways."
-              : isAnniversary
-                ? "Hope today brings back some really good memories."
-                : "Just wanted to say I’m thinking of you today.";
-
-          openSmartMessageSuggestions({
-            personName: toName,
-            phone: person.phone,
-            suggestions: [
-              { id: "short", message: short },
-              { id: "warm", message: warm },
-              { id: "playful", message: playful },
-              { id: "deeper", message: deeper },
-              { id: "custom", label: "Write my own", message: "" },
-            ],
-          });
+          openSmartMessageSuggestions(buildReminderTextSuggestions(reminder, person));
         },
       },
       {
@@ -2937,7 +3024,10 @@ function buildHorizonPlanningNudge(args: {
 
                   const renderCareSuggestionCard = (suggestion: typeof activeCareSuggestion) => {
                     if (!suggestion) return null;
-                    const message = [suggestion.title, suggestion.message, suggestion.insight].filter(Boolean).join("\n");
+                    const isPhoneNudge = suggestion.id.startsWith("phone_");
+                    const message = isPhoneNudge
+                      ? suggestion.message
+                      : [suggestion.title, suggestion.message, suggestion.insight].filter(Boolean).join("\n");
                     return (
                       <SmartSuggestionCard
                         variant="nudge"
@@ -2979,6 +3069,14 @@ function buildHorizonPlanningNudge(args: {
                         const primaryActions = isCompleted
                           ? []
                           : actions.filter((action) => action.label !== "Done for today");
+                        const peerPrimaryActions = primaryActions.filter(
+                          (action) => "layout" in action && action.layout === "peerPrimary"
+                        );
+                        const leadPrimaryAction = peerPrimaryActions.length > 0 ? null : (primaryActions[0] ?? null);
+                        const trailingPrimaryActions =
+                          peerPrimaryActions.length > 0
+                            ? primaryActions.filter((action) => !("layout" in action && action.layout === "peerPrimary"))
+                            : primaryActions.slice(1);
 
                         return (
                           <div
@@ -3095,23 +3193,29 @@ function buildHorizonPlanningNudge(args: {
                                   <div
                                     style={{
                                       display: "grid",
-                                      gridTemplateColumns: primaryActions.length > 1 ? "repeat(2, minmax(120px, 138px))" : "minmax(120px, 138px)",
+                                      gridTemplateColumns:
+                                        peerPrimaryActions.length > 0
+                                          ? `repeat(${peerPrimaryActions.length + (trailingPrimaryActions.length > 0 ? 1 : 0)}, minmax(120px, 138px))`
+                                          : primaryActions.length > 1
+                                            ? "repeat(2, minmax(120px, 138px))"
+                                            : "minmax(120px, 138px)",
                                       columnGap: "16px",
                                       rowGap: "10px",
                                       alignItems: "start",
-                                      justifyContent: primaryActions.length > 1 ? "space-between" : "start",
+                                      justifyContent:
+                                        peerPrimaryActions.length > 0 || primaryActions.length > 1 ? "space-between" : "start",
                                     }}
                                   >
-                                    {"href" in primaryActions[0] && primaryActions[0].href ? (
+                                    {leadPrimaryAction ? ("href" in leadPrimaryAction && leadPrimaryAction.href ? (
                                       <a
-                                        href={primaryActions[0].href}
+                                        href={leadPrimaryAction.href}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         onClick={(event) => {
                                           event.stopPropagation();
                                         }}
-                                        aria-disabled={"disabled" in primaryActions[0] && primaryActions[0].disabled ? "true" : undefined}
-                                        title={(primaryActions[0] as { title?: string }).title}
+                                        aria-disabled={"disabled" in leadPrimaryAction && leadPrimaryAction.disabled ? "true" : undefined}
+                                        title={(leadPrimaryAction as { title?: string }).title}
                                         style={{
                                           display: "inline-flex",
                                           alignItems: "center",
@@ -3135,24 +3239,24 @@ function buildHorizonPlanningNudge(args: {
                                           whiteSpace: "nowrap",
                                           overflow: "hidden",
                                           textOverflow: "ellipsis",
-                                          opacity: "disabled" in primaryActions[0] && primaryActions[0].disabled ? 0.5 : 1,
-                                          pointerEvents: "disabled" in primaryActions[0] && primaryActions[0].disabled ? "none" : undefined,
+                                          opacity: "disabled" in leadPrimaryAction && leadPrimaryAction.disabled ? 0.5 : 1,
+                                          pointerEvents: "disabled" in leadPrimaryAction && leadPrimaryAction.disabled ? "none" : undefined,
                                         }}
                                       >
-                                        {primaryActions[0].label}
+                                        {leadPrimaryAction.label}
                                       </a>
                                     ) : (
                                       <button
                                         type="button"
                                         onClick={(event) => {
                                           event.stopPropagation();
-                                          const action = primaryActions[0];
+                                          const action = leadPrimaryAction;
                                           if ("onClick" in action && typeof action.onClick === "function") {
                                             action.onClick();
                                           }
                                         }}
-                                        disabled={Boolean("disabled" in primaryActions[0] && primaryActions[0].disabled)}
-                                        title={"title" in primaryActions[0] && typeof primaryActions[0].title === "string" ? primaryActions[0].title : undefined}
+                                        disabled={Boolean("disabled" in leadPrimaryAction && leadPrimaryAction.disabled)}
+                                        title={"title" in leadPrimaryAction && typeof leadPrimaryAction.title === "string" ? leadPrimaryAction.title : undefined}
                                         style={{
                                           alignSelf: "start",
                                           width: "138px",
@@ -3171,11 +3275,46 @@ function buildHorizonPlanningNudge(args: {
                                           textOverflow: "ellipsis",
                                         }}
                                       >
-                                        {primaryActions[0].label}
+                                        {leadPrimaryAction.label}
                                       </button>
-                                    )}
+                                    )) : null}
 
-                                    {primaryActions.length > 1 ? (
+                                    {peerPrimaryActions.length > 0
+                                      ? peerPrimaryActions.map((action) => (
+                                          <button
+                                            key={action.label}
+                                            type="button"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              if ("onClick" in action && typeof action.onClick === "function") {
+                                                action.onClick();
+                                              }
+                                            }}
+                                            disabled={Boolean("disabled" in action && action.disabled)}
+                                            title={"title" in action && typeof action.title === "string" ? action.title : undefined}
+                                            style={{
+                                              alignSelf: "start",
+                                              width: "138px",
+                                              minHeight: "44px",
+                                              borderRadius: "12px",
+                                              padding: "0.74rem 0.88rem",
+                                              fontSize: "0.88rem",
+                                              fontWeight: 600,
+                                              border: `1px solid ${CIRCLE_NAVY}`,
+                                              background: CIRCLE_NAVY,
+                                              color: "var(--paper)",
+                                              boxShadow: "0 12px 26px rgba(20, 36, 54, 0.18)",
+                                              whiteSpace: "nowrap",
+                                              overflow: "hidden",
+                                              textOverflow: "ellipsis",
+                                            }}
+                                          >
+                                            {action.label}
+                                          </button>
+                                        ))
+                                      : null}
+
+                                    {trailingPrimaryActions.length > 0 ? (
                                       <div
                                         style={{
                                           display: "grid",
@@ -3198,7 +3337,7 @@ function buildHorizonPlanningNudge(args: {
                                             {display.actionHeading}
                                           </div>
                                         ) : null}
-                                        {primaryActions.slice(1).map((action) =>
+                                        {trailingPrimaryActions.map((action) =>
                                           "href" in action && action.href ? (
                                             <a
                                               key={action.label}
@@ -3565,12 +3704,7 @@ function buildHorizonPlanningNudge(args: {
                       ) : null}
 
                       {showDiscoverySurface && !activeLegacyPrompt && !activeQuestion && activeCareSuggestion ? (
-                        <>
-                          <div style={{ ...headerStyle, marginTop: hasPendingReminders ? "24px" : "8px" }}>
-                            A thoughtful nudge
-                          </div>
-                          {renderPromptGrid(renderCareSuggestionCard(activeCareSuggestion))}
-                        </>
+                        renderPromptGrid(renderCareSuggestionCard(activeCareSuggestion))
                       ) : null}
 
                       {showHorizonSection ? (

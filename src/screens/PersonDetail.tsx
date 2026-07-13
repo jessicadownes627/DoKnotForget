@@ -299,6 +299,9 @@ export default function PersonDetail() {
         : null,
     [people, resolvedPerson.careRecipientId]
   );
+  const hasOwnPhone = Boolean((resolvedPerson.phone ?? "").trim());
+  const hasCareRecipientNumber = Boolean((careRecipient?.phone ?? "").trim());
+  const showPhoneNudge = !hasOwnPhone && !hasCareRecipientNumber && !careRecipient;
 
   const availableConnectionTargets = useMemo(() => {
     const excludedIds = new Set<string>([resolvedPerson.id, ...relatedPeople.map((item) => item.person.id)]);
@@ -517,6 +520,8 @@ export default function PersonDetail() {
     setIsPhoneEditorOpen(true);
   }
 
+  const isGentlePhonePrompt = phoneEditorMode === "direct" && showPhoneNudge;
+
   function openAddConnectedPerson() {
     setIsConnectPersonOpen(true);
   }
@@ -720,7 +725,7 @@ export default function PersonDetail() {
                     <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
                       {resolvedPerson.phone
                         ? `${resolvedPerson.phone} · ready for quick texting from reminders`
-                        : "Add a number if you'd like to text directly from reminders"}
+                        : `Add ${resolvedPerson.name.trim()}'s number to make texting easy later.`}
                     </div>
                   )}
                 </div>
@@ -1297,13 +1302,17 @@ export default function PersonDetail() {
               gap: "0.8rem",
             }}
           >
-            <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>
-              {phoneEditorMode === "separate" ? `Add a different number for ${resolvedPerson.name.trim()}` : "Make reaching out easier"}
-            </div>
+            {isGentlePhonePrompt ? null : (
+              <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>
+                {phoneEditorMode === "separate" ? `Add a different number for ${resolvedPerson.name.trim()}` : "Phone number"}
+              </div>
+            )}
             <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
-              {phoneEditorMode === "separate"
-                ? `Use a separate number for ${resolvedPerson.name.trim()} instead of routing reminders through someone else.`
-                : `If you'd like to text ${resolvedPerson.name.trim()} directly from reminders, add a phone number.`}
+              {isGentlePhonePrompt
+                ? `Add ${resolvedPerson.name.trim()}'s number to make texting easy later.`
+                : phoneEditorMode === "separate"
+                  ? `Use a separate number for ${resolvedPerson.name.trim()} instead of routing reminders through someone else.`
+                  : `Add or update ${resolvedPerson.name.trim()}'s number.`}
             </div>
             <input
               type="tel"
@@ -1332,14 +1341,14 @@ export default function PersonDetail() {
                 }}
                 style={{ border: "none", background: "none", padding: 0, color: "var(--muted)", fontSize: "0.92rem" }}
               >
-                Cancel
+                {isGentlePhonePrompt ? "Not now" : "Cancel"}
               </button>
               <button
                 type="button"
                 onClick={savePhone}
                 style={{ border: "none", background: "none", padding: 0, color: "var(--ink)", fontSize: "0.95rem", fontWeight: 700 }}
               >
-                Save number
+                {isGentlePhonePrompt ? "Add number" : "Save number"}
               </button>
             </div>
           </div>
