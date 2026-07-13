@@ -2,7 +2,7 @@ import type { ChildParentContact, Person } from "../models/Person.js";
 import type { Relationship } from "../models/Relationship.js";
 import { getNextBirthdayFromIso } from "./birthdayUtils.js";
 import { parseLocalDate } from "./date.js";
-import { displayNameOrFallback, normalizeDisplayName } from "./displayName.js";
+import { compareDisplayNamesByFirstName, displayNameOrFallback, normalizeDisplayName } from "./displayName.js";
 import { buildRelationshipV2Links, resolveRelationshipV2Context } from "./relationshipV2.js";
 
 export type ReminderEventLike = {
@@ -47,7 +47,7 @@ function joinNamesAlphabetically(...names: string[]) {
   return names
     .map((name) => displayNameOrFallback(name, "").trim())
     .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+    .sort(compareDisplayNamesByFirstName)
     .join(" & ");
 }
 

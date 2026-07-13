@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { displayNameOrFallback } from "../utils/displayName";
 
 type Suggestion = {
   id: string;
@@ -42,6 +43,8 @@ export default function SmartMessageSuggestionsModal({
   onPick,
   onClose,
 }: Props) {
+  const displayPersonName = displayNameOrFallback(personName, "them");
+
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -78,7 +81,7 @@ export default function SmartMessageSuggestionsModal({
             </button>
           </div>
           <div style={{ marginTop: "6px", color: "var(--muted)", fontSize: "0.95rem", lineHeight: 1.5 }}>
-            Choose a message for {personName}.
+            Choose a message for {displayPersonName}.
           </div>
         </div>
 

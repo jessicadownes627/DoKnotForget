@@ -1,6 +1,6 @@
 import type { Moment, Person } from "../models/Person";
 import { parseLocalDate } from "../utils/date";
-import { displayNameOrFallback } from "../utils/displayName";
+import { compareDisplayNamesByFirstName, displayNameOrFallback } from "../utils/displayName";
 
 export type ReminderMomentType = "birthday" | "anniversary" | "childBirthday" | "custom";
 
@@ -30,7 +30,7 @@ function joinNamesAlphabetically(...names: string[]) {
   return names
     .map((name) => displayNameOrFallback(name, "").trim())
     .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+    .sort(compareDisplayNamesByFirstName)
     .join(" & ");
 }
 

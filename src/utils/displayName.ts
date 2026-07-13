@@ -40,6 +40,16 @@ export function normalizeDisplayName(value: string) {
     .join(" & ");
 }
 
+export function compareDisplayNamesByFirstName(a: string, b: string) {
+  const normalizedA = normalizeDisplayName(a);
+  const normalizedB = normalizeDisplayName(b);
+  const firstA = normalizedA.split(/\s+/)[0] ?? normalizedA;
+  const firstB = normalizedB.split(/\s+/)[0] ?? normalizedB;
+  const firstCompare = firstA.localeCompare(firstB, undefined, { sensitivity: "base" });
+  if (firstCompare !== 0) return firstCompare;
+  return normalizedA.localeCompare(normalizedB, undefined, { sensitivity: "base" });
+}
+
 export function displayNameOrFallback(value: string, fallback = "them") {
   const normalized = normalizeDisplayName(value);
   return normalized || fallback;

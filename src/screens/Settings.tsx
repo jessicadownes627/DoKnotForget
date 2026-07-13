@@ -175,9 +175,13 @@ export default function Settings() {
             color: "var(--muted)",
             fontSize: "0.95rem",
             fontFamily: "var(--font-sans)",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.3rem",
           }}
         >
-          Back
+          <span aria-hidden="true">←</span>
+          <span>Back</span>
         </button>
 
         <h1
