@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
 import { useAppState } from "../appState";
-import { useLocation, useNavigate } from "../router";
+import { useNavigate } from "../router";
 import { purchaseProduct, restorePremiumPurchases } from "../utils/storeKit";
 
 export default function Paywall() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { isPremium, setPremium } = useAppState();
-  const isPeopleLimitPaywall = location.state?.source === "people-limit";
   const [isBusy, setIsBusy] = useState(false);
 
   useEffect(() => {
@@ -93,9 +91,13 @@ export default function Paywall() {
             fontSize: "0.95rem",
             fontWeight: 500,
             fontFamily: "var(--font-sans)",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.3rem",
           }}
         >
-          Back
+          <span aria-hidden="true">←</span>
+          <span>Back</span>
         </button>
 
         <div
@@ -121,29 +123,17 @@ export default function Paywall() {
                 letterSpacing: "-0.03em",
               }}
             >
-              {isPeopleLimitPaywall ? "Keep this going" : "Show up for everyone who matters"}
+              Never miss the moment again
             </h1>
             <div style={{ color: "var(--muted)", fontSize: "1rem", lineHeight: 1.6 }}>
-              {isPeopleLimitPaywall
-                ? "We’ll help you stay on top of the people who matter — without having to think about it."
-                : "Keep everything in one place. Never miss a moment."}
+              You don’t have to keep this in your head anymore.
             </div>
           </div>
 
           <div style={{ display: "grid", gap: "10px", color: "var(--ink)", fontSize: "0.98rem", lineHeight: 1.55 }}>
-            {isPeopleLimitPaywall ? (
-              <>
-                <div>• Never miss important dates</div>
-                <div>• Keep track of the people in your life</div>
-                <div>• Stay one step ahead, quietly</div>
-              </>
-            ) : (
-              <>
-                <div>• Import your contacts in seconds</div>
-                <div>• Keep track of everyone who matters</div>
-                <div>• Always know the right moment to reach out</div>
-              </>
-            )}
+            <div>You won’t forget the people who matter.</div>
+            <div>When the moment comes, you’ll be ready.</div>
+            <div>A small reminder can mean everything.</div>
           </div>
 
           <div style={{ display: "grid", gap: "10px" }}>
@@ -157,7 +147,7 @@ export default function Paywall() {
                 fontSize: "1rem",
               }}
             >
-              {isBusy ? "Processing..." : isPeopleLimitPaywall ? "Unlock your full list" : "Upgrade"}
+              {isBusy ? "Processing..." : "Unlock your Circle"}
             </button>
             <button
               type="button"

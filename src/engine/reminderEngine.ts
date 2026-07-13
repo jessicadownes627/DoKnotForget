@@ -1,5 +1,6 @@
 import type { Moment, Person } from "../models/Person";
 import { parseLocalDate } from "../utils/date";
+import { displayNameOrFallback } from "../utils/displayName";
 
 export type ReminderMomentType = "birthday" | "anniversary" | "childBirthday" | "custom";
 
@@ -24,6 +25,14 @@ type NormalizedEvent = {
   eventDate: Date;
   ageText?: string;
 };
+
+function joinNamesAlphabetically(...names: string[]) {
+  return names
+    .map((name) => displayNameOrFallback(name, "").trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+    .join(" & ");
+}
 
 const REMINDER_SCHEDULE: Array<{ daysBefore: number; reminderType: ReminderType }> = [
   { daysBefore: 7, reminderType: "sevenDay" },
@@ -110,7 +119,7 @@ function dedupeMoments(moments: Moment[]) {
   });
 }
 
-function collectEventsForPerson(person: Person, baseDate: Date): NormalizedEvent[] {
+function collectEventsForPerson(person: Person, people: Person[], baseDate: Date): NormalizedEvent[] {
   const events: NormalizedEvent[] = [];
 
   const birthday = (person.moments ?? []).find((moment) => moment.type === "birthday") ?? null;
@@ -119,9 +128,9 @@ function collectEventsForPerson(person: Person, baseDate: Date): NormalizedEvent
     if (occurrence) {
       events.push({
         personId: person.id,
-        personName: person.name,
+        personName: displayNameOrFallback(person.name),
         momentType: "birthday",
-        labelBase: `${possessive(person.name)} birthday`,
+        labelBase: `${possessive(displayNameOrFallback(person.name))} birthday`,
         eventDate: occurrence.date,
       });
     }
@@ -129,13 +138,26 @@ function collectEventsForPerson(person: Person, baseDate: Date): NormalizedEvent
 
   const anniversary = getNextAnniversaryOccurrence(person, baseDate);
   if (anniversary) {
-    events.push({
-      personId: person.id,
-      personName: person.name,
-      momentType: "anniversary",
-      labelBase: `${possessive(person.name)} anniversary`,
-      eventDate: anniversary.date,
-    });
+    const partnerId = (person.partnerId ?? "").trim();
+    const partner = partnerId ? people.find((candidate) => candidate.id === partnerId) ?? null : null;
+    const partnerAnniversary = partner ? getNextAnniversaryOccurrence(partner, baseDate) : null;
+    const isSharedPair =
+      Boolean(partner?.id) &&
+      partnerAnniversary !== null &&
+      formatYmd(partnerAnniversary.date) === formatYmd(anniversary.date);
+    if (isSharedPair && person.id.localeCompare(partner!.id, undefined, { sensitivity: "base" }) > 0) {
+      // Skip the duplicate anniversary emission from the reverse partner record.
+    } else {
+      const anniversaryName = isSharedPair ? joinNamesAlphabetically(person.name, partner?.name ?? "") : displayNameOrFallback(person.name);
+
+      events.push({
+        personId: person.id,
+        personName: anniversaryName,
+        momentType: "anniversary",
+        labelBase: `${possessive(anniversaryName)} anniversary`,
+        eventDate: anniversary.date,
+      });
+    }
   }
 
   for (const child of person.children ?? []) {
@@ -149,9 +171,9 @@ function collectEventsForPerson(person: Person, baseDate: Date): NormalizedEvent
     const ageText = getAgeText(occurrence.sourceYear, occurrence.date.getFullYear()) ?? undefined;
     events.push({
       personId: person.id,
-      personName: person.name,
+      personName: displayNameOrFallback(person.name),
       momentType: "childBirthday",
-      labelBase: childName,
+      labelBase: displayNameOrFallback(childName, childName),
       eventDate: occurrence.date,
       ageText,
     });
@@ -177,9 +199,9 @@ function collectEventsForPerson(person: Person, baseDate: Date): NormalizedEvent
 
     events.push({
       personId: person.id,
-      personName: person.name,
+      personName: displayNameOrFallback(person.name),
       momentType: "custom",
-      labelBase: `${moment.label} for ${person.name}`,
+      labelBase: `${moment.label} for ${displayNameOrFallback(person.name)}`,
       eventDate: occurrence.date,
     });
   }
@@ -208,7 +230,7 @@ export function getUpcomingReminders(people: Person[], today = new Date()): Remi
   for (const person of people) {
     if (!person?.id || !person.name?.trim()) continue;
 
-    const events = collectEventsForPerson(person, baseDate);
+    const events = collectEventsForPerson(person, people, baseDate);
     for (const event of events) {
       for (const schedule of REMINDER_SCHEDULE) {
         const reminderDate = addDays(event.eventDate, -schedule.daysBefore);

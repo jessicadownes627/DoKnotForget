@@ -1,5 +1,6 @@
 import type { Moment, Person } from "../models/Person";
 import { parseLocalDate } from "../utils/date";
+import { displayNameOrFallback } from "../utils/displayName";
 import { eventKey } from "../utils/eventKey";
 
 export type UpcomingMomentType = "birthday" | "anniversary" | "childBirthday" | "custom";
@@ -12,6 +13,14 @@ export type UpcomingMomentEvent = {
   label: string;
   eventDate: string;
 };
+
+function joinNamesAlphabetically(...names: string[]) {
+  return names
+    .map((name) => displayNameOrFallback(name, "").trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+    .join(" & ");
+}
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -85,9 +94,9 @@ export function getUpcomingMoments(people: Person[], today = new Date(), horizon
         events.push({
           id: eventKey(person.id, "birthday", formatYmd(next)),
           personId: person.id,
-          personName: person.name,
+          personName: displayNameOrFallback(person.name),
           momentType: "birthday",
-          label: `${possessive(person.name)} birthday`,
+          label: `${possessive(displayNameOrFallback(person.name))} birthday`,
           eventDate: formatYmd(next),
         });
       }
@@ -99,14 +108,30 @@ export function getUpcomingMoments(people: Person[], today = new Date(), horizon
     if (anniversaryIso) {
       const next = getNextRecurringOccurrence(anniversaryIso, baseDate);
       if (next && next > addDays(baseDate, 1) && next <= horizonDate) {
-        events.push({
-          id: eventKey(person.id, "anniversary", formatYmd(next)),
-          personId: person.id,
-          personName: person.name,
-          momentType: "anniversary",
-          label: `${possessive(person.name)} anniversary`,
-          eventDate: formatYmd(next),
-        });
+        const partnerId = (person.partnerId ?? "").trim();
+        const partner = partnerId ? people.find((candidate) => candidate.id === partnerId) ?? null : null;
+        const partnerMonthDay = (partner?.anniversary ?? "").trim();
+        const partnerMoment = (partner?.moments ?? []).find((moment) => moment.type === "anniversary") ?? null;
+        const partnerIso = partnerMonthDay ? `0000-${partnerMonthDay}` : (partnerMoment?.date ?? "").trim();
+        const partnerNext = partnerIso ? getNextRecurringOccurrence(partnerIso, baseDate) : null;
+        const isSharedPair =
+          Boolean(partner?.id) &&
+          partnerNext !== null &&
+          formatYmd(partnerNext) === formatYmd(next);
+        if (isSharedPair && person.id.localeCompare(partner!.id, undefined, { sensitivity: "base" }) > 0) {
+          // Skip the duplicate anniversary moment from the reverse partner record.
+        } else {
+          const anniversaryName = isSharedPair ? joinNamesAlphabetically(person.name, partner?.name ?? "") : displayNameOrFallback(person.name);
+
+          events.push({
+            id: eventKey(person.id, "anniversary", formatYmd(next)),
+            personId: person.id,
+            personName: anniversaryName,
+            momentType: "anniversary",
+            label: `${possessive(anniversaryName)} anniversary`,
+            eventDate: formatYmd(next),
+          });
+        }
       }
     }
 
@@ -119,9 +144,9 @@ export function getUpcomingMoments(people: Person[], today = new Date(), horizon
         events.push({
           id: eventKey(person.id, "childBirthday", formatYmd(next)),
           personId: person.id,
-          personName: person.name,
+          personName: displayNameOrFallback(person.name),
           momentType: "childBirthday",
-          label: `${childName}'s birthday`,
+          label: `${displayNameOrFallback(childName, childName)}'s birthday`,
           eventDate: formatYmd(next),
         });
       }
@@ -140,9 +165,9 @@ export function getUpcomingMoments(people: Person[], today = new Date(), horizon
       events.push({
         id: eventKey(person.id, "custom", formatYmd(next)),
         personId: person.id,
-        personName: person.name,
+        personName: displayNameOrFallback(person.name),
         momentType: "custom",
-        label: `${moment.label} for ${person.name}`,
+        label: `${moment.label} for ${displayNameOrFallback(person.name)}`,
         eventDate: formatYmd(next),
       });
     }

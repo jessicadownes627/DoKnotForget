@@ -242,7 +242,7 @@ function careEventDisplayName(name: string) {
 }
 
 function buildRecentlyAddedReassurance(name: string, person: Person) {
-  const trimmedName = name.trim() || "This person";
+  const trimmedName = displayNameOrFallback(name, "This person");
   const birthday = (person.moments ?? []).some((moment) => moment.type === "birthday");
   const anniversary =
     Boolean((person.anniversary ?? "").trim()) ||
@@ -391,7 +391,7 @@ function reminderActionHeadingLabel(
   const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
 
   if (reminder.momentType === "anniversary" && reminderContext?.kind === "anniversary") {
-    const subjectName = reminderContext.subjectName.trim();
+    const subjectName = displayNameOrFallback(reminderContext.subjectName, "");
     if (subjectName.includes("&")) {
       return `For ${subjectName.replace(/\s*&\s*/g, " and ")}`;
     }
@@ -457,7 +457,7 @@ function getChildBirthdayContext(reminder: ReminderEvent, people: Person[], toda
 
   if (!child) return null;
 
-  const childName = (child.name ?? "").trim() || "Your child";
+  const childName = displayNameOrFallback(child.name ?? "", "Your child");
   const birthday = (child.birthday ?? child.birthdate ?? "").trim() || undefined;
   const age = birthday && eventDate ? calculateAge(birthday, eventDate) : undefined;
   const parentContacts = resolveChildParentContacts(person, people, child.parents);
@@ -475,7 +475,7 @@ function resolveChildParentContacts(person: Person, people: Person[], parents?: 
   const contacts = (parents ?? [])
     .map((parentContact) => {
       const linkedPerson = parentContact.id ? people.find((candidate) => candidate.id === parentContact.id) ?? null : null;
-      const name = (linkedPerson?.name ?? parentContact.name ?? "").trim();
+      const name = displayNameOrFallback(linkedPerson?.name ?? parentContact.name ?? "", "").trim();
       const phone = (linkedPerson?.phone ?? parentContact.phone ?? "").trim();
       if (!name) return null;
       return {
@@ -488,7 +488,7 @@ function resolveChildParentContacts(person: Person, people: Person[], parents?: 
 
   if (contacts.length > 0) return contacts;
 
-  const fallbackName = person.name.trim();
+  const fallbackName = displayNameOrFallback(person.name, "").trim();
   return fallbackName
     ? [
         {
@@ -501,7 +501,7 @@ function resolveChildParentContacts(person: Person, people: Person[], parents?: 
 }
 
 function contactFirstName(name: string) {
-  const trimmed = name.trim();
+  const trimmed = displayNameOrFallback(name, "").trim();
   return trimmed.split(" ")[0] || trimmed;
 }
 
@@ -1258,7 +1258,7 @@ function buildHorizonPlanningNudge(args: {
     const childContext = getChildBirthdayContext(reminder, people, today);
     const reminderContext = resolveReminderContext(reminder, people, relationships, today, relationshipV2Links);
     const presentation = reminderCardPresentation(reminder, section);
-    const personName = (person?.name ?? reminder.personName).trim();
+    const personName = displayNameOrFallback(person?.name ?? reminder.personName, "");
     const childName = reminderContext?.kind === "childBirthday" ? reminderContext.subjectName : childContext?.childName ?? "";
     const eventDate = reminderEventDate(reminder);
 

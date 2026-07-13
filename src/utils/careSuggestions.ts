@@ -2,6 +2,7 @@ import type { Moment, Person } from "../models/Person";
 import type { Child } from "../models/Person";
 import { getUpcomingHolidays } from "./holidays";
 import { parseLocalDate } from "./date";
+import { displayNameOrFallback } from "./displayName";
 import { getSelectedHolidays } from "./personHolidays";
 
 export type CareSuggestionType =
@@ -108,7 +109,7 @@ function daysBetween(target: Date, base: Date) {
 }
 
 function firstName(person: Person) {
-  const trimmed = person.name.trim();
+  const trimmed = displayNameOrFallback(person.name, "");
   if (!trimmed) return "them";
   return trimmed.split(/\s+/)[0] ?? trimmed;
 }
@@ -121,7 +122,7 @@ function momentDisplayLabel(moment: Moment) {
 }
 
 function childNameLabel(child: Child, parent: Person) {
-  const trimmed = (child.name ?? "").trim();
+  const trimmed = displayNameOrFallback(child.name ?? "", "");
   if (trimmed) return trimmed;
   const who = firstName(parent);
   return `A child in ${who}'s life`;

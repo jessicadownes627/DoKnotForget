@@ -2,6 +2,7 @@ import type { ChildParentContact, Person } from "../models/Person.js";
 import type { Relationship } from "../models/Relationship.js";
 import { getNextBirthdayFromIso } from "./birthdayUtils.js";
 import { parseLocalDate } from "./date.js";
+import { displayNameOrFallback, normalizeDisplayName } from "./displayName.js";
 import { buildRelationshipV2Links, resolveRelationshipV2Context } from "./relationshipV2.js";
 
 export type ReminderEventLike = {
@@ -34,12 +35,20 @@ function possessive(name: string) {
 }
 
 function contactFirstName(name: string) {
-  const trimmed = name.trim();
+  const trimmed = normalizeDisplayName(name);
   return trimmed.split(" ")[0] || trimmed;
 }
 
 function joinRecipientFirstNames(recipients: ResolvedReminderRecipient[]) {
   return recipients.map((recipient) => contactFirstName(recipient.name)).join(" & ");
+}
+
+function joinNamesAlphabetically(...names: string[]) {
+  return names
+    .map((name) => displayNameOrFallback(name, "").trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+    .join(" & ");
 }
 
 export function reminderRelativeLabel(reminderType: ReminderEventLike["reminderType"]) {
@@ -94,7 +103,7 @@ function resolveChildParentContacts(person: Person, people: Person[], parents?: 
     ? [
         {
           id: person.id,
-          name: fallbackName,
+          name: displayNameOrFallback(fallbackName, ""),
           phone: (person.phone ?? "").trim(),
         },
       ]
@@ -136,7 +145,7 @@ function getChildBirthdayContext(reminder: ReminderEventLike, people: Person[], 
 }
 
 function mapPersonToRecipient(person: Person | null): ResolvedReminderRecipient | null {
-  const name = (person?.name ?? "").trim();
+  const name = displayNameOrFallback(person?.name ?? "", "");
   if (!person || !name) return null;
   return {
     id: person.id,
@@ -185,7 +194,7 @@ export function resolveReminderContext(
   relationshipV2Links = buildRelationshipV2Links({ people, relationships })
 ): ResolvedReminderContext | null {
   const person = people.find((candidate) => candidate.id === reminder.personId) ?? null;
-  const personName = (person?.name ?? reminder.personName).trim();
+  const personName = displayNameOrFallback(person?.name ?? reminder.personName, "").trim();
 
   if (reminder.momentType === "childBirthday") {
     const childContext = getChildBirthdayContext(reminder, people, today);
@@ -299,7 +308,7 @@ export function resolveReminderContext(
       partnerAnchor?.kind === "person"
         ? people.find((candidate) => candidate.id === partnerAnchor.personId) ?? null
         : null;
-    const subjectName = partner ? `${personName} & ${partner.name}` : personName;
+    const subjectName = partner ? joinNamesAlphabetically(personName, partner.name) : personName;
     const recipient = mapPersonToRecipient(person);
 
     if (!recipient) return null;

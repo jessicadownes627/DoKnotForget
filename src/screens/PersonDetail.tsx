@@ -7,6 +7,7 @@ import { useAppState } from "../appState";
 import { useLocation, useNavigate, useParams } from "../router";
 import { getNextBirthdayFromIso } from "../utils/birthdayUtils";
 import { parseLocalDate } from "../utils/date";
+import { displayNameOrFallback } from "../utils/displayName";
 import { normalizePhone } from "../utils/phone";
 import { getSelectedHolidays, holidayOptionLabel } from "../utils/personHolidays";
 
@@ -302,6 +303,7 @@ export default function PersonDetail() {
   const hasOwnPhone = Boolean((resolvedPerson.phone ?? "").trim());
   const hasCareRecipientNumber = Boolean((careRecipient?.phone ?? "").trim());
   const showPhoneNudge = !hasOwnPhone && !hasCareRecipientNumber && !careRecipient;
+  const resolvedPersonName = displayNameOrFallback(resolvedPerson.name, "them");
 
   const availableConnectionTargets = useMemo(() => {
     const excludedIds = new Set<string>([resolvedPerson.id, ...relatedPeople.map((item) => item.person.id)]);
@@ -400,7 +402,7 @@ export default function PersonDetail() {
   }
 
   function recentCareTitle(event: CareEvent) {
-    const personName = resolvedPerson.name.trim() || "them";
+    const personName = resolvedPersonName;
     const date = formatCareEventDate(event.timestamp);
     const context = careEventContext(event);
 
@@ -410,7 +412,7 @@ export default function PersonDetail() {
   }
 
   function recentCareDetail(event: CareEvent) {
-    const personName = resolvedPerson.name.trim() || "them";
+    const personName = resolvedPersonName;
     if (event.type === "text") return "You reached out";
     if (event.type === "ecard") return "Sent an eCard";
     if (event.type === "gift") return "Sent a gift";
@@ -566,7 +568,7 @@ export default function PersonDetail() {
     navigate("/add", {
       state: {
         connectedToPersonId: resolvedPerson.id,
-        connectedToPersonName: resolvedPerson.name.trim(),
+        connectedToPersonName: resolvedPersonName,
       },
     });
   }
@@ -643,7 +645,7 @@ export default function PersonDetail() {
                   fontWeight: 700,
                 }}
               >
-                {(resolvedPerson.name.trim()[0] ?? "?").toUpperCase()}
+                {(resolvedPersonName[0] ?? "?").toUpperCase()}
               </div>
               <div style={{ minWidth: 0 }}>
                 <div
@@ -654,7 +656,7 @@ export default function PersonDetail() {
                     letterSpacing: "-0.028em",
                   }}
                 >
-                  {resolvedPerson.name.trim()}
+                  {resolvedPersonName}
                 </div>
                 <div style={{ marginTop: "0.4rem", color: "var(--muted)", fontSize: "0.95rem" }}>
                   {portraitSubtitle}
@@ -696,7 +698,7 @@ export default function PersonDetail() {
                   {careRecipient ? (
                     <div style={{ marginTop: "0.28rem", display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
                       <span style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.45 }}>
-                        {`Messages for ${resolvedPerson.name.trim()} will go to ${careRecipient.name}.`}
+                        {`Messages for ${resolvedPersonName} will go to ${displayNameOrFallback(careRecipient.name)}.`}
                       </span>
                       <button
                         type="button"
@@ -725,7 +727,7 @@ export default function PersonDetail() {
                     <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
                       {resolvedPerson.phone
                         ? `${resolvedPerson.phone} · ready for quick texting from reminders`
-                        : `Add ${resolvedPerson.name.trim()}'s number to make texting easy later.`}
+                        : `Add ${resolvedPersonName}'s number to make texting easy later.`}
                     </div>
                   )}
                 </div>
@@ -795,7 +797,7 @@ export default function PersonDetail() {
               <div>
                 <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>Important moments</div>
                 <div style={{ marginTop: "0.25rem", color: "var(--muted)", fontSize: "0.92rem" }}>
-                  What helps you remember {resolvedPerson.name.trim()} well.
+                  What helps you remember {resolvedPersonName} well.
                 </div>
               </div>
             </div>
@@ -819,7 +821,7 @@ export default function PersonDetail() {
                 }}
               >
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 600 }}>{possessive(resolvedPerson.name)} birthday</div>
+                  <div style={{ fontWeight: 600 }}>{possessive(resolvedPersonName)} birthday</div>
                   <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
                     {birthdayInfo
                       ? birthdayInfo.isToday
@@ -895,7 +897,7 @@ export default function PersonDetail() {
           <SurfaceCard>
             <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "baseline" }}>
               <div>
-                <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>People around {resolvedPerson.name.trim()}</div>
+                <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>People around {resolvedPersonName}</div>
                 <div style={{ marginTop: "0.25rem", color: "var(--muted)", fontSize: "0.92rem" }}>
                   The people connected to this page.
                 </div>
@@ -1011,7 +1013,7 @@ export default function PersonDetail() {
                   }}
                 >
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 600 }}>{careRecipient.name}</div>
+                    <div style={{ fontWeight: 600 }}>{displayNameOrFallback(careRecipient.name)}</div>
                     <div style={{ marginTop: "0.28rem", color: "var(--muted)", fontSize: "0.92rem" }}>
                       Primary contact for reminders
                     </div>
@@ -1117,7 +1119,7 @@ export default function PersonDetail() {
 
       <MomentDatePicker
         isOpen={momentComposer.kind === "birthday"}
-        title={`${possessive(resolvedPerson.name)} birthday`}
+        title={`${possessive(resolvedPersonName)} birthday`}
         mode="birthday"
         monthDay={birthdayDraftMonthDay}
         setMonthDay={setBirthdayDraftMonthDay}
@@ -1138,7 +1140,7 @@ export default function PersonDetail() {
 
       <MomentDatePicker
         isOpen={momentComposer.kind === "anniversary"}
-        title={`${resolvedPerson.name.trim()}'s anniversary`}
+        title={`${resolvedPersonName}'s anniversary`}
         mode="anniversary"
         monthDay={anniversaryDraftMonthDay}
         setMonthDay={setAnniversaryDraftMonthDay}
@@ -1189,7 +1191,7 @@ export default function PersonDetail() {
               gap: "0.9rem",
             }}
           >
-            <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>What should we remember for {resolvedPerson.name.trim()}?</div>
+            <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>What should we remember for {resolvedPersonName}?</div>
             <input
               value={customMomentTitle}
               onChange={(e) => setCustomMomentTitle(e.target.value)}
@@ -1304,15 +1306,15 @@ export default function PersonDetail() {
           >
             {isGentlePhonePrompt ? null : (
               <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>
-                {phoneEditorMode === "separate" ? `Add a different number for ${resolvedPerson.name.trim()}` : "Phone number"}
+                {phoneEditorMode === "separate" ? `Add a different number for ${resolvedPersonName}` : "Phone number"}
               </div>
             )}
             <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
               {isGentlePhonePrompt
-                ? `Add ${resolvedPerson.name.trim()}'s number to make texting easy later.`
+                ? `Add ${resolvedPersonName}'s number to make texting easy later.`
                 : phoneEditorMode === "separate"
-                  ? `Use a separate number for ${resolvedPerson.name.trim()} instead of routing reminders through someone else.`
-                  : `Add or update ${resolvedPerson.name.trim()}'s number.`}
+                  ? `Use a separate number for ${resolvedPersonName} instead of routing reminders through someone else.`
+                  : `Add or update ${resolvedPersonName}'s number.`}
             </div>
             <input
               type="tel"
@@ -1359,7 +1361,7 @@ export default function PersonDetail() {
         <div
           role="dialog"
           aria-modal="true"
-          aria-label={`Use ${contactChoiceTarget.name.trim()} as contact`}
+          aria-label={`Use ${displayNameOrFallback(contactChoiceTarget.name)} as contact`}
           onClick={() => setContactChoiceTarget(null)}
           style={{
             position: "fixed",
@@ -1386,10 +1388,10 @@ export default function PersonDetail() {
             }}
           >
             <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>
-              {`Who should receive messages for ${resolvedPerson.name.trim()}?`}
+              {`Who should receive messages for ${resolvedPersonName}?`}
             </div>
             <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
-              {`Choose whether reminders about ${resolvedPerson.name.trim()} should go through ${contactChoiceTarget.name.trim()} or to a number of their own.`}
+              {`Choose whether reminders about ${resolvedPersonName} should go through ${displayNameOrFallback(contactChoiceTarget.name)} or to a number of their own.`}
             </div>
 
             <div style={{ display: "grid", gap: "0.7rem" }}>
@@ -1411,7 +1413,7 @@ export default function PersonDetail() {
                 }}
               >
                 <div style={{ fontWeight: 600 }}>
-                  {`Text ${contactChoiceTarget.name.trim()} for ${resolvedPerson.name.trim()}`}
+                  {`Text ${displayNameOrFallback(contactChoiceTarget.name)} for ${resolvedPersonName}`}
                 </div>
                 <RowChevron />
               </button>
@@ -1433,7 +1435,7 @@ export default function PersonDetail() {
                   boxShadow: "0 6px 18px rgba(28, 28, 30, 0.03)",
                 }}
               >
-                <div style={{ fontWeight: 600 }}>{`${resolvedPerson.name.trim()} has their own number`}</div>
+                <div style={{ fontWeight: 600 }}>{`${resolvedPersonName} has their own number`}</div>
                 <RowChevron />
               </button>
             </div>
@@ -1455,7 +1457,7 @@ export default function PersonDetail() {
         <div
           role="dialog"
           aria-modal="true"
-          aria-label={`Connect ${resolvedPerson.name.trim()}`}
+          aria-label={`Connect ${resolvedPersonName}`}
           onClick={() => setIsConnectPersonOpen(false)}
           style={{
             position: "fixed",
@@ -1481,7 +1483,7 @@ export default function PersonDetail() {
               gap: "0.9rem",
             }}
           >
-            <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>Who should you reach out to for {resolvedPerson.name.trim()}?</div>
+            <div style={{ fontSize: "1.08rem", fontWeight: 600 }}>Who should you reach out to for {resolvedPersonName}?</div>
             <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
               Pick someone you've already added, or add someone new if they aren't here yet.
             </div>

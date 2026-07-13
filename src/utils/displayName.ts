@@ -1,5 +1,23 @@
 const EMOJI_PATTERN = /[\p{Extended_Pictographic}\uFE0F\u200D]/gu;
 
+function normalizeNameSegment(segment: string) {
+  let shouldCapitalize = true;
+  let result = "";
+
+  for (const char of segment.toLowerCase()) {
+    if (/[a-z]/i.test(char)) {
+      result += shouldCapitalize ? char.toUpperCase() : char;
+      shouldCapitalize = false;
+      continue;
+    }
+
+    result += char;
+    shouldCapitalize = char === "'" || char === "-" || char === " ";
+  }
+
+  return result;
+}
+
 export function stripEmojiFromDisplayName(value: string) {
   return value
     .replace(EMOJI_PATTERN, "")
@@ -7,7 +25,22 @@ export function stripEmojiFromDisplayName(value: string) {
     .trim();
 }
 
-export function displayNameOrFallback(value: string, fallback = "them") {
+export function normalizeDisplayName(value: string) {
   const stripped = stripEmojiFromDisplayName(value);
-  return stripped || fallback;
+  if (!stripped) return "";
+
+  return stripped
+    .split(/\s*&\s*/)
+    .map((part) =>
+      part
+        .split(/\s+/)
+        .map((segment) => normalizeNameSegment(segment))
+        .join(" ")
+    )
+    .join(" & ");
+}
+
+export function displayNameOrFallback(value: string, fallback = "them") {
+  const normalized = normalizeDisplayName(value);
+  return normalized || fallback;
 }
