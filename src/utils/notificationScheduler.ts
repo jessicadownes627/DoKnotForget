@@ -17,7 +17,6 @@ import { buildResolvedReminderLabel } from "./reminderRelationshipContext.js";
 import { DEFAULT_USER_SETTINGS, type UserSettings } from "./userSettings.js";
 
 const REMINDER_NOTIFICATION_SOURCE = "dkf-reminder";
-const TEST_NOTIFICATION_SOURCE = "dkf-test-reminder";
 const HANDLED_REMINDER_ACTIONS_STORAGE_KEY = "doknotforget_handled_reminder_actions_v1";
 const SCHEDULED_REMINDER_SIGNATURE_STORAGE_KEY = "doknotforget_scheduled_reminder_signature_v1";
 export const REMINDER_NOTIFICATION_CATEGORY = "reminder";
@@ -320,32 +319,4 @@ export async function scheduleReminderNotifications(
   } catch {
     // ignore
   }
-}
-
-export async function scheduleTestReminderNotification(delayMs = 10_000) {
-  if (!isNativeNotificationsSupported()) return;
-
-  const now = new Date();
-  const notificationId = hashReminderId(`${TEST_NOTIFICATION_SOURCE}:${now.getTime()}`);
-
-  await LocalNotifications.schedule({
-    notifications: [
-      {
-        id: notificationId,
-        title: "Test Reminder",
-        body: "Notification system is working.",
-        sound: "default",
-        actionTypeId: REMINDER_NOTIFICATION_CATEGORY,
-        channelId: REMINDER_NOTIFICATION_CATEGORY,
-        threadIdentifier: REMINDER_NOTIFICATION_CATEGORY,
-        schedule: {
-          at: new Date(now.getTime() + delayMs),
-        },
-        extra: {
-          source: TEST_NOTIFICATION_SOURCE,
-          scheduledAt: now.toISOString(),
-        },
-      },
-    ],
-  });
 }

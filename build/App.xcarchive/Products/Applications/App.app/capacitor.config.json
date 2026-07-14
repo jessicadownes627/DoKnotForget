@@ -1,0 +1,10 @@
+{
+	"appId": "com.doknotforget.app",
+	"appName": "DoKnotForget",
+	"webDir": "dist",
+	"packageClassList": [
+		"ContactsPlugin",
+		"AppPlugin",
+		"LocalNotificationsPlugin"
+	]
+}

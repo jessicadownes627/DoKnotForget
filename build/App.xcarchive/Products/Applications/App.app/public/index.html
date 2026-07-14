@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="theme-color" content="#F3EEE7" />
+    <title>DoKnotForget — For the Moments That Matter.</title>
+    <style>
+      html.dkf-launch-active,
+      body.dkf-launch-active {
+        height: 100%;
+        overflow: hidden;
+        background: #f3eee7; /* match splash background */
+      }
+
+      #dkf-launch {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        background: #f3eee7;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transform: translateY(-6vh);
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+          env(safe-area-inset-left);
+        overscroll-behavior: none;
+      }
+
+      #dkf-launch img {
+        display: block;
+        width: min(84vw, 380px);
+        height: auto;
+      }
+
+      html.dkf-launch-active #root,
+      body.dkf-launch-active #root {
+        background: #f3eee7; /* match splash background */
+        min-height: 100vh;
+      }
+    </style>
+    <script>
+      window.__dkfLaunchStart = performance.now();
+      document.documentElement.classList.add("dkf-launch-active");
+      window.addEventListener(
+        "DOMContentLoaded",
+        () => document.body.classList.add("dkf-launch-active"),
+        { once: true },
+      );
+    </script>
+    <script type="module" crossorigin src="/assets/index-Dv5h8HRR.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CfI02HwA.css">
+  </head>
+  <body>
+    <div id="dkf-launch">
+      <img
+        src="/assets/splash3-Dc2T0gK6.png"
+        alt="DoKnotForget splash screen."
+      />
+    </div>
+    <div id="root"></div>
+  </body>
+</html>
