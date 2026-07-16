@@ -22,7 +22,7 @@ import {
   type UserSettings,
 } from "./utils/userSettings";
 import { loadPremiumStatus, savePremiumStatus } from "./utils/premium";
-import { getPremiumEntitlementStatus } from "./utils/storeKit";
+import { getPremiumEntitlementStatus, isNativeStoreKitAvailable } from "./utils/storeKit";
 
 type SavePersonPayload = {
   person: Person;
@@ -69,7 +69,9 @@ function startOfToday() {
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [hasHydrated, setHasHydrated] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
-  const [isPremium, setIsPremium] = useState(loadPremiumStatus);
+  const [isPremium, setIsPremium] = useState(() =>
+    isNativeStoreKitAvailable() ? false : loadPremiumStatus()
+  );
   const [people, setPeople] = useState<Person[]>([]);
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [relationshipLinksV2, setRelationshipLinksV2] = useState<RelationshipV2Link[]>([]);
@@ -240,7 +242,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
     async function syncPremiumEntitlement() {
       const entitlementActive = await getPremiumEntitlementStatus();
-      if (cancelled || entitlementActive === null) return;
+      if (cancelled) return;
+      if (entitlementActive === null) {
+        setIsPremium(false);
+        return;
+      }
       setIsPremium(entitlementActive);
     }
 

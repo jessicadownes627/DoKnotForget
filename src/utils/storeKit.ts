@@ -9,7 +9,7 @@ type StoreKitPlugin = {
 
 const StoreKit = registerPlugin<StoreKitPlugin>("StoreKit");
 
-function isNativeStoreKitAvailable() {
+export function isNativeStoreKitAvailable() {
   return Capacitor.getPlatform() !== "web";
 }
 

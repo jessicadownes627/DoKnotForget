@@ -99,7 +99,7 @@ export function buildReminderNotification(
     0
   );
 
-  const effectiveAt = scheduledAt <= now ? new Date(now.getTime() + 5000) : scheduledAt;
+  if (scheduledAt <= now) return null;
   // eslint-disable-next-line no-console
   console.log("[DKF DEBUG] Build reminder notification", {
     todayLocal: formatLocalYmd(now),
@@ -108,7 +108,7 @@ export function buildReminderNotification(
     birthdayEventDateLocal: reminder.eventDate,
     reminderTriggerDateLocal: reminder.triggerDate || reminder.date,
     handledKey: getReminderId(reminder),
-    scheduledForLocal: formatLocalYmd(effectiveAt),
+    scheduledForLocal: formatLocalYmd(scheduledAt),
   });
   const reminderTitle =
     people.length > 0
@@ -129,7 +129,7 @@ export function buildReminderNotification(
     channelId: REMINDER_NOTIFICATION_CATEGORY,
     threadIdentifier: REMINDER_NOTIFICATION_CATEGORY,
     schedule: {
-      at: effectiveAt,
+      at: scheduledAt,
     },
     extra: {
       source: REMINDER_NOTIFICATION_SOURCE,
